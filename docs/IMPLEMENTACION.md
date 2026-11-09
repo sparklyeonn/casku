@@ -44,8 +44,8 @@ Primer incremento implementado: creación y selección de eventos en administrac
 
 Primer incremento implementado: evento por cuenta de recepción, búsqueda por número o QR, confirmación de llegada y fila de espera persistida sin duplicados. Consultar [RECEPCION.md](RECEPCION.md). Segundo incremento implementado: llamado exclusivo por profesional, formulario precargado, devolución a espera y guardado vinculado que finaliza la atención. Consultar [KINESIOLOGIA.md](KINESIOLOGIA.md).
 
-- Pendientes: inscripción del día, ausencias y reincorporaciones.
-- Fila común con proporción configurable y prioridad por espera. Los ejemplos 3:1 y 30 minutos están pendientes de validar con capacidad y tiempos reales.
+- Inscripción del día en recepción y fila intercalada implementadas; consultar [PRESENCIAL_Y_PRIORIDAD.md](PRESENCIAL_Y_PRIORIDAD.md). Ausencias y reasignación supervisada siguen pendientes.
+- Fila común con proporción fija 3:1 y prioridad por mayor espera a partir de treinta minutos. Su configuración visual y la validación operativa de capacidad siguen pendientes.
 - Reserva atómica y una atención activa por profesional implementadas, incluso entre eventos.
 - Formulario existente vinculado a la inscripción, con identidad y profesional del servidor, y guardado sin duplicados implementados.
 - Definir la política de cupos, atrasos y reincorporación antes de automatizarla.

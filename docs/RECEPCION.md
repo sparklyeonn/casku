@@ -21,7 +21,7 @@ La transacción bloquea el evento, verifica que la inscripción corresponda a é
 
 Las rutas `/api/recepcion/*` exigen `RECEPCION`. Administración y kinesiología no heredan estos permisos. La pantalla y las respuestas no incluyen diagnósticos, evaluaciones, RUT, contactos ni el token QR; muestran únicamente los nombres necesarios para recibir, número y llegada. Los QR viajan en el cuerpo de la búsqueda, no en parámetros de URL. Las respuestas son privadas y no se guardan en caché.
 
-La fila de recepción muestra únicamente `EN_ESPERA` por orden de llegada. Kinesiología ya reserva al siguiente bebé, puede devolverlo a espera y finaliza su atención al guardar (ver KINESIOLOGIA.md). Recepción no puede realizar esas transiciones. No se estima una hora de atención. La inscripción presencial, proporción 3:1, prioridad por espera y ausencias/reincorporación siguen pendientes.
+La fila de recepción muestra únicamente `EN_ESPERA` por orden de llegada. Kinesiología ya reserva al siguiente bebé, puede devolverlo a espera y finaliza su atención al guardar (ver KINESIOLOGIA.md). Recepción no puede realizar esas transiciones. No se estima una hora de atención. La inscripción presencial, proporción 3:1 y prioridad por espera están implementadas (ver PRESENCIAL_Y_PRIORIDAD.md). Ausencias y reasignación supervisada siguen pendientes.
 
 ## Actualización y pruebas
 

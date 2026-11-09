@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       const matches = await tx.paciente.findMany({ where: { rut: { in: data.rutVariants } }, take: 2 })
       if (matches.length > 1) throw new PatientConflict()
       let paciente = matches[0]
-      if (paciente?.apoderadoId) throw new PatientConflict("Este bebé tiene una inscripción. Abre su atención desde la fila de kinesiología.")
+      if (paciente && (paciente.apoderadoId || await tx.inscripcion.count({ where: { pacienteId: paciente.id } }))) throw new PatientConflict("Este bebé tiene una inscripción. Abre su atención desde la fila de kinesiología.")
       if (paciente && (paciente.nombre.trim().toLocaleLowerCase() !== data.nombre.toLocaleLowerCase() || paciente.fechaNacimiento.toISOString().slice(0, 10) !== data.fecha.toISOString().slice(0, 10))) throw new PatientConflict()
       if (!paciente) paciente = await tx.paciente.create({ data: { rut: data.rut, nombre: data.nombre, fechaNacimiento: data.fecha } })
       return tx.evaluacion.create({ data: {

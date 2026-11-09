@@ -46,7 +46,7 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
     if (!resultado) return mostrarToast("Ingresa las 4 medidas")
     if (inFlight.current || guardada) return
     if (!form.fnac) return mostrarToast("Ingresa la fecha de nacimiento")
-    if (!form.correo) return mostrarToast("⚠ Ingresa el correo del padre/madre")
+    if (!form.correo && !atencion) return mostrarToast("⚠ Ingresa el correo del padre/madre")
     if (!form.nombre || (!atencion && !form.rut)) return mostrarToast("⚠ Completa los datos del paciente")
 
     inFlight.current = true

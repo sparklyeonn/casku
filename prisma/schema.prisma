@@ -23,6 +23,7 @@ model Evento {
   ultimoOrdenFila Int @default(0)
   fila            EntradaFila[]
   llamadas        LlamadaFila[]
+  previosConsecutivos Int @default(0)
 
   @@index([fecha, createdAt])
 }
@@ -56,7 +57,7 @@ model Evaluacion {
   id              String   @id @default(cuid())
   pacienteId      String
   paciente        Paciente @relation(fields: [pacienteId], references: [id])
-  correoPadre     String
+  correoPadre     String?
   anteroposterior Float
   biparietal      Float
   diagonalIzq     Float
@@ -109,8 +110,13 @@ model Inscripcion {
   evento         Evento @relation(fields: [eventoId], references: [id], onDelete: Restrict)
   pacienteId     String
   paciente       Paciente @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
-  apoderadoId    String @db.Uuid
-  apoderado      Apoderado @relation(fields: [apoderadoId], references: [id], onDelete: Restrict)
+  apoderadoId    String? @db.Uuid
+  apoderado      Apoderado? @relation(fields: [apoderadoId], references: [id], onDelete: Restrict)
+  origen         OrigenInscripcion @default(PREVIA)
+  contactoNombre String?
+  contactoCorreo String?
+  contactoTelefono String?
+  registradoPorId String?
   numero         Int
   qrToken        String @unique
   createdAt      DateTime @default(now())
@@ -120,6 +126,11 @@ model Inscripcion {
   @@unique([eventoId, numero])
   @@unique([eventoId, pacienteId])
   @@index([apoderadoId, createdAt])
+}
+
+enum OrigenInscripcion {
+  PREVIA
+  PRESENCIAL
 }
 
 enum EstadoFila {

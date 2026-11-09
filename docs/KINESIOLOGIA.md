@@ -4,9 +4,9 @@
 
 1. Ingresar con una cuenta individual `KINESIOLOGO` y abrir `/kinesiologia`.
 2. Seleccionar el evento. La selección se guarda por cuenta, sin cambiar la de recepción u otras profesionales.
-3. Pulsar **Llamar al siguiente**. Se reserva la primera inscripción `EN_ESPERA` según su orden de llegada confirmado en recepción. El llamado queda registrado y pasa a `EN_ATENCION`.
+3. Pulsar **Llamar al siguiente**. Se reserva una inscripción `EN_ESPERA` aplicando la regla intercalada 3:1 y la prioridad por espera de treinta minutos, según PRESENCIAL_Y_PRIORIDAD.md. El llamado queda registrado y pasa a `EN_ATENCION`.
 4. Confirmar con la familia el número y nombre del bebé. Abrir el formulario de craneometría desde la tarjeta de atención.
-5. El formulario existente carga nombre, fecha de nacimiento, RUT si existe y correo del apoderado. Esos campos son de solo lectura. El nombre profesional proviene de la sesión; solo se ingresan las cuatro medidas. **Limpiar medidas** conserva los datos del bebé.
+5. El formulario existente carga nombre, fecha de nacimiento, RUT si existe y correo del apoderado. Esos campos son de solo lectura. El nombre profesional proviene de la sesión; solo se ingresan las cuatro medidas. Una inscripción presencial puede no tener correo de contacto; esto no impide guardar su evaluación. **Limpiar medidas** conserva los datos del bebé.
 6. Guardar crea la evaluación sobre el paciente ya registrado y marca la atención `ATENDIDO` en la misma transacción. No crea otro paciente y admite bebés sin RUT.
 7. Volver a **Mi atención** para llamar al siguiente. Los resultados clínicos todavía no se publican ni se envían automáticamente por correo.
 
@@ -28,7 +28,7 @@ La ruta anterior `/evaluacion` sin parámetros sigue disponible como **Evaluaci�
 
 ## Alcance pendiente
 
-La fila actual es por llegada confirmada. Inscripción presencial, intercalado 3:1, prioridad por espera máxima, ausencias y reasignación supervisada siguen pendientes. Tampoco hay anuncios por voz, pantalla pública ni mensajes automáticos al llamar. El llamado se muestra a la profesional, que avisa a la familia en el evento. Las medidas sin guardar no tienen recuperación automática entre recargas.
+La fila ya incorpora inscripción presencial, intercalado 3:1 y prioridad al mayor tiempo de espera desde treinta minutos. Las ausencias y la reasignación supervisada siguen pendientes. Tampoco hay anuncios por voz, pantalla pública ni mensajes automáticos al llamar. El llamado se muestra a la profesional, que avisa a la familia en el evento. Las medidas sin guardar no tienen recuperación automática entre recargas.
 
 ## Base y comprobación
 

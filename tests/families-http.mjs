@@ -11,6 +11,7 @@ import { PGLiteSocketServer } from "@electric-sql/pglite-socket"
 import { hashPassword } from "../src/lib/passwords.mjs"
 import { receptionChecks } from "./reception-checks.mjs"
 import { kinesiologyChecks } from "./kinesiology-checks.mjs"
+import { onsiteChecks } from "./onsite-checks.mjs"
 
 const db = new PGlite(), socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: 0, maxConnections: 20 })
 const base = "http://localhost:3120", password = randomBytes(20).toString("base64url")
@@ -183,6 +184,8 @@ try {
   await receptionChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, a, b, first, second, own2, png, token, post, createEvent })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await kinesiologyChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, a, b, first, second, post, mails })
+  assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  await onsiteChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent, mails, setMailFailure: value => { failConfirmation = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   console.log("Pruebas completas con PostgreSQL y correo locales. No se usó Neon ni se enviaron mensajes reales.")
 } catch (error) { console.error(error); console.error(log.slice(-3000)); testFailed = true }

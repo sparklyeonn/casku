@@ -8,7 +8,7 @@ import { takeLimit } from "./security"
 export const registrationInclude = { evento: true, paciente: true, correo: true } satisfies Prisma.InscripcionInclude
 type RegistrationRow = Prisma.InscripcionGetPayload<{ include: typeof registrationInclude }>
 export function summarizeRegistration(row: RegistrationRow) {
-  return { id: row.id, numero: row.numero, evento: { id: row.evento.id, nombre: row.evento.nombre, fecha: row.evento.fecha.toISOString().slice(0, 10), lugar: row.evento.lugar }, bebe: { id: row.paciente.id, nombre: row.paciente.nombre }, correo: { estado: row.correo?.estado ?? "PENDIENTE", reintentarDesde: row.correo?.disponibleAt.toISOString() ?? null } }
+  return { id: row.id, numero: row.numero, origen: row.origen, evento: { id: row.evento.id, nombre: row.evento.nombre, fecha: row.evento.fecha.toISOString().slice(0, 10), lugar: row.evento.lugar }, bebe: { id: row.paciente.id, nombre: row.paciente.nombre }, correo: { estado: row.correo?.estado ?? "PENDIENTE", reintentarDesde: row.correo?.disponibleAt.toISOString() ?? null } }
 }
 export async function createRegistration(familyId: string, input: RegistrationInput) {
   const hash = createHash("sha256").update(JSON.stringify({ familyId, ...input })).digest("hex")
@@ -21,6 +21,7 @@ export async function createRegistration(familyId: string, input: RegistrationIn
     }
     const event = await tx.evento.findUnique({ where: { id: input.eventoId } })
     if (!event) throw new RegistrationConflict("El evento no está disponible.")
+    const today = chileToday()
     let baby = input.bebeId
       ? await tx.paciente.findFirst({ where: { id: input.bebeId, apoderadoId: familyId } })
       : await tx.paciente.findFirst({ where: { apoderadoId: familyId, nombreNormalizado: input.nuevoBebe!.nombreNormalizado, fechaNacimiento: input.nuevoBebe!.fechaNacimiento } })
@@ -29,7 +30,7 @@ export async function createRegistration(familyId: string, input: RegistrationIn
       const existing = await tx.inscripcion.findUnique({ where: { eventoId_pacienteId: { eventoId: event.id, pacienteId: baby.id } }, include: registrationInclude })
       if (existing) return existing
     }
-    if (!event.inscripcionesAbiertas || event.fecha.toISOString().slice(0, 10) < chileToday()) throw new RegistrationConflict("Las inscripciones de este evento están cerradas.")
+    if (!event.inscripcionesAbiertas || event.fecha.toISOString().slice(0, 10) < today) throw new RegistrationConflict("Las inscripciones de este evento están cerradas.")
     if (event.inscritos >= event.cupos) throw new RegistrationConflict("Este evento ya no tiene cupos disponibles.")
     await takeLimit(tx, `registration:${familyId}`, 30, 60 * 60_000)
     if (!baby) {
@@ -43,7 +44,7 @@ export async function createRegistration(familyId: string, input: RegistrationIn
     }
     await tx.apoderado.update({ where: { id: familyId }, data: { nombre: input.nombreApoderado, telefono: input.telefono || null, rut: input.rutApoderado } })
     const updated = await tx.evento.update({ where: { id: event.id }, data: { inscritos: { increment: 1 }, ultimoNumero: { increment: 1 } } })
-    return tx.inscripcion.create({ data: { id: input.id, solicitudHash: hash, eventoId: event.id, pacienteId: baby.id, apoderadoId: familyId, numero: updated.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), correo: { create: {} } }, include: registrationInclude })
+    return tx.inscripcion.create({ data: { id: input.id, solicitudHash: hash, eventoId: event.id, pacienteId: baby.id, apoderadoId: familyId, origen: event.fecha.toISOString().slice(0, 10) === today ? "PRESENCIAL" : "PREVIA", numero: updated.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), correo: { create: {} } }, include: registrationInclude })
   }, { timeout: 15000 })
   for (let attempt = 0; ; attempt++) {
     try { return await save() } catch (error) {

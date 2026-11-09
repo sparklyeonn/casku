@@ -22,7 +22,7 @@ Después de comprobar la conexión de destino, aplicar con `npm run db:deploy` y
 
 La inscripción familiar tiene una relación obligatoria con `Evento.id`, independiente de la ficha permanente del bebé. El número es único dentro de cada evento. La futura fila consultará únicamente sus inscripciones presentes. Cada operación enviará y validará el evento explícitamente; no se usará una selección global que cambie silenciosamente el contexto de otros usuarios.
 
-Administración abre o cierra inscripciones por evento; crear o seleccionar un evento no las abre. No se permite abrir un evento pasado (día de Chile). Consultar FAMILIAS.md. Recepción tiene selección por cuenta, búsqueda de inscripciones y confirmación de llegadas en una fila persistida; consultar RECEPCION.md. Kinesiología reserva al siguiente bebé y guarda la evaluación vinculada; consultar KINESIOLOGIA.md. La edición de eventos y la prioridad intercalada de la fila siguen pendientes.
+Administración abre o cierra inscripciones por evento; crear o seleccionar un evento no las abre. No se permite abrir un evento pasado (día de Chile). Consultar FAMILIAS.md. Recepción tiene selección por cuenta, búsqueda de inscripciones y confirmación de llegadas en una fila persistida; consultar RECEPCION.md. Kinesiología reserva al siguiente bebé y guarda la evaluación vinculada; consultar KINESIOLOGIA.md. La prioridad intercalada y la inscripción presencial están implementadas (ver PRESENCIAL_Y_PRIORIDAD.md). La edición de eventos y la configuración visual de prioridades siguen pendientes.
 
 ## Pruebas
 

@@ -31,3 +31,5 @@ Consulta [la inscripción familiar](docs/FAMILIAS.md) para configurar el correo 
 Consulta [recepción y fila](docs/RECEPCION.md) para confirmar llegadas, usar la cámara y consultar las familias en espera.
 
 La vista de [kinesiología](docs/KINESIOLOGIA.md) permite llamar al siguiente bebé, reservar su atención y abrir el formulario con los datos registrados. Guardar finaliza la atención sin enviar resultados automáticamente.
+
+La [inscripción presencial y prioridad](docs/PRESENCIAL_Y_PRIORIDAD.md) permite registrar en recepción el día del evento, compartir cupos y llamar tres previas por una del día, con prioridad por espera desde treinta minutos.

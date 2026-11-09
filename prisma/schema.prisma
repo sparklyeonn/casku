@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Paciente {
+  id              String       @id @default(cuid())
+  rut             String       @unique
+  nombre          String
+  fechaNacimiento DateTime
+  createdAt       DateTime     @default(now())
+  evaluaciones    Evaluacion[]
+}
+
+model Evaluacion {
+  id              String   @id @default(cuid())
+  pacienteId      String
+  paciente        Paciente @relation(fields: [pacienteId], references: [id])
+  correoPadre     String
+  anteroposterior Float
+  biparietal      Float
+  diagonalIzq     Float
+  diagonalDer     Float
+  indiceCraneal   Float
+  indiceAsimetria Float
+  diagnostico     String
+  recomendacion   String
+  kinesiologa     String
+  createdAt       DateTime @default(now())
+}
+

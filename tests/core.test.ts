@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { hashPassword, verifyPassword } from "../src/lib/passwords.mjs"
 import { canEvaluate, isRole } from "../src/lib/roles.ts"
-import { parseEvaluation, InvalidEvaluation } from "../src/lib/evaluation-input.ts"
+import { parseEvaluation, parseMeasurements, InvalidEvaluation } from "../src/lib/evaluation-input.ts"
 import { parseTeamAccounts, accountRevision } from "../src/lib/team-accounts.ts"
 const body = { nombre: "Bebé de prueba", rut: "12.345.678-9", fnac: "2026-01-01", correo: "familia@example.com", ap: 140, bp: 120, di: 135, dd: 138 }
 
@@ -35,4 +35,13 @@ test("el servidor rechaza mediciones y datos incompletos antes de guardar", () =
   for (const invalid of [NaN, Infinity, 0, -1, "140", null]) assert.throws(() => parseEvaluation({ ...body, ap: invalid }), InvalidEvaluation)
   for (const invalid of [{ fnac: "2026-02-30" }, { fnac: "2099-01-01" }, { correo: "incorrecto" }, { nombre: " " }, { rut: "" }]) assert.throws(() => parseEvaluation({ ...body, ...invalid }), InvalidEvaluation)
   assert.throws(() => parseEvaluation(null), InvalidEvaluation)
+})
+test("atención asignada: las mediciones se calculan sin exigir identidad escrita ni RUT", () => {
+  const measures = { ap: 140, bp: 120, di: 135, dd: 138 }
+  const parsed = parseMeasurements({ ...measures, nombre: "ignorado", correo: "ignorado", diagnostico: "inventado" })
+  assert.equal(parsed.indiceCraneal, 120 / 140 * 100)
+  assert.equal(parsed.indiceAsimetria, 3)
+  assert(!Object.hasOwn(parsed, "correo")); assert(!Object.hasOwn(parsed, "nombre"))
+  assert.notEqual(parsed.diagnostico, "inventado")
+  for (const ap of [0, -1, NaN, Infinity, "140", null]) assert.throws(() => parseMeasurements({ ...measures, ap }), InvalidEvaluation)
 })

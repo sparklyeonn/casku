@@ -6,7 +6,7 @@ Administración puede crear y seleccionar eventos en `/administracion`. Los camp
 
 - `Evento` almacena los datos del evento y el identificador del administrador creador.
 - `EventoSeleccionado` guarda un evento de trabajo por cuenta. Se conserva al recargar o volver a ingresar, sin cambiar la selección de otros administradores.
-- Las operaciones de `/api/eventos` y `/api/eventos/seleccion` exigen una sesión ADMIN, incluso si se llaman directamente. Recepción y kinesiología aún no gestionan este contexto.
+- Las operaciones de `/api/eventos` y `/api/eventos/seleccion` exigen una sesión ADMIN, incluso si se llaman directamente. Recepción y kinesiología usan sus propias rutas protegidas para seleccionar un evento por cuenta.
 - El usuario de la selección se toma exclusivamente de la sesión, nunca del formulario. Las respuestas son privadas y no se almacenan en caché.
 - La fecha es un día calendario PostgreSQL DATE, presentado con zona UTC para evitar cambiar de día en Chile.
 - Los cupos son enteros entre 1 y 100.000, validados en cliente, servidor y mediante restricción SQL. Son cupos totales. Se muestra también el recuento de inscripciones y los cupos disponibles.
@@ -22,7 +22,7 @@ Después de comprobar la conexión de destino, aplicar con `npm run db:deploy` y
 
 La inscripción familiar tiene una relación obligatoria con `Evento.id`, independiente de la ficha permanente del bebé. El número es único dentro de cada evento. La futura fila consultará únicamente sus inscripciones presentes. Cada operación enviará y validará el evento explícitamente; no se usará una selección global que cambie silenciosamente el contexto de otros usuarios.
 
-Administración abre o cierra inscripciones por evento; crear o seleccionar un evento no las abre. No se permite abrir un evento pasado (día de Chile). Consultar FAMILIAS.md. Recepción tiene selección por cuenta, búsqueda de inscripciones y confirmación de llegadas en una fila persistida; consultar RECEPCION.md. La edición de eventos, la prioridad de la fila y la reserva de pacientes siguen pendientes.
+Administración abre o cierra inscripciones por evento; crear o seleccionar un evento no las abre. No se permite abrir un evento pasado (día de Chile). Consultar FAMILIAS.md. Recepción tiene selección por cuenta, búsqueda de inscripciones y confirmación de llegadas en una fila persistida; consultar RECEPCION.md. Kinesiología reserva al siguiente bebé y guarda la evaluación vinculada; consultar KINESIOLOGIA.md. La edición de eventos y la prioridad intercalada de la fila siguen pendientes.
 
 ## Pruebas
 

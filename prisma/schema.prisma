@@ -22,6 +22,7 @@ model Evento {
   inscripciones   Inscripcion[]
   ultimoOrdenFila Int @default(0)
   fila            EntradaFila[]
+  llamadas        LlamadaFila[]
 
   @@index([fecha, createdAt])
 }
@@ -66,6 +67,8 @@ model Evaluacion {
   recomendacion   String
   kinesiologa     String
   createdAt       DateTime @default(now())
+  filaId          String? @unique @db.Uuid
+  fila            EntradaFila? @relation(fields: [filaId], references: [id], onDelete: Restrict)
 }
 
 model Apoderado {
@@ -136,10 +139,29 @@ model EntradaFila {
   llegadaAt        DateTime @default(now())
   confirmadoPorId  String
   estado           EstadoFila @default(EN_ESPERA)
+  profesionalId    String?
+  reservaId        String? @db.Uuid
+  llamadaAt        DateTime?
+  finalizadaAt     DateTime?
+  evaluacion       Evaluacion?
+  llamadas         LlamadaFila[]
 
   @@unique([eventoId, orden])
   @@unique([inscripcionId, eventoId])
   @@index([eventoId, estado, orden])
+  @@index([profesionalId, estado])
+}
+
+// Guarda también respuestas de fila vacía y reintentos después de finalizar/devolver.
+model LlamadaFila {
+  id             String @id @db.Uuid
+  profesionalId  String
+  eventoId       String @db.Uuid
+  evento         Evento @relation(fields: [eventoId], references: [id], onDelete: Restrict)
+  entradaId      String? @db.Uuid
+  entrada        EntradaFila? @relation(fields: [entradaId], references: [id], onDelete: Restrict)
+  reservaId      String? @db.Uuid
+  createdAt      DateTime @default(now())
 }
 
 enum EstadoCorreo {

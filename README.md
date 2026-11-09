@@ -19,7 +19,7 @@ Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas d
 - `npm test`: contraseñas, permisos, cuentas y validación de evaluaciones.
 - `npm run test:http`: inicio/cierre de sesión y permisos mediante servidor temporal en el puerto 3117, con cuentas efímeras y conexión de base ficticia. No crea pacientes ni envía correos.
 - `npm run test:events`: migración y gestión de eventos con PostgreSQL temporal aislado. No utiliza la base real de Casku.
-- `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR, correo y recepción (llegadas, duplicados, permisos y fila), con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
+- `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR, correo, recepción y kinesiología (llegadas, reservas, formularios, guardado y permisos), con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
 - `npx tsc --noEmit`, `npm run lint`, `npm run build`.
 
 Consulta [el plan de implementación](docs/IMPLEMENTACION.md) para conocer el alcance, las etapas pendientes y las condiciones antes de publicar.
@@ -28,4 +28,6 @@ La [gestión de eventos](docs/EVENTOS.md) describe el modelo, la selección por 
 
 Consulta [la inscripción familiar](docs/FAMILIAS.md) para configurar el correo y conocer los límites de esta etapa.
 
-Consulta [recepción y fila](docs/RECEPCION.md) para confirmar llegadas, usar la cámara y conocer qué falta del llamado de pacientes.
+Consulta [recepción y fila](docs/RECEPCION.md) para confirmar llegadas, usar la cámara y consultar las familias en espera.
+
+La vista de [kinesiología](docs/KINESIOLOGIA.md) permite llamar al siguiente bebé, reservar su atención y abrir el formulario con los datos registrados. Guardar finaliza la atención sin enviar resultados automáticamente.

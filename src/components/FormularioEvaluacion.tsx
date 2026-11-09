@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
+import Link from "next/link"
 
 import { calcularDiagnostico } from "@/lib/craneometria"
 
@@ -16,12 +17,15 @@ const colorVal = {
   moderado: "text-red-600 dark:text-red-400",
 }
 
-export default function FormularioEvaluacion({ profesional }: { profesional: string }) {
+export type AssignedForm = { id: string; reservaId: string; numero: number; evento: { nombre: string }; bebe: { nombre: string; rut: string; fnac: string }; correo: string }
+export default function FormularioEvaluacion({ profesional, atencion }: { profesional: string; atencion?: AssignedForm }) {
+  const initial = { nombre: atencion?.bebe.nombre || "", rut: atencion?.bebe.rut || "", fnac: atencion?.bebe.fnac || "", correo: atencion?.correo || "", ap: "", bp: "", di: "", dd: "", kine: "" }
   const [form, setForm] = useState({
-    nombre: "", rut: "", fnac: "", correo: "",
-    ap: "", bp: "", di: "", dd: "", kine: "",
+    ...initial,
   })
   const [guardando, setGuardando] = useState(false)
+  const [guardada, setGuardada] = useState(false)
+  const inFlight = useRef(false)
   const [toast, setToast] = useState<string | null>(null)
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
@@ -40,17 +44,18 @@ export default function FormularioEvaluacion({ profesional }: { profesional: str
 
   async function guardar() {
     if (!resultado) return mostrarToast("Ingresa las 4 medidas")
-    if (guardando) return
+    if (inFlight.current || guardada) return
     if (!form.fnac) return mostrarToast("Ingresa la fecha de nacimiento")
     if (!form.correo) return mostrarToast("⚠ Ingresa el correo del padre/madre")
-    if (!form.nombre || !form.rut) return mostrarToast("⚠ Completa los datos del paciente")
+    if (!form.nombre || (!atencion && !form.rut)) return mostrarToast("⚠ Completa los datos del paciente")
 
+    inFlight.current = true
     setGuardando(true)
     try {
       const res = await fetch("/api/evaluaciones", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(atencion ? { atencionId: atencion.id, reservaId: atencion.reservaId, ap, bp, di, dd } : {
           ...form,
           ap, bp, di, dd,
           indiceCraneal: resultado.indiceCraneal,
@@ -62,16 +67,20 @@ export default function FormularioEvaluacion({ profesional }: { profesional: str
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "No se pudo guardar")
       mostrarToast("Evaluación guardada. El envío se habilitará con la publicación.")
-      setForm({ nombre: "", rut: "", fnac: "", correo: "", ap: "", bp: "", di: "", dd: "", kine: "" })
+      if (atencion) setGuardada(true)
+      else setForm(initial)
     } catch (error) {
       mostrarToast(error instanceof Error ? error.message : "Error al guardar. Intenta de nuevo.")
     } finally {
       setGuardando(false)
+      inFlight.current = false
     }
   }
 
   return (
     <div className="max-w-xl mx-auto px-4 py-7">
+      {atencion && <section className="mb-6 space-y-3 rounded-xl border border-teal-300 p-4"><h1 className="text-xl font-semibold">Craneometría · Inscripción N.º {String(atencion.numero).padStart(3, "0")}</h1><p>{atencion.evento.nombre}</p><p className="text-sm">Datos recuperados de la inscripción. Verifica el nombre del bebé antes de medir.</p>{guardada && <p role="status" className="font-medium text-teal-700 dark:text-teal-300">Evaluación guardada y atención finalizada.</p>}<Link href="/kinesiologia" className="inline-block underline">{guardada ? "Volver y llamar al siguiente bebé" : "Volver a mi atención"}</Link></section>}
+      <fieldset disabled={guardando || guardada} className="min-w-0">
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
@@ -96,22 +105,22 @@ export default function FormularioEvaluacion({ profesional }: { profesional: str
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-gray-500">Nombre completo</label>
-            <input className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" placeholder="Nombre del bebé" value={form.nombre} onChange={e => set("nombre", e.target.value)} />
+            <input className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" placeholder="Nombre del bebé" readOnly={Boolean(atencion)} value={form.nombre} onChange={e => set("nombre", e.target.value)} />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-gray-500">RUT del paciente</label>
-            <input className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" placeholder="12.345.678-9" value={form.rut} onChange={e => set("rut", e.target.value)} />
+            <input className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" placeholder={atencion ? "Sin RUT registrado" : "12.345.678-9"} readOnly={Boolean(atencion)} value={form.rut} onChange={e => set("rut", e.target.value)} />
           </div>
         </div>
         <div className="border-t border-gray-100 dark:border-gray-800" />
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-gray-500">Fecha de nacimiento</label>
-            <input type="date" className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" value={form.fnac} onChange={e => set("fnac", e.target.value)} />
+            <input type="date" className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" readOnly={Boolean(atencion)} value={form.fnac} onChange={e => set("fnac", e.target.value)} />
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-gray-500">Correo padre/madre</label>
-            <input type="email" className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" placeholder="correo@ejemplo.com" value={form.correo} onChange={e => set("correo", e.target.value)} />
+            <input type="email" className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" placeholder="correo@ejemplo.com" readOnly={Boolean(atencion)} value={form.correo} onChange={e => set("correo", e.target.value)} />
           </div>
         </div>
       </div>
@@ -202,8 +211,8 @@ export default function FormularioEvaluacion({ profesional }: { profesional: str
 
       {/* Botones */}
       <div className="flex gap-3">
-        <button onClick={() => setForm({ nombre: "", rut: "", fnac: "", correo: "", ap: "", bp: "", di: "", dd: "", kine: "" })} className="border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 px-4 py-2.5 rounded-lg text-sm font-medium hover:border-gray-400 transition">
-          Limpiar
+        <button onClick={() => setForm(initial)} className="border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 px-4 py-2.5 rounded-lg text-sm font-medium hover:border-gray-400 transition">
+          {atencion ? "Limpiar medidas" : "Limpiar"}
         </button>
         <button onClick={guardar} disabled={guardando} className="flex-1 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2">
           {guardando ? "Guardando..." : (
@@ -218,6 +227,7 @@ export default function FormularioEvaluacion({ profesional }: { profesional: str
       </div>
 
       <p className="mt-4 text-sm text-gray-500">Guardar registra la evaluación. Los resultados no se envían por correo automáticamente.</p>
+      </fieldset>
 
       {/* Toast */}
       {toast && (

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 import { PNG } from "pngjs"
-import { BinaryBitmap, HybridBinarizer, RGBLuminanceSource, QRCodeReader } from "@zxing/library"
+import { BinaryBitmap, HybridBinarizer, RGBLuminanceSource, QRCodeReader, DecodeHintType } from "@zxing/library"
 
 // Reutiliza la base y las inscripciones del recorrido familiar; nunca toca la base configurada.
 export async function receptionChecks({ db, client, signIn, password, accounts, admin, anonymous, f1, a, b, first, second, own2, png, token, post, createEvent }) {
@@ -31,7 +31,9 @@ export async function receptionChecks({ db, client, signIn, password, accounts, 
   // Decodifica el PNG real con el mismo motor QR utilizado por la cámara.
   const image = PNG.sync.read(png), luminances = new Uint8ClampedArray(image.width * image.height)
   for (let pixel = 0; pixel < luminances.length; pixel++) luminances[pixel] = image.data[pixel * 4]
-  const decoded = new QRCodeReader().decode(new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(luminances, image.width, image.height)))).getText()
+  // Es un PNG frontal sin perspectiva. Evitar falsos positivos del detector de cámara
+  // ante patrones aleatorios: decodificar directamente la cuadrícula del comprobante.
+  const decoded = new QRCodeReader().decode(new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(luminances, image.width, image.height))), new Map([[DecodeHintType.PURE_BARCODE, true]])).getText()
   assert.equal(decoded, `CASKU:INSCRIPCION:${token}`)
   const lookup = await reception("/api/recepcion/buscar", post({ eventoId: a.id, consulta: decoded }))
   assert.equal(lookup.status, 200); assert(lookup.headers.get("cache-control").includes("no-store"))

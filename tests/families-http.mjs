@@ -10,6 +10,7 @@ import { PGlite } from "@electric-sql/pglite"
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket"
 import { hashPassword } from "../src/lib/passwords.mjs"
 import { receptionChecks } from "./reception-checks.mjs"
+import { kinesiologyChecks } from "./kinesiology-checks.mjs"
 
 const db = new PGlite(), socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: 0, maxConnections: 20 })
 const base = "http://localhost:3120", password = randomBytes(20).toString("base64url")
@@ -62,7 +63,7 @@ async function createEvent(admin, nombre, cupos, open = true) {
   return input
 }
 const registration = (event, changes = {}) => ({ id: randomUUID(), eventoId: event.id, nombreApoderado: "Apoderado ficticio", nombreBebe: "Bebé ficticio", fechaNacimiento: "2026-01-01", ...changes })
-const clinicalSnapshot = () => db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) FROM "Evaluacion" e`)
+const clinicalSnapshot = () => db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) - 'filaId' FROM "Evaluacion" e WHERE id='legacy-evaluation'`)
 try {
   await db.waitReady
   const migrations = (await readdir("prisma/migrations", { withFileTypes: true })).filter(e => e.isDirectory()).map(e => e.name).sort()
@@ -74,7 +75,7 @@ try {
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await socket.start(); await new Promise(resolve => mailServer.listen(0, "127.0.0.1", resolve))
   const adminAccount = { id: "family-test-admin", email: "admin@example.com", name: "Admin ficticio", role: "ADMIN", active: true, passwordHash: await hashPassword(password) }
-  const receptionAccounts = await Promise.all(["RECEPCION", "RECEPCION", "KINESIOLOGO"].map(async (role, i) => ({ id: `reception-test-${i}`, email: `reception-${i}@example.com`, name: `Equipo ficticio ${i}`, role, active: true, passwordHash: await hashPassword(password) })))
+  const receptionAccounts = await Promise.all(["RECEPCION", "RECEPCION", "KINESIOLOGO", "KINESIOLOGO"].map(async (role, i) => ({ id: `reception-test-${i}`, email: `reception-${i}@example.com`, name: `Equipo ficticio ${i}`, role, active: true, passwordHash: await hashPassword(password) })))
   child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--port", "3120"], { cwd: process.cwd(), env: { ...process.env, NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts]), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", RESEND_API_KEY: "re_local_test_only", RESEND_FROM: "Casku <test@example.com>", CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"] })
   child.stdout.on("data", value => { log = (log + value).slice(-15000) }); child.stderr.on("data", value => { log = (log + value).slice(-15000) }); child.on("exit", () => { exited = true })
   let ready = false
@@ -180,6 +181,8 @@ try {
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   console.log("OK concurrencia y correo: último cupo protegido, fallos recuperables, idempotencia del envío y datos clínicos anteriores intactos.")
   await receptionChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, a, b, first, second, own2, png, token, post, createEvent })
+  assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  await kinesiologyChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, a, b, first, second, post, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   console.log("Pruebas completas con PostgreSQL y correo locales. No se usó Neon ni se enviaron mensajes reales.")
 } catch (error) { console.error(error); console.error(log.slice(-3000)); testFailed = true }

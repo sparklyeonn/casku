@@ -20,6 +20,8 @@ model Evento {
   inscritos       Int @default(0)
   ultimoNumero    Int @default(0)
   inscripciones   Inscripcion[]
+  ultimoOrdenFila Int @default(0)
+  fila            EntradaFila[]
 
   @@index([fecha, createdAt])
 }
@@ -110,9 +112,34 @@ model Inscripcion {
   qrToken        String @unique
   createdAt      DateTime @default(now())
   correo         CorreoInscripcion?
+  fila           EntradaFila?
+  @@unique([id, eventoId])
   @@unique([eventoId, numero])
   @@unique([eventoId, pacienteId])
   @@index([apoderadoId, createdAt])
+}
+
+enum EstadoFila {
+  EN_ESPERA
+  EN_ATENCION
+  ATENDIDO
+  AUSENTE
+}
+
+model EntradaFila {
+  id               String @id @default(uuid()) @db.Uuid
+  eventoId         String @db.Uuid
+  evento           Evento @relation(fields: [eventoId], references: [id], onDelete: Restrict)
+  inscripcionId    String @unique @db.Uuid
+  inscripcion      Inscripcion @relation(fields: [inscripcionId, eventoId], references: [id, eventoId], onDelete: Restrict)
+  orden            Int
+  llegadaAt        DateTime @default(now())
+  confirmadoPorId  String
+  estado           EstadoFila @default(EN_ESPERA)
+
+  @@unique([eventoId, orden])
+  @@unique([inscripcionId, eventoId])
+  @@index([eventoId, estado, orden])
 }
 
 enum EstadoCorreo {

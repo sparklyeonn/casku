@@ -42,7 +42,9 @@ Primer incremento implementado: creación y selección de eventos en administrac
 
 ## Etapa 3 — Recepción y fila
 
-- Confirmar llegada, inscripción del día, ausencias y reincorporaciones.
+Primer incremento implementado: evento por cuenta de recepción, búsqueda por número o QR, confirmación de llegada y fila de espera persistida sin duplicados. Consultar [RECEPCION.md](RECEPCION.md). La lista muestra el orden de llegada; todavía no asigna pacientes a profesionales.
+
+- Pendientes: inscripción del día, ausencias y reincorporaciones.
 - Fila común con proporción configurable y prioridad por espera. Los ejemplos 3:1 y 30 minutos están pendientes de validar con capacidad y tiempos reales.
 - Reserva atómica al llamar para impedir que dos profesionales atiendan la misma inscripción.
 - Abrir el formulario existente con los datos de la inscripción, sin volver a escribir bebé, correo o profesional.

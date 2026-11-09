@@ -2,7 +2,7 @@
 
 Web de craneometrias, para expo niño y bebé.
 
-Administración permite crear eventos con nombre, fecha, lugar y cupos, y seleccionar el evento de trabajo por cuenta. También permite abrir o cerrar inscripciones. Las familias verifican su correo, eligen evento y registran a sus bebés; reciben un número por evento y un comprobante con QR. La fila se incorporará después.
+Administración permite crear eventos con nombre, fecha, lugar y cupos, y seleccionar el evento de trabajo por cuenta. También permite abrir o cerrar inscripciones. Las familias verifican su correo, eligen evento y registran a sus bebés; reciben un número por evento y un comprobante con QR. Recepción busca por número o QR, confirma llegadas y consulta la fila de espera.
 
 ## Uso local
 
@@ -19,7 +19,7 @@ Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas d
 - `npm test`: contraseñas, permisos, cuentas y validación de evaluaciones.
 - `npm run test:http`: inicio/cierre de sesión y permisos mediante servidor temporal en el puerto 3117, con cuentas efímeras y conexión de base ficticia. No crea pacientes ni envía correos.
 - `npm run test:events`: migración y gestión de eventos con PostgreSQL temporal aislado. No utiliza la base real de Casku.
-- `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR y fallos/reintentos de correo, con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
+- `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR, correo y recepción (llegadas, duplicados, permisos y fila), con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
 - `npx tsc --noEmit`, `npm run lint`, `npm run build`.
 
 Consulta [el plan de implementación](docs/IMPLEMENTACION.md) para conocer el alcance, las etapas pendientes y las condiciones antes de publicar.
@@ -27,3 +27,5 @@ Consulta [el plan de implementación](docs/IMPLEMENTACION.md) para conocer el al
 La [gestión de eventos](docs/EVENTOS.md) describe el modelo, la selección por administrador y cómo se relacionarán las futuras inscripciones y la fila.
 
 Consulta [la inscripción familiar](docs/FAMILIAS.md) para configurar el correo y conocer los límites de esta etapa.
+
+Consulta [recepción y fila](docs/RECEPCION.md) para confirmar llegadas, usar la cámara y conocer qué falta del llamado de pacientes.

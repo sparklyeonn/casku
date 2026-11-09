@@ -20,6 +20,7 @@
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "@types/pg": "^8.23.1",
+    "@zxing/browser": "0.1.5",
     "dotenv": "^18.0.8",
     "next": "^16.4.3",
     "next-auth": "^5.0.0-beta.32",

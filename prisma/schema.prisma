@@ -6,13 +6,47 @@ datasource db {
   provider = "postgresql"
 }
 
+model Evento {
+  id             String                @id @default(uuid()) @db.Uuid
+  nombre         String
+  fecha          DateTime              @db.Date
+  lugar          String
+  cupos          Int
+  creadoPorId    String
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  selecciones    EventoSeleccionado[]
+  inscripcionesAbiertas Boolean @default(false)
+  inscritos       Int @default(0)
+  ultimoNumero    Int @default(0)
+  inscripciones   Inscripcion[]
+
+  @@index([fecha, createdAt])
+}
+
+// Contexto de trabajo por cuenta. No activa ni cierra un evento globalmente.
+model EventoSeleccionado {
+  usuarioId String   @id
+  eventoId  String   @db.Uuid
+  evento    Evento   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
+
+  @@index([eventoId])
+}
+
 model Paciente {
   id              String       @id @default(cuid())
-  rut             String       @unique
+  rut             String?      @unique
   nombre          String
   fechaNacimiento DateTime
   createdAt       DateTime     @default(now())
   evaluaciones    Evaluacion[]
+  apoderadoId     String?      @db.Uuid
+  apoderado       Apoderado?   @relation(fields: [apoderadoId], references: [id], onDelete: Restrict)
+  nombreNormalizado String?
+  inscripciones   Inscripcion[]
+
+  @@unique([apoderadoId, nombreNormalizado, fechaNacimiento])
 }
 
 model Evaluacion {
@@ -30,5 +64,78 @@ model Evaluacion {
   recomendacion   String
   kinesiologa     String
   createdAt       DateTime @default(now())
+}
+
+model Apoderado {
+  id             String @id @default(uuid()) @db.Uuid
+  correo         String @unique
+  nombre         String?
+  telefono       String?
+  rut            String?
+  activo         Boolean @default(true)
+  versionSesion  Int @default(1)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  bebes          Paciente[]
+  inscripciones  Inscripcion[]
+}
+
+model CodigoAccesoFamilia {
+  correo           String @id
+  desafioId        String @unique @db.Uuid
+  codigoHash       String
+  navegadorHash    String
+  expiraAt         DateTime
+  consumidoAt      DateTime?
+  intentos         Int @default(0)
+}
+
+model LimiteSolicitud {
+  clave     String @id
+  cantidad  Int
+  expiraAt  DateTime
+  @@index([expiraAt])
+}
+
+model Inscripcion {
+  id             String @id @db.Uuid
+  solicitudHash  String
+  eventoId       String @db.Uuid
+  evento         Evento @relation(fields: [eventoId], references: [id], onDelete: Restrict)
+  pacienteId     String
+  paciente       Paciente @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
+  apoderadoId    String @db.Uuid
+  apoderado      Apoderado @relation(fields: [apoderadoId], references: [id], onDelete: Restrict)
+  numero         Int
+  qrToken        String @unique
+  createdAt      DateTime @default(now())
+  correo         CorreoInscripcion?
+  @@unique([eventoId, numero])
+  @@unique([eventoId, pacienteId])
+  @@index([apoderadoId, createdAt])
+}
+
+enum EstadoCorreo {
+  PENDIENTE
+  ENVIANDO
+  ENVIADO
+  FALLIDO
+}
+
+model CorreoInscripcion {
+  id            String @id @default(uuid()) @db.Uuid
+  inscripcionId String @unique @db.Uuid
+  inscripcion   Inscripcion @relation(fields: [inscripcionId], references: [id], onDelete: Restrict)
+  estado        EstadoCorreo @default(PENDIENTE)
+  intentos      Int @default(0)
+  disponibleAt  DateTime @default(now())
+  bloqueoToken  String? @db.Uuid
+  bloqueoHasta  DateTime?
+  enviadoAt     DateTime?
+  proveedorId   String?
+  ultimoError   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@index([estado, disponibleAt])
 }
 

@@ -6,7 +6,7 @@ import { hashPassword } from "../src/lib/passwords.mjs"
 const base = "http://localhost:3117", password = randomBytes(20).toString("base64url")
 const accounts = await Promise.all(["KINESIOLOGO", "RECEPCION", "ADMIN"].map(async role => ({ id: `smoke-${role}`, email: `${role.toLowerCase()}@example.com`, name: `Prueba ${role}`, role, active: true, passwordHash: await hashPassword(password) })))
 const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--port", "3117"], {
-  cwd: process.cwd(), env: { ...process.env, NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify(accounts), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", DATABASE_URL: "postgresql://smoke:smoke@127.0.0.1:1/smoke?connect_timeout=1" }, stdio: ["ignore", "pipe", "pipe"],
+  cwd: process.cwd(), env: { ...process.env, CASKU_TEST_MODE: "1", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify(accounts), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", DATABASE_URL: "postgresql://smoke:smoke@127.0.0.1:1/smoke?connect_timeout=1" }, stdio: ["ignore", "pipe", "pipe"],
 })
 let log = "", exited = false
 child.stdout.on("data", b => { log = (log + b).slice(-10000) }); child.stderr.on("data", b => { log = (log + b).slice(-10000) }); child.on("exit", () => { exited = true })

@@ -1,15 +1,22 @@
 "use client"
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import { signIn, getSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { isRole, roleHomes } from "@/lib/roles"
+import { FamilyAccess } from "@/components/FamilyAccess"
 
-export default function Login() {
-  const [portal, setPortal] = useState<"equipo" | "familias">("equipo")
+function LoginContent() {
+  const search = useSearchParams()
+  const [portal, setPortal] = useState<"equipo" | "familias">(search.get("portal") === "familias" ? "familias" : "equipo")
   const [email, setEmail] = useState(""), [password, setPassword] = useState("")
   const [error, setError] = useState(""), [loading, setLoading] = useState(false)
   const router = useRouter()
+  const requestedEvent = search.get("evento")
+  function familyDestination() {
+    const suffix = requestedEvent && /^[a-f0-9-]{36}$/i.test(requestedEvent) ? `?evento=${encodeURIComponent(requestedEvent)}` : ""
+    router.replace(`/familias${suffix}`); router.refresh()
+  }
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setLoading(true); setError("")
     try {
@@ -27,7 +34,7 @@ export default function Login() {
       {(["equipo", "familias"] as const).map(value => <button key={value} type="button" aria-pressed={portal === value} className={`rounded-lg px-4 py-2 ${portal === value ? "bg-teal-700 text-white" : "border"}`} onClick={() => { setPortal(value); setError(""); setPassword("") }}>{value === "equipo" ? "Equipo Casku" : "Familias"}</button>)}
     </div>
     <h1 className="mt-7 text-2xl font-semibold">{portal === "equipo" ? "Acceso del equipo" : "Espacio de las familias"}</h1>
-    {portal === "familias" ? <div className="mt-5 space-y-4 rounded-xl border p-5"><p>El acceso con verificación por correo y la inscripción de bebés se incorporarán en la siguiente etapa.</p><p className="text-sm text-gray-500">Las evaluaciones anteriores se conservan. El historial se habilitará cuando se verifique la vinculación del apoderado con cada bebé.</p></div> : <form onSubmit={submit} className="mt-5 space-y-5">
+    {portal === "familias" ? <FamilyAccess onAuthenticated={familyDestination} /> : <form onSubmit={submit} className="mt-5 space-y-5">
       <p className="text-sm text-gray-500">Tu cuenta determina el perfil y los permisos. Administración debe habilitar tu acceso.</p>
       <label className="block">Correo<input className="mt-2 w-full rounded-lg border p-3" type="email" autoComplete="username" value={email} maxLength={254} onChange={e => setEmail(e.target.value)} required /></label>
       <label className="block">Contraseña<input className="mt-2 w-full rounded-lg border p-3" type="password" autoComplete="current-password" value={password} maxLength={128} onChange={e => setPassword(e.target.value)} required /></label>
@@ -36,3 +43,4 @@ export default function Login() {
     </form>}
   </main>
 }
+export default function Login() { return <Suspense fallback={<p className="p-8">Cargando acceso…</p>}><LoginContent /></Suspense> }

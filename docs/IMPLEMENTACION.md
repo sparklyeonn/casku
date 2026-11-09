@@ -1,6 +1,6 @@
 # Implementación por etapas
 
-El código actual es la continuación del proyecto de Downloads, copiado a Documents/ChatGPT/casku con los cambios locales que ya existían. El original no se modifica. La base de datos no se migró ni se escribieron pacientes durante las pruebas.
+El código actual es la continuación del proyecto de Downloads, copiado a Documents/ChatGPT/casku con los cambios locales que ya existían. El original no se modifica. Durante la entrega inicial no se migró la base ni se escribieron pacientes. Los incrementos de eventos e inscripciones se describen en EVENTOS.md y FAMILIAS.md.
 
 ## Etapa 1 — Acceso del equipo y formulario existente (implementada)
 
@@ -17,7 +17,7 @@ El código actual es la continuación del proyecto de Downloads, copiado a Docum
 
 Desde esta carpeta, ejecutar `npm run account:create`. El asistente pide correo, nombre, perfil y una contraseña de al menos 12 caracteres que no se muestra. Guarda el hash en `.env.local`, crea AUTH_SECRET si no existe y no imprime contraseñas. Repetir por cada integrante; reiniciar el servidor después de cambios.
 
-Ejecutar `npm run dev` y abrir /login. El perfil depende de la cuenta; no se elige desde el navegador. La sección Familias indica que la verificación por correo llegará en la siguiente etapa.
+Ejecutar `npm run dev` y abrir /login. El perfil depende de la cuenta; no se elige desde el navegador. La sección Familias permite verificar el correo cuando el remitente esté configurado.
 
 Conservar DATABASE_URL en la configuración privada. Para desactivar una cuenta, poner `active: false` en su entrada de CASKU_TEAM_ACCOUNTS y reiniciar. Cambiar contraseña o perfil invalida las sesiones anteriores. Los perfiles se administran por configuración en esta etapa, no desde una pantalla pública.
 
@@ -31,12 +31,14 @@ Antes de publicar en internet: configurar HTTPS, AUTH_URL y AUTH_SECRET; usar al
 
 ## Etapa 2 — Familias, eventos e inscripciones
 
+Primer incremento implementado: creación y selección de eventos en administración, con persistencia por cuenta y migración aditiva. Consultar [EVENTOS.md](EVENTOS.md). El segundo incremento implementa el acceso familiar por código, bebés propios, inscripción atómica, número y QR, y confirmación por correo con reintento manual. Consultar [FAMILIAS.md](FAMILIAS.md). El remitente verificado está pendiente; no se enviaron correos reales.
+
 - Modelar apoderado, bebé, evento e inscripción por separado; un apoderado puede tener varios bebés.
 - Sustituir el acceso familiar por verificación real de correo con códigos de un solo uso, expiración y límite de intentos.
-- Relacionar datos históricos con el apoderado solo después de verificar identidad; nunca por conocer un RUT.
+- Los datos históricos permanecen sin asignar. Su vinculación exige una revisión de identidad adicional; nunca se realiza automáticamente por conocer un RUT.
 - Asignar el número por evento con restricción única y operación atómica. La inscripción no es un turno.
-- Confirmación, QR con identificador opaco y registro del estado de entrega del correo. Definir dominio remitente y datos del evento.
-- Preparar migración aditiva y ensayarla con datos de prueba antes de aplicarla a la base existente.
+- Confirmación y QR opaco implementados; se registra aceptación del proveedor, no entrega efectiva al buzón. Pendientes: remitente verificado y seguimiento mediante webhooks.
+- Migración ensayada con pacientes y evaluaciones anteriores ficticios, verificando que sus datos se conservan.
 
 ## Etapa 3 — Recepción y fila
 
@@ -51,5 +53,5 @@ Antes de publicar en internet: configurar HTTPS, AUTH_URL y AUTH_SECRET; usar al
 - Borrador, publicación explícita, autoría clínica y trazabilidad de correcciones.
 - Solo el apoderado verificado accede a sus bebés y resultados publicados.
 - Cola de correo/reintentos, persistencia del estado de entrega e idempotencia para evitar evaluaciones duplicadas.
-- Configuración visual de eventos, accesos, reportes operativos y seguimiento de familias con permisos específicos.
+- Edición de eventos, administración visual de accesos, reportes operativos y seguimiento de familias con permisos específicos.
 - Definir quién contacta a las familias y qué datos necesita antes de construir seguimiento.

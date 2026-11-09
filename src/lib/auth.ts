@@ -3,6 +3,8 @@ import Credentials from "next-auth/providers/credentials"
 import { getTeamAccounts, accountRevision } from "./team-accounts"
 import { verifyPassword } from "./passwords.mjs"
 import { isRole } from "./roles"
+import { consumeFamilyCode } from "./families/otp"
+import { prisma } from "./prisma"
 
 // Límite por proceso: sustituir por almacén compartido antes de escalar.
 const attempts = new Map<string, { count: number; until: number }>()
@@ -24,9 +26,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       attempts.delete(email)
       return { id: account.id, email: account.email, name: account.name, role: account.role }
     },
+  }), Credentials({
+    id: "familias", name: "Familias Casku",
+    credentials: { desafioId: { type: "text" }, navegador: { type: "text" }, codigo: { type: "text" } },
+    async authorize(credentials) {
+      try {
+        const family = await consumeFamilyCode(credentials)
+        return family ? { id: `familia:${family.id}`, email: family.correo, name: family.nombre || "Apoderado", role: "APODERADO" as const } : null
+      } catch { return null }
+    },
   })],
   callbacks: {
     async jwt({ token, user }) {
+      if (user?.role === "APODERADO" || (!user && token.role === "APODERADO")) {
+        const id = user?.id ?? token.id
+        if (typeof id !== "string" || !/^familia:[a-f0-9-]{36}$/i.test(id)) return null
+        const family = await prisma.apoderado.findUnique({ where: { id: id.slice(8) } })
+        if (!family?.activo || (!user && token.revision !== `familia:${family.versionSesion}`)) return null
+        token.id = id; token.role = "APODERADO"; token.revision = `familia:${family.versionSesion}`
+        token.name = family.nombre || "Apoderado"; token.email = family.correo
+        return token
+      }
       const account = getTeamAccounts().find(a => a.active && a.id === (user?.id ?? token.id))
       if (!account || (!user && token.revision !== accountRevision(account))) return null
       token.id = account.id; token.role = account.role; token.revision = accountRevision(account)
@@ -35,7 +55,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async session({ session, token }) {
       session.user.id = typeof token.id === "string" ? token.id : ""
-      session.user.role = isRole(token.role) ? token.role : undefined
+      session.user.role = isRole(token.role) || token.role === "APODERADO" ? token.role : undefined
       return session
     },
   },

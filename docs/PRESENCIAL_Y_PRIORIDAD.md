@@ -14,7 +14,7 @@ El remitente verificado de Casku sigue pendiente. Sin remitente no se envían co
 
 ## Contacto y acceso familiar
 
-El contacto anotado por recepción es independiente de una cuenta verificada. No se crea un apoderado ni se asigna el bebé a una cuenta existente por conocer un correo o RUT. Por eso un registro presencial nuevo no aparece automáticamente en el portal de una cuenta que tenga ese correo. La vinculación posterior requiere un flujo adicional de revisión de identidad, todavía pendiente.
+El contacto anotado por recepción es independiente de una cuenta verificada. No se crea un apoderado ni se asigna el bebé a una cuenta existente por conocer un correo o RUT. Por eso un registro presencial nuevo no aparece automáticamente en el portal de una cuenta que tenga ese correo. La vinculación posterior está disponible mediante código entregado por recepción y aceptación desde la cuenta verificada (ver VINCULACION.md).
 
 La inscripción presencial sin cuenta guarda nombre, correo opcional y teléfono del contacto, junto con la cuenta de recepción que la registró. Los QR de recepción y los reintentos de correo exigen sesión `RECEPCION` y el evento correcto. Las listas operativas siguen sin devolver RUT, contactos o datos clínicos. El correo de una inscripción sin cuenta invita a conservar el comprobante y consultar a recepción, sin prometer acceso al portal familiar.
 
@@ -57,4 +57,4 @@ Verificación de esta etapa: diecinueve pruebas unitarias, recorrido integral de
 
 ## Fuera de esta etapa
 
-La gestión de ausencias y regreso está disponible (ver AUSENCIAS.md). Siguen pendientes reasignación supervisada, cancelación de reservas, recuperación de cupos de ausentes, lista de espera con evento lleno y vinculación de registros presenciales al portal familiar. La política 3:1 y el umbral de treinta minutos son constantes del sistema en esta entrega; aún no se editan por evento desde administración.
+La gestión de ausencias y regreso está disponible (ver AUSENCIAS.md). Siguen pendientes reasignación supervisada, cancelación de reservas, recuperación de cupos de ausentes, lista de espera con evento lleno y revisión supervisada de fichas coincidentes. La política 3:1 y el umbral de treinta minutos son constantes del sistema en esta entrega; aún no se editan por evento desde administración.

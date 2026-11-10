@@ -49,6 +49,7 @@ model Paciente {
   apoderado       Apoderado?   @relation(fields: [apoderadoId], references: [id], onDelete: Restrict)
   nombreNormalizado String?
   inscripciones   Inscripcion[]
+  vinculaciones   VinculacionPresencial[]
 
   @@unique([apoderadoId, nombreNormalizado, fechaNacimiento])
 }
@@ -91,6 +92,7 @@ model Apoderado {
   bebes          Paciente[]
   inscripciones  Inscripcion[]
   resultados     ResultadoPublicado[]
+  vinculaciones  VinculacionPresencial[]
 }
 
 model ResultadoPublicado {
@@ -177,10 +179,31 @@ model Inscripcion {
   createdAt      DateTime @default(now())
   correo         CorreoInscripcion?
   fila           EntradaFila?
+  vinculaciones  VinculacionPresencial[]
   @@unique([id, eventoId])
   @@unique([eventoId, numero])
   @@unique([eventoId, pacienteId])
   @@index([apoderadoId, createdAt])
+}
+
+model VinculacionPresencial {
+  id             String @id @db.Uuid
+  inscripcionId  String @db.Uuid
+  inscripcion    Inscripcion @relation(fields: [inscripcionId], references: [id], onDelete: Restrict)
+  pacienteId     String
+  paciente       Paciente @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
+  correo         String
+  codigoHash     String @unique
+  creadoPorId    String
+  createdAt      DateTime @default(now())
+  expiraAt       DateTime
+  revocadaAt     DateTime?
+  revocadaPorId  String?
+  consumidaAt    DateTime?
+  apoderadoId    String? @db.Uuid
+  apoderado      Apoderado? @relation(fields: [apoderadoId], references: [id], onDelete: Restrict)
+
+  @@index([inscripcionId, createdAt])
 }
 
 enum OrigenInscripcion {

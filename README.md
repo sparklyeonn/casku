@@ -19,7 +19,7 @@ Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas d
 - `npm test`: contraseñas, permisos, cuentas y validación de evaluaciones.
 - `npm run test:http`: inicio/cierre de sesión y permisos mediante servidor temporal en el puerto 3117, con cuentas efímeras y conexión de base ficticia. No crea pacientes ni envía correos.
 - `npm run test:events`: migración y gestión de eventos con PostgreSQL temporal aislado. No utiliza la base real de Casku.
-- `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR, correo, recepción y kinesiología (llegadas, reservas, formularios, guardado y permisos), con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
+- `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR, correo, recepción y kinesiología (llegadas, reservas, formularios, guardado y permisos), publicación de resultados y vinculación presencial, con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
 - `npx tsc --noEmit`, `npm run lint`, `npm run build`.
 
 Consulta [el plan de implementación](docs/IMPLEMENTACION.md) para conocer el alcance, las etapas pendientes y las condiciones antes de publicar.
@@ -37,3 +37,5 @@ La [inscripción presencial y prioridad](docs/PRESENCIAL_Y_PRIORIDAD.md) permite
 La [gestión de ausencias](docs/AUSENCIAS.md) permite marcar a quien no responde y reincorporarlo desde recepción con la misma inscripción, reiniciando su espera al regresar.
 
 La [publicación de resultados](docs/RESULTADOS.md) incorpora revisión de borradores, publicación explícita, consulta en la cuenta familiar y correo con reintento. Las inscripciones presenciales sin vinculación verificada quedan pendientes de ese proceso antes de publicar resultados clínicos.
+
+La [vinculación presencial](docs/VINCULACION.md) permite que recepción entregue un código a la familia y que esta acepte desde su cuenta verificada, conservando bebé, inscripción, fila y evaluaciones.

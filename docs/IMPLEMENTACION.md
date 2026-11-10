@@ -55,7 +55,7 @@ Primer incremento implementado: evento por cuenta de recepción, búsqueda por n
 Primer incremento implementado: borradores revisables por su autora, copia publicada inmutable, consulta familiar y correo con recuperación manual. Consultar [RESULTADOS.md](RESULTADOS.md).
 
 - Autoría clínica verificada y cambios auditados de borrador implementados. Las correcciones después de publicar y la revisión supervisada siguen pendientes.
-- Solo el apoderado verificado y actualmente vinculado accede a resultados publicados. La vinculación de presenciales e históricos sigue pendiente.
+- Solo el apoderado verificado y actualmente vinculado accede a resultados publicados. La vinculación de presenciales está implementada con código entregado por recepción y aceptación de la cuenta verificada (ver VINCULACION.md). La revisión de históricos y la resolución supervisada de fichas coincidentes siguen pendientes.
 - Correo idempotente con estado de aceptación y reintento manual implementado. Pendientes: remitente, webhooks de entrega y reintento programado.
 - Edición de eventos, administración visual de accesos, reportes operativos y seguimiento de familias con permisos específicos.
 - Definir quién contacta a las familias y qué datos necesita antes de construir seguimiento.

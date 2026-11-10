@@ -41,3 +41,7 @@ En otros entornos, ejecutar `npm run db:deploy` para aplicar migraciones y `npx 
 Ejecutar también `npm test`, `npm run test:events`, `npm run test:http`, `npm run lint` y `npx tsc --noEmit`. Las pruebas HTTP deben ejecutarse por separado porque comparten `.next-tests`.
 
 Verificación de esta etapa: doce pruebas unitarias, tres suites HTTP, TypeScript, ESLint y validación Prisma correctos. La compilación de producción continúa bloqueada en este entorno: el proceso de estilos de Turbopack no puede abrir su puerto local, incluso al repetir con permisos ampliados. Debe verificarse la compilación en el entorno de despliegue antes de publicar.
+
+## Inscripciones presenciales
+
+La familia puede aceptar en `/familias` el código o QR de vinculación entregado directamente por recepción, con el correo allí confirmado. La operación conserva la ficha y las evaluaciones existentes; no requiere volver a registrar al bebé. Ver [VINCULACION.md](VINCULACION.md). Los resultados requieren publicación posterior de la profesional.

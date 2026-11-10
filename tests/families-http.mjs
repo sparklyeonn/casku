@@ -16,6 +16,7 @@ import { absenceChecks } from "./absence-checks.mjs"
 import { seedBeforeAbsenceMigration } from "./absence-migration.mjs"
 import { seedBeforeResultsMigration } from "./results-migration.mjs"
 import { resultsChecks } from "./results-checks.mjs"
+import { linkingChecks } from "./linking-checks.mjs"
 
 const db = new PGlite(), socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: 0, maxConnections: 20 })
 const base = "http://localhost:3120", password = randomBytes(20).toString("base64url")
@@ -198,6 +199,8 @@ try {
   await absenceChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await resultsChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, post, createEvent, mails, setResultFailure: value => { failResults = value } })
+  assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  await linkingChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   console.log("Pruebas completas con PostgreSQL y correo locales. No se usó Neon ni se enviaron mensajes reales.")
 } catch (error) { console.error(error); console.error(log.slice(-3000)); testFailed = true }

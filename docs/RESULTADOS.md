@@ -34,7 +34,7 @@ Una orden de correo por publicación, reserva temporal de envío y clave de idem
 
 La migración recupera autoría solo cuando una evaluación está respaldada por una atención finalizada con profesional identificada. No asigna evaluaciones antiguas por coincidencia de nombre y no publica nada automáticamente. Las evaluaciones históricas sin esa evidencia permanecen conservadas, pendientes de un proceso de revisión y vinculación.
 
-Una inscripción presencial sin cuenta familiar puede guardar y revisar su borrador, pero no publicarlo ni enviarlo al correo de contacto. La vinculación de esos registros con una cuenta verificada sigue pendiente del flujo correspondiente. Conocer el correo o RUT no concede propiedad ni habilita un envío clínico.
+Una inscripción presencial sin cuenta familiar puede guardar y revisar su borrador, pero no publicarlo ni enviarlo al correo de contacto. La vinculación está disponible mediante código entregado por recepción y aceptación desde la cuenta verificada (ver VINCULACION.md). Después, la autora recarga el borrador y puede publicarlo. Conocer el correo o RUT no concede propiedad ni habilita un envío clínico.
 
 Recepción y administración no adquieren permiso clínico ni acceso a estos endpoints. No se altera la fila, los cupos, las ausencias o las inscripciones al revisar o publicar.
 

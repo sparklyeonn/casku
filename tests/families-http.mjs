@@ -12,6 +12,8 @@ import { hashPassword } from "../src/lib/passwords.mjs"
 import { receptionChecks } from "./reception-checks.mjs"
 import { kinesiologyChecks } from "./kinesiology-checks.mjs"
 import { onsiteChecks } from "./onsite-checks.mjs"
+import { absenceChecks } from "./absence-checks.mjs"
+import { seedBeforeAbsenceMigration } from "./absence-migration.mjs"
 
 const db = new PGlite(), socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: 0, maxConnections: 20 })
 const base = "http://localhost:3120", password = randomBytes(20).toString("base64url")
@@ -72,7 +74,11 @@ try {
   await db.exec(`INSERT INTO "Paciente" (id,rut,nombre,"fechaNacimiento") VALUES ('legacy-baby','11111111-1','Bebé anterior ficticio','2026-01-01');
     INSERT INTO "Evaluacion" (id,"pacienteId","correoPadre",anteroposterior,biparietal,"diagonalIzq","diagonalDer","indiceCraneal","indiceAsimetria",diagnostico,recomendacion,kinesiologa) VALUES ('legacy-evaluation','legacy-baby','legacy@example.com',140,120,135,138,85.7,3,'Ejemplo','Ejemplo','Profesional ficticio');`)
   const before = await clinicalSnapshot()
-  for (const name of migrations.filter(name => name >= "20261109000200_inscripcion_familiar")) await db.exec(await readFile(`prisma/migrations/${name}/migration.sql`, "utf8"))
+  for (const name of migrations.filter(name => name >= "20261109000200_inscripcion_familiar")) {
+    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : null
+    await db.exec(await readFile(`prisma/migrations/${name}/migration.sql`, "utf8"))
+    if (verify) await verify()
+  }
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await socket.start(); await new Promise(resolve => mailServer.listen(0, "127.0.0.1", resolve))
   const adminAccount = { id: "family-test-admin", email: "admin@example.com", name: "Admin ficticio", role: "ADMIN", active: true, passwordHash: await hashPassword(password) }
@@ -186,6 +192,8 @@ try {
   await kinesiologyChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, a, b, first, second, post, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await onsiteChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent, mails, setMailFailure: value => { failConfirmation = value } })
+  assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  await absenceChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   console.log("Pruebas completas con PostgreSQL y correo locales. No se usó Neon ni se enviaron mensajes reales.")
 } catch (error) { console.error(error); console.error(log.slice(-3000)); testFailed = true }

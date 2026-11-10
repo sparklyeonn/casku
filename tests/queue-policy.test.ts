@@ -4,7 +4,7 @@ import { chooseNext, type QueueCandidate } from "../src/lib/queue/policy.ts"
 import { parseOnsiteInput } from "../src/lib/reception/onsite-input.ts"
 import { FamilyInputError } from "../src/lib/families/input.ts"
 const now = new Date("2026-11-09T15:00:00Z")
-const row = (id: string, origen: QueueCandidate["origen"], minutes: number, orden = 1): QueueCandidate => ({ id, origen, orden, llegadaAt: new Date(now.getTime() - minutes * 60000) })
+const row = (id: string, origen: QueueCandidate["origen"], minutes: number, orden = 1): QueueCandidate => ({ id, origen, orden, esperaDesde: new Date(now.getTime() - minutes * 60000) })
 
 test("fila: tres previas y una del día aunque la presencial llegue antes", () => {
   const previous = Array.from({ length: 9 }, (_, i) => row(`p${i}`, "PREVIA", 5, i + 2)), walkin = Array.from({ length: 3 }, (_, i) => row(`w${i}`, "PRESENCIAL", 10, i + 1))
@@ -30,6 +30,12 @@ test("fila: ningún grupo disponible deja ociosa la fila y el contador no supera
   assert.equal(chooseNext(row("p", "PREVIA", 1), null, 3, now)!.siguientesPrevios, 3)
   const single = chooseNext(null, row("w", "PRESENCIAL", 1), 0, now)!
   assert.equal(single.entrada.id, "w"); assert.equal(single.siguientesPrevios, 0)
+})
+test("fila: la espera reiniciada prevalece sobre una llegada original antigua", () => {
+  const returned = { ...row("regreso", "PREVIA", 0), llegadaAt: new Date(now.getTime() - 120 * 60000) }
+  const walkin = { ...row("día", "PRESENCIAL", 5), llegadaAt: new Date(now.getTime() - 5 * 60000) }
+  const next = chooseNext(returned, walkin, 3, now)!
+  assert.equal(next.entrada.id, "día"); assert.equal(next.motivo, "TURNO_PRESENCIAL")
 })
 test("presencial: permite bebé sin RUT ni correo y no acepta seleccionar dueño desde el navegador", () => {
   const raw = { id: "047c4f7f-a32f-4f4a-96c3-39da98abb14f", eventoId: "047c4f7f-a32f-4f4a-96c3-39da98abb140", nombreBebe: " Bebé ficticio ", fechaNacimiento: "2026-01-01", nombreApoderado: " Familia ficticia ", origen: "PREVIA", apoderadoId: "intruso" }

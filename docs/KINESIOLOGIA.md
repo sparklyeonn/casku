@@ -28,7 +28,7 @@ La ruta anterior `/evaluacion` sin parámetros sigue disponible como **Evaluaci�
 
 ## Alcance pendiente
 
-La fila ya incorpora inscripción presencial, intercalado 3:1 y prioridad al mayor tiempo de espera desde treinta minutos. Las ausencias y la reasignación supervisada siguen pendientes. Tampoco hay anuncios por voz, pantalla pública ni mensajes automáticos al llamar. El llamado se muestra a la profesional, que avisa a la familia en el evento. Las medidas sin guardar no tienen recuperación automática entre recargas.
+La fila ya incorpora inscripción presencial, intercalado 3:1 y prioridad al mayor tiempo de espera desde treinta minutos. **No respondió al llamado** permite marcar ausencia y liberar la atención; recepción confirma el regreso y reinicia la espera, conservando la inscripción (ver AUSENCIAS.md). La reasignación supervisada sigue pendiente. Tampoco hay anuncios por voz, pantalla pública ni mensajes automáticos al llamar. El llamado se muestra a la profesional, que avisa a la familia en el evento. Las medidas sin guardar no tienen recuperación automática entre recargas.
 
 ## Base y comprobación
 

@@ -77,7 +77,7 @@ export async function returnToQueue(staffId: string, id: string, reservaId: stri
     const row = await tx.entradaFila.findUnique({ where: { id } })
     if (!row || row.profesionalId !== staffId || row.reservaId !== reservaId) throw new AttentionUnavailable()
     if (row.estado === "EN_ESPERA") return
-    if (row.estado !== "EN_ATENCION") throw new AttentionConflict("Esta atención ya está finalizada.")
+    if (row.estado !== "EN_ATENCION") throw new AttentionConflict("La atención ya no está activa. Actualiza su estado antes de continuar.")
     // Conserva orden/hora de llegada. El identificador cambia en el próximo llamado.
     await tx.entradaFila.update({ where: { id }, data: { estado: "EN_ESPERA" } })
   })

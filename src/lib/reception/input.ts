@@ -16,6 +16,6 @@ export function receptionInput(value: unknown) {
 }
 export function parseCursor(value: string | null) {
   if (value === null) return 0
-  if (!/^\d{1,6}$/.test(value) || Number(value) > 100000) throw new ReceptionInputError("La página de la fila no es válida.")
+  if (!/^\d{1,10}$/.test(value) || Number(value) > 2147483647) throw new ReceptionInputError("La página de la fila no es válida.")
   return Number(value)
 }

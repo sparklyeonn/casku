@@ -13,5 +13,7 @@ test("recepción: rechaza enlaces, identificadores sueltos y búsquedas ambiguas
   assert.throws(() => receptionInput([]), ReceptionInputError)
   assert.equal(parseCursor(null), 0)
   assert.equal(parseCursor("50"), 50)
-  for (const value of ["-1", "1.5", "100001", ""]) assert.throws(() => parseCursor(value), ReceptionInputError)
+  assert.equal(parseCursor("100001"), 100001)
+  assert.equal(parseCursor("2147483647"), 2147483647)
+  for (const value of ["-1", "1.5", "2147483648", ""]) assert.throws(() => parseCursor(value), ReceptionInputError)
 })

@@ -33,7 +33,7 @@ Solo participan llegadas confirmadas y en estado `EN_ESPERA`.
 
 El contador es persistente por evento y compartido entre todas las profesionales. Se actualiza únicamente al reservar una nueva atención; revisar la fila, recuperar una atención activa o repetir un envío no lo avanza. El bloqueo de evento y la exclusividad por profesional conservan las garantías de la etapa de kinesiología.
 
-Devolver un bebé a espera mantiene su hora y orden originales. No revierte el contador: la proporción cuenta llamados, no evaluaciones terminadas. Una espera ya larga conserva su prioridad al reincorporarse mediante esa devolución.
+Devolver un bebé presente a espera mantiene su hora y orden originales. No revierte el contador: la proporción cuenta llamados, no evaluaciones terminadas. Una espera ya larga conserva su prioridad mediante esa devolución. Marcar ausencia es distinto: recepción debe confirmar el regreso y esa reincorporación reinicia la espera y coloca al bebé al final de su grupo, conservando la categoría y el número (ver AUSENCIAS.md).
 
 Los treinta minutos son un umbral de prioridad, **no una espera máxima garantizada**: la regla se aplica al liberarse una profesional, sin interrumpir atenciones. Si hay más demanda que capacidad, varias familias pueden superar ese tiempo. No estima una hora de atención.
 
@@ -57,4 +57,4 @@ Verificación de esta etapa: diecinueve pruebas unitarias, recorrido integral de
 
 ## Fuera de esta etapa
 
-No se agregaron reasignación supervisada, cancelación de reservas, recuperación de cupos de ausentes, lista de espera con evento lleno ni vinculación de registros presenciales al portal familiar. La política 3:1 y el umbral de treinta minutos son constantes del sistema en esta entrega; aún no se editan por evento desde administración.
+La gestión de ausencias y regreso está disponible (ver AUSENCIAS.md). Siguen pendientes reasignación supervisada, cancelación de reservas, recuperación de cupos de ausentes, lista de espera con evento lleno y vinculación de registros presenciales al portal familiar. La política 3:1 y el umbral de treinta minutos son constantes del sistema en esta entrega; aún no se editan por evento desde administración.

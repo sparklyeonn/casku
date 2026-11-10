@@ -97,7 +97,7 @@ export async function onsiteChecks({ db, client, signIn, password, accounts, adm
   const aged = await createEvent(admin, "Espera ficticia", 10, true), agedPrev = await previous(aged, 2)
   await setToday(aged); await arrive(aged, agedPrev)
   const old = await onsite(input(aged, "Presencial con espera"))
-  async function age(id, minutes) { await db.query('UPDATE "EntradaFila" SET "llegadaAt"=$1 WHERE "inscripcionId"=$2', [new Date(Date.now() - minutes * 60000), id]) }
+  async function age(id, minutes) { await db.query('UPDATE "EntradaFila" SET "llegadaAt"=$1,"esperaDesde"=$1 WHERE "inscripcionId"=$2', [new Date(Date.now() - minutes * 60000), id]) }
   await age(old.inscripcion.id, 31)
   const overdue = await queue(aged)
   assert.equal(overdue.proximo.numero, old.inscripcion.numero); assert.equal(overdue.proximo.motivo, "ESPERA_MAXIMA")

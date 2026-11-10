@@ -26,7 +26,7 @@ export function OnsiteRegistration({ event, enabled, disponibles, disabled, onSt
     try {
       const data = await read(await fetch("/api/recepcion/presencial", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, eventoId: event.id, id: requestId.current }) }))
       setReceipt(data.inscripcion); setMail(data.correo); setUncertain(false); requestId.current = null; setForm(initial)
-      setMessage(data.nuevaInscripcion ? "Inscripción registrada y llegada confirmada. El bebé ya está en la fila." : "La inscripción ya existía. Conservamos su número y registramos su llegada si aún estaba pendiente.")
+      setMessage(data.inscripcion.llegada?.estado === "AUSENTE" ? "La inscripción ya existe y figura ausente. Búscala por este número para confirmar su reincorporación a la fila." : data.nuevaInscripcion ? "Inscripción registrada y llegada confirmada. El bebé ya está en la fila." : "La inscripción ya existía. Conservamos su número y registramos su llegada si aún estaba pendiente.")
       await onRegistered()
     } catch (cause) {
       const status = cause && typeof cause === "object" && "status" in cause ? Number(cause.status) : 0

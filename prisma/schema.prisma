@@ -148,6 +148,10 @@ model EntradaFila {
   inscripcion      Inscripcion @relation(fields: [inscripcionId, eventoId], references: [id, eventoId], onDelete: Restrict)
   orden            Int
   llegadaAt        DateTime @default(now())
+  esperaDesde      DateTime @default(now())
+  ausenciaId       String? @db.Uuid
+  ausenteAt        DateTime?
+  reincorporadaAt   DateTime?
   confirmadoPorId  String
   estado           EstadoFila @default(EN_ESPERA)
   profesionalId    String?
@@ -156,11 +160,31 @@ model EntradaFila {
   finalizadaAt     DateTime?
   evaluacion       Evaluacion?
   llamadas         LlamadaFila[]
+  movimientos      MovimientoFila[]
 
   @@unique([eventoId, orden])
   @@unique([inscripcionId, eventoId])
   @@index([eventoId, estado, orden])
   @@index([profesionalId, estado])
+  @@index([eventoId, estado, esperaDesde, orden])
+}
+
+enum TipoMovimientoFila {
+  AUSENCIA
+  REINCORPORACION
+}
+
+model MovimientoFila {
+  id           String @id @default(uuid()) @db.Uuid
+  entradaId    String @db.Uuid
+  entrada      EntradaFila @relation(fields: [entradaId], references: [id], onDelete: Restrict)
+  ausenciaId   String @db.Uuid
+  tipo         TipoMovimientoFila
+  usuarioId    String
+  createdAt    DateTime @default(now())
+
+  @@unique([entradaId, ausenciaId, tipo])
+  @@index([entradaId, createdAt])
 }
 
 // Guarda también respuestas de fila vacía y reintentos después de finalizar/devolver.

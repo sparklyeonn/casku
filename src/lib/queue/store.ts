@@ -4,7 +4,7 @@ import { chooseNext, type Origin } from "./policy"
 // Invocar bajo bloqueo del evento al reservar; una lectura de recepción solo anticipa.
 export async function nextWaiting(tx: Prisma.TransactionClient, eventoId: string, streak: number, now: Date) {
   const head = async (origen: Origin) => {
-    const row = await tx.entradaFila.findFirst({ where: { eventoId, estado: "EN_ESPERA", inscripcion: { origen } }, orderBy: [{ llegadaAt: "asc" }, { orden: "asc" }], select: { id: true, orden: true, llegadaAt: true } })
+    const row = await tx.entradaFila.findFirst({ where: { eventoId, estado: "EN_ESPERA", inscripcion: { origen } }, orderBy: [{ esperaDesde: "asc" }, { orden: "asc" }], select: { id: true, orden: true, esperaDesde: true } })
     return row ? { ...row, origen } : null
   }
   const previous = await head("PREVIA"), walkin = await head("PRESENCIAL")

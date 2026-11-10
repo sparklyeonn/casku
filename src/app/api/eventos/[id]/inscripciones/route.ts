@@ -1,3 +1,4 @@
+import { processAvailable } from "@/lib/waitlist/process"
 import { getTeamUser } from "@/lib/access"
 import { prisma } from "@/lib/prisma"
 import { parseEventId } from "@/lib/events/input"
@@ -19,6 +20,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (event.inscripcionesAbiertas === data.abiertas) return event
       return tx.evento.update({ where: { id }, data: { inscripcionesAbiertas: data.abiertas, revision: { increment: 1 } } })
     })
-    return updated ? familyResponse({ evento: summarizeEvent(updated) }) : familyResponse({ error: "Evento no disponible." }, 404)
+    if (updated && data.abiertas) { try { await processAvailable(id, "APERTURA_INSCRIPCIONES") } catch { /* La apertura ya está guardada. */ } }
+    return updated ? familyResponse({ evento: summarizeEvent(await prisma.evento.findUniqueOrThrow({ where: { id } })) }) : familyResponse({ error: "Evento no disponible." }, 404)
   } catch (error) { return familyFailure(error) }
 }

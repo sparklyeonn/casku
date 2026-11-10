@@ -27,6 +27,7 @@ export async function registerOnsite(staffId: string, input: OnsiteInput) {
       if (input.bebe.rut && known.paciente.rut && known.paciente.rut.replace(/\./g, "").toUpperCase() !== input.bebe.rut) throw new ReceptionConflict("El RUT no coincide con la inscripción existente. Revisa los datos antes de continuar.")
       return { ...await ensureArrival(tx, known, staffId), nuevaInscripcion: false }
     }
+    if (await tx.listaEspera.findFirst({ where: { eventoId: event.id, estado: "PENDIENTE" }, select: { id: true } })) throw new ReceptionConflict("Los cupos liberados corresponden primero a la lista de espera. No se adelantó un registro presencial.")
     if (event.inscritos >= event.cupos) throw new ReceptionConflict("No quedan cupos. Las inscripciones previas conservan su reserva aunque aún no hayan llegado.")
     if (input.bebe.rut) {
       const [body, digit] = input.bebe.rut.split("-"), formatted = `${body.replace(/\B(?=(\d{3})+(?!\d))/g, ".")}-${digit}`

@@ -1,3 +1,4 @@
+import { promoteLocked } from "@/lib/waitlist/promotion"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 export type CancellationActor = { id: string; role: "ADMIN" | "RECEPCION"; version: number } | { id: string; role: "APODERADO" }
@@ -28,8 +29,8 @@ export async function cancelRegistration(actor: CancellationActor, eventoId: str
     await tx.$queryRaw`SELECT id FROM "Evento" WHERE id=${eventoId}::uuid FOR UPDATE`
     const known = await tx.inscripcion.findFirst({ where: { id, eventoId }, select: { pacienteId: true } })
     if (!known) return null
-    // Mismo orden que inscripción/vinculación: evento, paciente, inscripción y correo.
-    await tx.$queryRaw`SELECT id FROM "Paciente" WHERE id=${known.pacienteId} FOR UPDATE`
+    // Evento serializa cancelación, llamado y vinculación de esta inscripción.
+    // No se retiene otro paciente al asignar el cupo al siguiente de la lista.
     await tx.$queryRaw`SELECT id FROM "Inscripcion" WHERE id=${id}::uuid FOR UPDATE`
     await tx.$queryRaw`SELECT id FROM "CorreoInscripcion" WHERE "inscripcionId"=${id}::uuid FOR UPDATE`
     const row = await tx.inscripcion.findFirstOrThrow({ where: { id, eventoId }, select: selection })
@@ -44,7 +45,7 @@ export async function cancelRegistration(actor: CancellationActor, eventoId: str
       if (!staff?.active || staff.role !== actor.role || staff.version !== actor.version) throw new CancellationConflict("Tu acceso cambió. Vuelve a iniciar sesión.")
       nombreActor = staff.name
     }
-    if (row.cancelacion) return { ...summary(row, actor), nueva: false }
+    if (row.cancelacion) return { ...summary(row, actor), nueva: false, promociones: [] as string[] }
     const reason = blocking(row, actor)
     if (reason) throw new CancellationConflict(reason)
     const event = await tx.evento.findUniqueOrThrow({ where: { id: eventoId } })
@@ -54,7 +55,8 @@ export async function cancelRegistration(actor: CancellationActor, eventoId: str
     await tx.correoInscripcion.updateMany({ where: { inscripcionId: id }, data: { estado: "CANCELADO", bloqueoToken: null, bloqueoHasta: null } })
     await tx.vinculacionPresencial.updateMany({ where: { inscripcionId: id, consumidaAt: null, revocadaAt: null }, data: { revocadaAt: new Date(), revocadaPorId: actor.role === "APODERADO" ? `familia:${actor.id}` : actor.id } })
     await tx.evento.update({ where: { id: eventoId }, data: { inscritos: { decrement: 1 } } })
+    const promociones = await promoteLocked(tx, eventoId, "CANCELACION")
     const updated = await tx.inscripcion.findUniqueOrThrow({ where: { id }, select: selection })
-    return { ...summary(updated, actor), nueva: true }
+    return { ...summary(updated, actor), nueva: true, promociones }
   }, { timeout: 15000 })
 }

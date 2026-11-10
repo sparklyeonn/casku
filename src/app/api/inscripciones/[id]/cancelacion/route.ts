@@ -1,3 +1,4 @@
+import { processAvailable, notifyAssignments } from "@/lib/waitlist/process"
 import { Prisma } from "@prisma/client"
 import { getTeamUser } from "@/lib/access"
 import { getFamilyUser } from "@/lib/families/access"
@@ -30,6 +31,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const { data, eventoId } = receptionInput(await familyJson(request))
     const result = await cancelRegistration(current.actor, eventoId, parseEventId((await params).id), cancellationReason(data.motivo))
-    return result ? familyResponse(result) : familyResponse({ error: "Inscripción no disponible." }, 404)
+    if (!result) return familyResponse({ error: "Inscripción no disponible." }, 404)
+    const { promociones, ...publicResult } = result
+    await notifyAssignments(promociones)
+    try { await processAvailable(eventoId, "CANCELACION_RECUPERACION") } catch { /* Cancelación confirmada; la lista conserva su orden para recuperación. */ }
+    return familyResponse(publicResult)
   } catch (error) { return failure(error) }
 }

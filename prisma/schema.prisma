@@ -37,6 +37,8 @@ model CambioCuentaEquipo {
 }
 
 model Evento {
+  ultimoOrdenEspera Int @default(0)
+  listaEspera ListaEspera[]
   id             String                @id @default(uuid()) @db.Uuid
   nombre         String
   fecha          DateTime              @db.Date
@@ -83,6 +85,7 @@ model EventoSeleccionado {
 }
 
 model Paciente {
+  listaEspera ListaEspera[]
   revisionDatos Int @default(1)
   id              String       @id @default(cuid())
   rut             String?      @unique
@@ -125,6 +128,7 @@ model Evaluacion {
 }
 
 model Apoderado {
+  listaEspera ListaEspera[]
   revisionDatos Int @default(1)
   id             String @id @default(uuid()) @db.Uuid
   correo         String @unique
@@ -207,6 +211,7 @@ model LimiteSolicitud {
 }
 
 model Inscripcion {
+  esperaOrigen ListaEspera?
   cancelacion CancelacionInscripcion?
   revisionContacto Int @default(1)
   id             String @id @db.Uuid
@@ -231,6 +236,36 @@ model Inscripcion {
   @@unique([id, eventoId])
   @@unique([eventoId, numero])
   @@unique([eventoId, pacienteId])
+  @@index([apoderadoId, createdAt])
+}
+
+enum EstadoListaEspera {
+  PENDIENTE
+  ASIGNADA
+  RETIRADA
+  NO_ELEGIBLE
+}
+
+model ListaEspera {
+  id String @id @db.Uuid
+  eventoId String @db.Uuid
+  evento Evento @relation(fields: [eventoId], references: [id], onDelete: Restrict)
+  pacienteId String
+  paciente Paciente @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
+  apoderadoId String @db.Uuid
+  apoderado Apoderado @relation(fields: [apoderadoId], references: [id], onDelete: Restrict)
+  nombreBebe String
+  orden Int
+  estado EstadoListaEspera @default(PENDIENTE)
+  solicitudHash String
+  createdAt DateTime @default(now())
+  resueltaAt DateTime?
+  motivoResolucion String?
+  origenResolucion String?
+  inscripcionId String? @unique @db.Uuid
+  inscripcion Inscripcion? @relation(fields: [inscripcionId], references: [id], onDelete: Restrict)
+  @@unique([eventoId, orden])
+  @@index([eventoId, estado, orden])
   @@index([apoderadoId, createdAt])
 }
 

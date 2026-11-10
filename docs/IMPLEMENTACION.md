@@ -48,7 +48,7 @@ Primer incremento implementado: evento por cuenta de recepción, búsqueda por n
 - Fila común con proporción fija 3:1 y prioridad por mayor espera a partir de treinta minutos. Su configuración visual y la validación operativa de capacidad siguen pendientes.
 - Reserva atómica y una atención activa por profesional implementadas, incluso entre eventos.
 - Formulario existente vinculado a la inscripción, con identidad y profesional del servidor, y guardado sin duplicados implementados.
-- Reincorporación implementada con categoría conservada y espera reiniciada. La cancelación y recuperación de cupos están implementadas con permisos, auditoría y protección de atenciones/evaluaciones (ver CANCELACIONES.md). La reactivación y lista de espera siguen pendientes.
+- Reincorporación implementada con categoría conservada y espera reiniciada. La cancelación y recuperación de cupos están implementadas con permisos, auditoría y protección de atenciones/evaluaciones (ver CANCELACIONES.md). La lista de espera de cupos está implementada con confirmación automática FIFO, retirada e historial (ver LISTA_ESPERA.md). La reactivación sigue pendiente.
 
 ## Etapa 4 — Publicación, resultados y seguimiento
 

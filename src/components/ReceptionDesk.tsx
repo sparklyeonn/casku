@@ -1,4 +1,5 @@
 "use client"
+import { WaitlistPanel } from "./WaitlistPanel"
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { FormEvent } from "react"
 import Link from "next/link"
@@ -52,6 +53,7 @@ export function ReceptionDesk() {
     {error && <div role="alert" className="rounded-lg bg-red-50 p-4 text-red-800 dark:bg-red-950 dark:text-red-100">{error}{events.length === 0 && <button type="button" onClick={() => { setLoading(true); setError(""); void load() }} className="ml-3 underline">Reintentar</button>}</div>}
     {loading ? <p role="status">Cargando eventos…</p> : events.length === 0 ? <p className="rounded-xl border p-5">Todavía no hay eventos. Administración debe crear uno para comenzar.</p> : <>
       <section className="rounded-xl border p-5"><label className="block font-medium">Evento de trabajo<select className={inputClass} value={selected} disabled={busy || working} onChange={e => select(e.target.value)}><option value="" disabled>Selecciona el evento</option>{events.map(item => <option key={item.id} value={item.id}>{item.nombre} · {eventDate(item.fecha)}</option>)}</select></label>{event && <p className="mt-3 text-sm">{event.lugar} · {event.cupos} cupos totales · {event.inscripcionesAbiertas ? "Inscripciones abiertas" : "Formulario web cerrado; puedes recibir a las familias ya inscritas"}</p>}</section>
+      {event && <WaitlistPanel key={`wait:${event.id}`} eventoId={event.id} disabled={busy || working} onStart={() => { if (selecting.current) return false; selecting.current = true; setBusy(true); return true }} onFinish={() => { selecting.current = false; setBusy(false) }} />}
       {event ? <div className={busy ? "pointer-events-none opacity-50" : ""} inert={busy}><EventReception key={event.id} event={event} onWorkingChange={setWorking} /></div> : <p>Selecciona un evento para buscar sus inscripciones y consultar su fila.</p>}
     </>}
   </main>

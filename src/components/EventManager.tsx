@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { FormEvent } from "react"
 import type { EventSummary } from "@/lib/events/input"
+import { EventOverview } from "./EventOverview"
 
 type EventsState = { eventos: EventSummary[]; seleccionadoId: string | null }
 const emptyForm = { nombre: "", fecha: "", lugar: "", cupos: "" }
@@ -96,12 +97,14 @@ export function EventManager() {
     <section aria-labelledby="selected-event-title" className="rounded-2xl border border-teal-200 bg-teal-50 p-6 dark:border-teal-800 dark:bg-teal-950">
       <h2 id="selected-event-title" className="text-sm font-medium text-teal-800 dark:text-teal-200">Tu evento de trabajo</h2>
       {loading ? <p className="mt-3">Cargando eventos…</p> : selected ? <><p className="mt-2 break-words text-2xl font-semibold">{selected.nombre}</p><p className="mt-3 break-words text-gray-700 dark:text-gray-200">{showDate(selected.fecha)} · {selected.lugar}</p><p className="mt-2 font-medium">{selected.cupos.toLocaleString("es-CL")} cupos totales</p></> : <p className="mt-3">{loaded ? "Todavía no seleccionaste un evento. Crea uno o elígelo de la lista." : "No se pudo consultar tu selección. Actualiza la lista para intentar nuevamente."}</p>}
-      {selected && <p className="mt-3 text-sm font-medium">{selected.inscritos} inscritos · {selected.cupos - selected.inscritos} cupos disponibles · Inscripciones {selected.inscripcionesAbiertas ? "abiertas" : "cerradas"}</p>}
+      {selected && <p className="mt-3 text-sm font-medium">Inscripciones {selected.inscripcionesAbiertas ? "abiertas" : "cerradas"}</p>}
       <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">La selección se guarda para tu cuenta y no cambia el evento de otros administradores.</p>
     </section>
+    {selected && <EventOverview key={selected.id} eventoId={selected.id} />}
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
       <section aria-labelledby="events-list-title" className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
         <h2 id="events-list-title" className="text-xl font-semibold">Eventos creados {loaded && <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({data.eventos.length})</span>}</h2>
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Los inscritos de esta lista corresponden a su última actualización. El resumen del evento seleccionado se actualiza automáticamente.</p>
         {loading ? <p className="py-8 text-gray-600 dark:text-gray-300">Consultando eventos…</p> : !loaded ? <p className="py-8 text-gray-600 dark:text-gray-300">La lista no está disponible. Puedes volver a cargarla.</p> : data.eventos.length === 0 ? <div className="py-10"><h3 className="font-medium">Aquí comenzará tu próximo evento</h3><p className="mt-2 text-gray-600 dark:text-gray-300">Completa el formulario para crear el primero.</p></div> : <ul className="mt-4 divide-y divide-gray-200 dark:divide-gray-700">{data.eventos.map(event => <li key={event.id} className="space-y-3 py-5">
           <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="min-w-0 break-words text-lg font-medium">{event.nombre}</h3>{data.seleccionadoId === event.id && <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-medium text-teal-800 dark:bg-teal-900 dark:text-teal-100">Seleccionado</span>}</div>
           <p className="break-words text-sm text-gray-600 dark:text-gray-300">{showDate(event.fecha)} · {event.lugar}</p><p className="text-sm">{event.inscritos} inscritos / {event.cupos.toLocaleString("es-CL")} cupos · Inscripciones {event.inscripcionesAbiertas ? "abiertas" : "cerradas"}</p>

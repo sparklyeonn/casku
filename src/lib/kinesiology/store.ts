@@ -54,6 +54,8 @@ export async function callNext(staffId: string, eventoId: string, requestId: str
     if (!active) {
       const next = await nextWaiting(tx, eventoId, event[0].previosConsecutivos, new Date())
       if (next) {
+        const entry = await tx.entradaFila.findUniqueOrThrow({ where: { id: next.entrada.id }, select: { inscripcion: { select: { pacienteId: true } } } })
+        await tx.$queryRaw`SELECT id FROM "Paciente" WHERE id=${entry.inscripcion.pacienteId} FOR UPDATE`
         active = await tx.entradaFila.update({ where: { id: next.entrada.id }, data: { estado: "EN_ATENCION", profesionalId: staffId, reservaId: requestId, llamadaAt: new Date(), finalizadaAt: null }, select: attentionSelect })
         await tx.evento.update({ where: { id: eventoId }, data: { previosConsecutivos: next.siguientesPrevios } })
       }

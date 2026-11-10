@@ -12,7 +12,7 @@ export async function GET() {
       prisma.inscripcion.findMany({ where: { apoderadoId: family.id }, include: registrationInclude, orderBy: { createdAt: "desc" } }),
       prisma.paciente.findMany({ where: { apoderadoId: family.id }, select: { id: true, nombre: true, fechaNacimiento: true }, orderBy: { createdAt: "asc" } }),
     ])
-    return familyResponse({ perfil: { nombre: family.nombre || "", telefono: family.telefono || "", rut: family.rut || "", correo: family.correo }, inscripciones: inscripciones.map(summarizeRegistration), bebes: bebes.map(baby => ({ ...baby, fechaNacimiento: baby.fechaNacimiento.toISOString().slice(0, 10) })) })
+    return familyResponse({ perfil: { nombre: family.nombre || "", telefono: family.telefono || "", rut: family.rut || "", correo: family.correo, revisionDatos: family.revisionDatos }, inscripciones: inscripciones.map(summarizeRegistration), bebes: bebes.map(baby => ({ ...baby, fechaNacimiento: baby.fechaNacimiento.toISOString().slice(0, 10) })) })
   } catch (error) { return familyFailure(error) }
 }
 export async function POST(request: Request) {

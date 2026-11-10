@@ -59,3 +59,7 @@ Primer incremento implementado: borradores revisables por su autora, copia publi
 - Correo idempotente con estado de aceptación y reintento manual implementado. Pendientes: remitente, webhooks de entrega y reintento programado.
 - Administración visual de accesos implementada (ver CUENTAS_EQUIPO.md). Resumen administrativo por evento implementado (ver RESUMEN_ADMINISTRATIVO.md). Edición de eventos implementada con fecha y cupos protegidos, revisiones y auditoría (ver EDICION_EVENTOS.md). Pendientes: reportes adicionales y seguimiento de familias con permisos específicos.
 - Definir quién contacta a las familias y qué datos necesita antes de construir seguimiento.
+
+## Corrección de datos personales — implementada
+
+Recepción y administración corrigen datos de bebé, perfil del apoderado y contactos presenciales mediante una inscripción, con revisiones, motivos e historial transaccional. Conserva relaciones, números, QR, fila y evaluaciones; protege el correo de acceso y rechaza posibles duplicados en vez de fusionar fichas. Consultar [CORRECCION_DATOS.md](CORRECCION_DATOS.md). Siguen pendientes las fusiones supervisadas, cambios de apoderado y cambio verificado de correo de acceso.

@@ -8,7 +8,7 @@ import { useSearchParams } from "next/navigation"
 import { eventDate, type PublicEvent } from "./PublicEvents"
 
 type Receipt = { origen: Origin; id: string; numero: number; evento: { id: string; nombre: string; fecha: string; lugar: string }; bebe: { id: string; nombre: string }; correo: { estado: string; reintentarDesde: string | null } }
-type FamilyData = { perfil: { nombre: string; telefono: string; rut: string; correo: string }; bebes: Array<{ id: string; nombre: string; fechaNacimiento: string }>; inscripciones: Receipt[] }
+type FamilyData = { perfil: { nombre: string; telefono: string; rut: string; correo: string; revisionDatos: number }; bebes: Array<{ id: string; nombre: string; fechaNacimiento: string }>; inscripciones: Receipt[] }
 const blank = { bebeId: "", nombreBebe: "", fechaNacimiento: "", rutBebe: "", nombreApoderado: "", rutApoderado: "", telefono: "" }
 const field = "mt-2 w-full rounded-lg border border-gray-300 bg-white p-3 text-gray-900 outline-none focus:border-teal-600 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
 async function jsonResponse(response: Response) { const data = await response.json(); if (!response.ok) throw new Error(data.error || "No pudimos completar la operación."); return data }
@@ -22,11 +22,14 @@ export function FamilyPortal() {
   const [eventoId, setEventoId] = useState(""), [form, setForm] = useState(blank)
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState(""), [message, setMessage] = useState("")
-  const creationId = useRef<string | null>(null), inFlight = useRef(false)
+  const profileRevision = useRef<number | null>(null), creationId = useRef<string | null>(null), inFlight = useRef(false)
   const apply = useCallback((value: { family: FamilyData; events: PublicEvent[] }) => {
+    const changedProfile = profileRevision.current !== null && profileRevision.current !== value.family.perfil.revisionDatos
+    profileRevision.current = value.family.perfil.revisionDatos
+    if (changedProfile) creationId.current = null
     setData(value.family); setEvents(value.events)
     setEventoId(previous => value.events.some(e => e.id === previous) ? previous : value.events.some(e => e.id === requestedEvent) ? requestedEvent : "")
-    setForm(previous => previous.nombreApoderado ? previous : { ...previous, nombreApoderado: value.family.perfil.nombre, rutApoderado: value.family.perfil.rut, telefono: value.family.perfil.telefono })
+    setForm(previous => previous.nombreApoderado && !changedProfile ? previous : { ...(changedProfile ? blank : previous), nombreApoderado: value.family.perfil.nombre, rutApoderado: value.family.perfil.rut, telefono: value.family.perfil.telefono })
   }, [requestedEvent])
   useEffect(() => {
     const controller = new AbortController()
@@ -44,7 +47,7 @@ export function FamilyPortal() {
     inFlight.current = true; setBusy("register"); setError(""); setMessage("")
     try {
       creationId.current ??= crypto.randomUUID()
-      const { inscripcion } = await jsonResponse(await fetch("/api/familias/inscripciones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, eventoId, id: creationId.current }) })) as { inscripcion: Receipt }
+      const { inscripcion } = await jsonResponse(await fetch("/api/familias/inscripciones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, revisionApoderado: data?.perfil.revisionDatos, eventoId, id: creationId.current }) })) as { inscripcion: Receipt }
       // Primero conservamos el comprobante, aunque falle la actualización de la lista.
       setData(previous => previous ? { ...previous, inscripciones: [inscripcion, ...previous.inscripciones.filter(row => row.id !== inscripcion.id)] } : previous)
       creationId.current = null

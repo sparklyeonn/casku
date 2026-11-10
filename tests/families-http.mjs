@@ -22,6 +22,8 @@ import { teamChecks } from "./team-checks.mjs"
 import { overviewChecks } from "./overview-checks.mjs"
 import { eventEditChecks } from "./event-edit-checks.mjs"
 import { seedBeforeEventEditMigration } from "./event-edit-migration.mjs"
+import { dataCorrectionsChecks } from "./data-corrections-checks.mjs"
+import { seedBeforeDataCorrectionMigration } from "./data-corrections-migration.mjs"
 
 const embeddedDb = new PGlite(), socket = new PGLiteSocketServer({ db: embeddedDb, host: "127.0.0.1", port: 0, maxConnections: 20 })
 let db = embeddedDb, fixturePool
@@ -75,7 +77,7 @@ async function createEvent(admin, nombre, cupos, open = true) {
   return input
 }
 const registration = (event, changes = {}) => ({ id: randomUUID(), eventoId: event.id, nombreApoderado: "Apoderado ficticio", nombreBebe: "Bebé ficticio", fechaNacimiento: "2026-01-01", ...changes })
-const clinicalSnapshot = () => db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' FROM "Evaluacion" e WHERE id='legacy-evaluation'`)
+const clinicalSnapshot = () => db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' - 'revisionDatos' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' FROM "Evaluacion" e WHERE id='legacy-evaluation'`)
 try {
   await db.waitReady
   const migrations = (await readdir("prisma/migrations", { withFileTypes: true })).filter(e => e.isDirectory()).map(e => e.name).sort()
@@ -84,7 +86,7 @@ try {
     INSERT INTO "Evaluacion" (id,"pacienteId","correoPadre",anteroposterior,biparietal,"diagonalIzq","diagonalDer","indiceCraneal","indiceAsimetria",diagnostico,recomendacion,kinesiologa) VALUES ('legacy-evaluation','legacy-baby','legacy@example.com',140,120,135,138,85.7,3,'Ejemplo','Ejemplo','Profesional ficticio');`)
   const before = await clinicalSnapshot()
   for (const name of migrations.filter(name => name >= "20261109000200_inscripcion_familiar")) {
-    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : name === "20261109000700_publicacion_resultados" ? await seedBeforeResultsMigration(db) : name === "20261110000100_edicion_eventos" ? await seedBeforeEventEditMigration(db) : null
+    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : name === "20261109000700_publicacion_resultados" ? await seedBeforeResultsMigration(db) : name === "20261110000100_edicion_eventos" ? await seedBeforeEventEditMigration(db) : name === "20261110000200_correccion_datos" ? await seedBeforeDataCorrectionMigration(db) : null
     await db.exec(await readFile(`prisma/migrations/${name}/migration.sql`, "utf8"))
     if (verify) await verify()
   }
@@ -171,7 +173,7 @@ try {
   assert(!(await (await anonymous("/api/eventos/disponibles")).json()).eventos.some(e => e.id === a.id))
   const own2 = await (await f2.request("/api/familias/inscripciones", post(registration(b, { nombreBebe: "Bebé de otra familia" })))).json()
   assert.equal(own2.inscripcion.numero, 1)
-  const otherEvent = await (await f1.request("/api/familias/inscripciones", post(registration(b, { bebeId: first.bebe.id })))).json()
+  const otherEvent = await (await f1.request("/api/familias/inscripciones", post(registration(b, { bebeId: first.bebe.id, revisionApoderado: (await (await f1.request("/api/familias/inscripciones")).json()).perfil.revisionDatos })))).json()
   assert.equal(otherEvent.inscripcion.numero, 2); assert.equal(otherEvent.inscripcion.bebe.id, first.bebe.id)
   assert.equal((await f2.request("/api/familias/inscripciones", post(registration(b, { bebeId: first.bebe.id })))).status, 409)
   assert(!(await (await f2.request("/api/familias/inscripciones")).json()).inscripciones.some(row => row.id === first.id))
@@ -216,6 +218,8 @@ try {
   await overviewChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await eventEditChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
+  assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  await dataCorrectionsChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await teamChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)

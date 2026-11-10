@@ -22,7 +22,7 @@ El QR de vinculación usa `CASKU:VINCULACION:` y es distinto del comprobante `CA
 
 Solo recepción emite, consulta el estado o revoca invitaciones. Solo una cuenta familiar activa y con el correo exacto de la invitación puede previsualizarla y aceptarla. El servidor toma la identidad de la sesión; ignora propietarios enviados por el navegador. Las APIs son privadas y sin caché.
 
-La aceptación actualiza en una transacción el propietario del paciente y de la inscripción, y registra quién aceptó y cuándo. No sobrescribe nombre, nacimiento, RUT, contactos, perfil familiar ni contenido clínico. Mantiene la orden previa de correo de confirmación; si no había orden crea una recuperable, sin enviar automáticamente. La publicación clínica usa exclusivamente la cuenta verificada vinculada.
+La aceptación actualiza en una transacción el propietario del paciente y de la inscripción, y registra quién aceptó y cuándo. No sobrescribe nombre, nacimiento, RUT, contactos, perfil familiar ni contenido clínico. Mantiene la orden de confirmación y prepara una nueva versión para la cuenta verificada, con otra clave de envío y sin enviar automáticamente; si no había orden crea una recuperable. La familia puede reintentar esa copia desde su portal. Un envío de comprobante en curso debe terminar antes de aceptar la vinculación. La publicación clínica usa exclusivamente la cuenta verificada vinculada.
 
 Existe una sola invitación pendiente por inscripción. Las operaciones bloquean evento, paciente e invitación; se comprueba nuevamente vigencia y propiedad antes de aceptar. Hay un límite persistido de diez consultas/aceptaciones por cuenta cada quince minutos, incluidos códigos inexistentes. Los códigos ajenos o vencidos producen una respuesta genérica sin datos del bebé.
 

@@ -1,3 +1,4 @@
+import { mailFamily } from "@/lib/families/identity-snapshot"
 import { mailEvent } from "@/lib/events/mail-snapshot"
 import type { Prisma, VinculacionPresencial } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
@@ -76,11 +77,15 @@ export async function familyLink(familyId: string, code: string, accept: boolean
     const collision = await tx.paciente.findFirst({ where: { id: { not: row.pacienteId }, apoderadoId: family.id, nombreNormalizado: normalized, fechaNacimiento: row.paciente.fechaNacimiento }, select: { id: true } })
     const otherOwner = await tx.inscripcion.findFirst({ where: { pacienteId: row.pacienteId, apoderadoId: { not: family.id } }, select: { id: true } })
     if (collision || otherOwner) return { estado: "CONFLICTO" as const }
-    await tx.paciente.update({ where: { id: row.pacienteId }, data: { apoderadoId: family.id } })
-    await tx.inscripcion.update({ where: { id: row.id }, data: { apoderadoId: family.id } })
+    await tx.$queryRaw`SELECT id FROM "CorreoInscripcion" WHERE "inscripcionId"=${row.id}::uuid FOR UPDATE`
+    const confirmation = await tx.correoInscripcion.findUnique({ where: { inscripcionId: row.id } })
+    if (confirmation?.estado === "ENVIANDO") return { estado: "ENVIO_EN_CURSO" as const }
+    await tx.paciente.update({ where: { id: row.pacienteId }, data: { apoderadoId: family.id, revisionDatos: { increment: 1 } } })
+    await tx.inscripcion.update({ where: { id: row.id }, data: { apoderadoId: family.id, revisionContacto: { increment: 1 } } })
     await tx.vinculacionPresencial.update({ where: { id: invite.id }, data: { consumidaAt: new Date(), apoderadoId: family.id } })
-    // Un registro sin correo previo obtiene una orden recuperable; no se reenvían órdenes existentes.
-    await tx.correoInscripcion.upsert({ where: { inscripcionId: row.id }, create: { inscripcionId: row.id, datosEvento: mailEvent(await tx.evento.findUniqueOrThrow({ where: { id: row.eventoId } })) }, update: {} })
+    // La cuenta verificada obtiene una copia recuperable con su propio destinatario.
+    // No se reutiliza la clave de un comprobante enviado al contacto presencial.
+    await tx.correoInscripcion.upsert({ where: { inscripcionId: row.id }, create: { inscripcionId: row.id, datosFamilia: mailFamily(row.paciente.nombre, family.correo, true), datosEvento: mailEvent(await tx.evento.findUniqueOrThrow({ where: { id: row.eventoId } })) }, update: { datosFamilia: mailFamily(row.paciente.nombre, family.correo, true), revisionContenido: { increment: 1 }, estado: "PENDIENTE", disponibleAt: new Date(), bloqueoToken: null, bloqueoHasta: null, ultimoError: null, enviadoAt: null, proveedorId: null } })
     return { estado: "OK" as const, vinculada: true, vinculacion: preview }
   }, { timeout: 15000 })
 }

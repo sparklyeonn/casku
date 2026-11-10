@@ -61,6 +61,9 @@ export async function linkingChecks({ db, client, signIn, password, accounts, ad
   assert.equal(mails.length, beforeMails, "Vincular no publica ni envía resultados automáticamente")
   assert((await (await owner.request("/api/familias/inscripciones")).json()).inscripciones.some(row => row.id === sourceId))
   assert.equal((await owner.request(`/api/familias/inscripciones/${sourceId}/qr`)).status, 200)
+  const verifiedEnvelope = (await db.query('SELECT "datosFamilia","revisionContenido",estado FROM "CorreoInscripcion" WHERE "inscripcionId"=$1', [sourceId])).rows[0]
+  assert.equal(verifiedEnvelope.datosFamilia.correo, owner.user.email); assert.equal(verifiedEnvelope.datosFamilia.conCuenta, true)
+  assert.equal(verifiedEnvelope.estado, "PENDIENTE")
   assert.equal((await (await kine(detail)).json()).resultado.publicable, true)
   const published = await kine(`${detail}/publicar`, post({ revision: 1 })); assert.equal(published.status, 201)
   const publication = (await published.json()).resultado.publicacion

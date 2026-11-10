@@ -83,6 +83,7 @@ model EventoSeleccionado {
 }
 
 model Paciente {
+  revisionDatos Int @default(1)
   id              String       @id @default(cuid())
   rut             String?      @unique
   nombre          String
@@ -124,6 +125,7 @@ model Evaluacion {
 }
 
 model Apoderado {
+  revisionDatos Int @default(1)
   id             String @id @default(uuid()) @db.Uuid
   correo         String @unique
   nombre         String?
@@ -205,6 +207,7 @@ model LimiteSolicitud {
 }
 
 model Inscripcion {
+  revisionContacto Int @default(1)
   id             String @id @db.Uuid
   solicitudHash  String
   eventoId       String @db.Uuid
@@ -329,6 +332,8 @@ enum EstadoCorreo {
 }
 
 model CorreoInscripcion {
+  datosFamilia Json?
+  revisionContenido Int @default(1)
   datosEvento   Json?
   id            String @id @default(uuid()) @db.Uuid
   inscripcionId String @unique @db.Uuid
@@ -344,5 +349,21 @@ model CorreoInscripcion {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   @@index([estado, disponibleAt])
+}
+
+model CambioDatos {
+  id String @id @default(uuid()) @db.Uuid
+  entidad String
+  registroId String
+  revision Int
+  actorId String
+  perfilActor String
+  apoderadoId String? @db.Uuid
+  motivo String
+  anterior Json
+  nueva Json
+  createdAt DateTime @default(now())
+  @@unique([entidad, registroId, revision])
+  @@index([apoderadoId, createdAt])
 }
 

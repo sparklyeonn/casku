@@ -1,3 +1,4 @@
+import { mailFamily } from "@/lib/families/identity-snapshot"
 import { mailEvent } from "@/lib/events/mail-snapshot"
 import { createHash, randomBytes } from "node:crypto"
 import { Prisma } from "@prisma/client"
@@ -33,7 +34,7 @@ export async function registerOnsite(staffId: string, input: OnsiteInput) {
     }
     const baby = await tx.paciente.create({ data: input.bebe })
     const updated = await tx.evento.update({ where: { id: event.id }, data: { inscritos: { increment: 1 }, ultimoNumero: { increment: 1 } } })
-    const row = await tx.inscripcion.create({ data: { id: input.id, solicitudHash: hash, eventoId: event.id, pacienteId: baby.id, numero: updated.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), origen: "PRESENCIAL", registradoPorId: staffId, contactoNombre: input.nombreApoderado, contactoCorreo: input.correo, contactoTelefono: input.telefono || null, ...(input.correo ? { correo: { create: { datosEvento: mailEvent(event) } } } : {}) }, select: receptionSelect })
+    const row = await tx.inscripcion.create({ data: { id: input.id, solicitudHash: hash, eventoId: event.id, pacienteId: baby.id, numero: updated.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), origen: "PRESENCIAL", registradoPorId: staffId, contactoNombre: input.nombreApoderado, contactoCorreo: input.correo, contactoTelefono: input.telefono || null, ...(input.correo ? { correo: { create: { datosEvento: mailEvent(event), datosFamilia: mailFamily(baby.nombre, input.correo, false) } } } : {}) }, select: receptionSelect })
     return { ...await ensureArrival(tx, row, staffId), nuevaInscripcion: true }
   }, { timeout: 15000 })
   for (let attempt = 0; ; attempt++) {

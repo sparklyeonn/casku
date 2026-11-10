@@ -1,6 +1,6 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import { getTeamAccounts, accountRevision } from "./team-accounts"
+import { teamAccount, teamRevision } from "./team/store"
 import { verifyPassword } from "./passwords.mjs"
 import { isRole } from "./roles"
 import { consumeFamilyCode } from "./families/otp"
@@ -21,10 +21,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const entry = attempts.get(email) ?? { count: 0, until: now + 15 * 60_000 }
       if (entry.count >= 5 || attempts.size > 10_000) return null
       entry.count++; attempts.set(email, entry)
-      const account = getTeamAccounts().find(a => a.email === email && a.active)
-      if (!account || !await verifyPassword(credentials.password, account.passwordHash)) return null
+      const account = await teamAccount({ email })
+      if (!account?.active || !await verifyPassword(credentials.password, account.passwordHash)) return null
       attempts.delete(email)
-      return { id: account.id, email: account.email, name: account.name, role: account.role }
+      return { id: account.id, email: account.email, name: account.name, role: account.role, teamVersion: account.version }
     },
   }), Credentials({
     id: "familias", name: "Familias Casku",
@@ -47,13 +47,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.name = family.nombre || "Apoderado"; token.email = family.correo
         return token
       }
-      const account = getTeamAccounts().find(a => a.active && a.id === (user?.id ?? token.id))
-      if (!account || (!user && token.revision !== accountRevision(account))) return null
-      token.id = account.id; token.role = account.role; token.revision = accountRevision(account)
-      token.name = account.name; token.email = account.email
+      const id = user?.id ?? token.id
+      if (typeof id !== "string") return null
+      const account = await teamAccount({ id })
+      if (!account?.active || (user && user.teamVersion !== account.version) || (!user && token.revision !== teamRevision(account))) return null
+      token.id = account.id; token.role = account.role; token.revision = teamRevision(account)
+      token.name = account.name; token.email = account.email; token.teamVersion = account.version
       return token
     },
     async session({ session, token }) {
+      session.user.teamVersion = typeof token.teamVersion === "number" ? token.teamVersion : undefined
       session.user.id = typeof token.id === "string" ? token.id : ""
       session.user.role = isRole(token.role) || token.role === "APODERADO" ? token.role : undefined
       return session

@@ -15,19 +15,19 @@ El código actual es la continuación del proyecto de Downloads, copiado a Docum
 
 ### Ejecutar y habilitar al equipo
 
-Desde esta carpeta, ejecutar `npm run account:create`. El asistente pide correo, nombre, perfil y una contraseña de al menos 12 caracteres que no se muestra. Guarda el hash en `.env.local`, crea AUTH_SECRET si no existe y no imprime contraseñas. Repetir por cada integrante; reiniciar el servidor después de cambios.
+La gestión visual del equipo está implementada en `/administracion/cuentas`: creación, edición, perfiles, desactivación/reactivación y contraseñas, con auditoría y sesiones invalidadas. Consultar [CUENTAS_EQUIPO.md](CUENTAS_EQUIPO.md). El asistente `npm run account:create` queda reservado para preparar el acceso inicial antes de la primera importación.
 
 Ejecutar `npm run dev` y abrir /login. El perfil depende de la cuenta; no se elige desde el navegador. La sección Familias permite verificar el correo cuando el remitente esté configurado.
 
-Conservar DATABASE_URL en la configuración privada. Para desactivar una cuenta, poner `active: false` en su entrada de CASKU_TEAM_ACCOUNTS y reiniciar. Cambiar contraseña o perfil invalida las sesiones anteriores. Los perfiles se administran por configuración en esta etapa, no desde una pantalla pública.
+Conservar DATABASE_URL en la configuración privada. Las cuentas iniciales se importan una sola vez conservando IDs y hashes. Después, solo la base decide el acceso y los cambios se realizan en el panel; modificar la lista antigua del entorno no restaura accesos.
 
 ### Comprobaciones
 
-`npm test`, `npx tsc --noEmit`, `npm run lint` y `npm run build`. Las pruebas automatizadas no escriben en la base ni envían correos. Las pruebas HTTP de acceso deben usar cuentas efímeras y limitarse a operaciones que terminan antes de acceder a la base.
+`npm test`, `npx tsc --noEmit`, `npm run lint` y `npm run build`. Las pruebas automatizadas no escriben en la base configurada ni envían correos reales. Las suites HTTP utilizan cuentas efímeras y PostgreSQL local temporal; deben ejecutarse por separado.
 
-En esta entrega pasaron las cinco pruebas unitarias, TypeScript, ESLint y `npm run test:http` (ingreso, permisos, apertura de pantalla y cierre de sesión de los tres perfiles). La compilación de producción quedó bloqueada por `Operation not permitted` al abrir el proceso auxiliar de estilos de Turbopack en este entorno. No se verificó el guardado contra la base real. No se aplicaron migraciones.
+En la entrega inicial pasaron las cinco pruebas unitarias, TypeScript, ESLint y `npm run test:http` (ingreso, permisos, apertura de pantalla y cierre de sesión de los tres perfiles). La compilación de producción quedó bloqueada por `Operation not permitted` al abrir el proceso auxiliar de estilos de Turbopack en este entorno. No se verificó el guardado contra la base real. En aquella entrega inicial no se aplicaron migraciones; las entregas posteriores se documentan por separado.
 
-Antes de publicar en internet: configurar HTTPS, AUTH_URL y AUTH_SECRET; usar almacenamiento compartido para limitar intentos si hay varias instancias y trasladar la provisión del equipo a cuentas persistentes/invitaciones. El límite actual es por cuenta y proceso (5 intentos / 15 minutos). Las fórmulas clínicas existentes se conservaron sin validar ni alterar sus umbrales médicos.
+Antes de publicar en internet: configurar HTTPS, AUTH_URL y AUTH_SECRET; usar almacenamiento compartido para limitar intentos si hay varias instancias; las cuentas del equipo ya son persistentes y se gestionan desde administración. El límite actual es por cuenta y proceso (5 intentos / 15 minutos). Las fórmulas clínicas existentes se conservaron sin validar ni alterar sus umbrales médicos.
 
 ## Etapa 2 — Familias, eventos e inscripciones
 
@@ -57,5 +57,5 @@ Primer incremento implementado: borradores revisables por su autora, copia publi
 - Autoría clínica verificada y cambios auditados de borrador implementados. Las correcciones después de publicar y la revisión supervisada siguen pendientes.
 - Solo el apoderado verificado y actualmente vinculado accede a resultados publicados. La vinculación de presenciales está implementada con código entregado por recepción y aceptación de la cuenta verificada (ver VINCULACION.md). La revisión de históricos y la resolución supervisada de fichas coincidentes siguen pendientes.
 - Correo idempotente con estado de aceptación y reintento manual implementado. Pendientes: remitente, webhooks de entrega y reintento programado.
-- Edición de eventos, administración visual de accesos, reportes operativos y seguimiento de familias con permisos específicos.
+- Administración visual de accesos implementada (ver CUENTAS_EQUIPO.md). Pendientes: edición de eventos, reportes operativos y seguimiento de familias con permisos específicos.
 - Definir quién contacta a las familias y qué datos necesita antes de construir seguimiento.

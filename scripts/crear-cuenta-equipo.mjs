@@ -1,7 +1,9 @@
 import { randomBytes, randomUUID } from "node:crypto"
 import { readFile, writeFile, chmod } from "node:fs/promises"
 import { createInterface, emitKeypressEvents } from "node:readline"
-import { parse } from "dotenv"
+import { parse, config } from "dotenv"
+import { PrismaClient } from "@prisma/client"
+import { PrismaPg } from "@prisma/adapter-pg"
 import { hashPassword } from "../src/lib/passwords.mjs"
 
 const ask = (question) => new Promise(resolve => {
@@ -26,6 +28,12 @@ async function passwordPrompt() {
 }
 async function readEnv(path) { try { return await readFile(path, "utf8") } catch (e) { if (e.code === "ENOENT") return ""; throw e } }
 try {
+  config({ path: [".env.local", ".env"], quiet: true })
+  if (!process.env.DATABASE_URL) throw new Error("Configura la conexión y aplica las migraciones antes de crear el acceso inicial.")
+  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) })
+  try {
+    if ((await db.registroEquipo.findUnique({ where: { id: 1 } }))?.importadoAt) throw new Error("Las cuentas ya se gestionan desde Administración → Cuentas del equipo. Este asistente solo prepara el acceso inicial.")
+  } finally { await db.$disconnect() }
   const email = String(await ask("Correo del equipo: ")).toLowerCase()
   const name = String(await ask("Nombre: "))
   const role = String(await ask("Perfil (KINESIOLOGO, RECEPCION o ADMIN): ")).toUpperCase()

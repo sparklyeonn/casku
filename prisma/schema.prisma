@@ -6,6 +6,36 @@ datasource db {
   provider = "postgresql"
 }
 
+model CuentaEquipo {
+  id String @id
+  email String @unique
+  name String
+  role String
+  passwordHash String
+  active Boolean @default(true)
+  version Int @default(1)
+  creadoPorId String?
+  solicitudHash String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RegistroEquipo {
+  id Int @id
+  importadoAt DateTime?
+}
+
+model CambioCuentaEquipo {
+  id String @id @default(uuid()) @db.Uuid
+  cuentaId String
+  actorId String
+  accion String
+  anterior Json?
+  nueva Json
+  createdAt DateTime @default(now())
+  @@index([cuentaId, createdAt])
+}
+
 model Evento {
   id             String                @id @default(uuid()) @db.Uuid
   nombre         String

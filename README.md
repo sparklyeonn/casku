@@ -8,18 +8,18 @@ Administración permite crear eventos con nombre, fecha, lugar y cupos, y selecc
 
 1. Instalar dependencias con `npm ci` si no existen.
 2. Configurar `DATABASE_URL` con la conexión existente y comprobar el destino. Para habilitar las tablas de eventos e inscripciones ejecutar `npm run db:deploy` y `npx prisma generate`. La nueva migración conserva los registros anteriores, añade relaciones opcionales al paciente y permite bebés sin RUT.
-3. Ejecutar `npm run account:create` y seguir el asistente para crear cada cuenta del equipo.
+3. En una instalación nueva, ejecutar `npm run account:create` para preparar al menos una cuenta administradora. Tras el primer ingreso, gestionar el equipo desde **Administración → Cuentas del equipo**. Ver [CUENTAS_EQUIPO.md](docs/CUENTAS_EQUIPO.md).
 4. Configurar `AUTH_SECRET`, `AUTH_URL`, `RESEND_API_KEY` y `RESEND_FROM` en la configuración privada. El remitente verificado está pendiente de Casku: sin él no se envían códigos ni se permite omitir la verificación.
 5. Ejecutar `npm run dev`. Administración abre inscripciones desde `/administracion`; las familias comienzan en `/inscripcion` y consultan sus comprobantes en `/familias`.
 
-Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas de demostración. La configuración privada de cuentas se guarda en `.env.local`.
+Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas de demostración. Las cuentas se guardan en la base. La lista privada de `.env.local` se usa solo para la importación inicial.
 
 ## Verificación
 
 - `npm test`: contraseñas, permisos, cuentas y validación de evaluaciones.
-- `npm run test:http`: inicio/cierre de sesión y permisos mediante servidor temporal en el puerto 3117, con cuentas efímeras y conexión de base ficticia. No crea pacientes ni envía correos.
+- `npm run test:http`: inicio/cierre de sesión y permisos mediante servidor temporal en el puerto 3117, con cuentas efímeras y PostgreSQL local temporal. No utiliza la base configurada ni envía correos.
 - `npm run test:events`: migración y gestión de eventos con PostgreSQL temporal aislado. No utiliza la base real de Casku.
-- `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR, correo, recepción y kinesiología (llegadas, reservas, formularios, guardado y permisos), publicación de resultados y vinculación presencial, con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
+- `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR, correo, recepción y kinesiología (llegadas, reservas, formularios, guardado y permisos), publicación de resultados, vinculación presencial y gestión de cuentas del equipo, con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
 - `npx tsc --noEmit`, `npm run lint`, `npm run build`.
 
 Consulta [el plan de implementación](docs/IMPLEMENTACION.md) para conocer el alcance, las etapas pendientes y las condiciones antes de publicar.
@@ -39,3 +39,5 @@ La [gestión de ausencias](docs/AUSENCIAS.md) permite marcar a quien no responde
 La [publicación de resultados](docs/RESULTADOS.md) incorpora revisión de borradores, publicación explícita, consulta en la cuenta familiar y correo con reintento. Las inscripciones presenciales sin vinculación verificada quedan pendientes de ese proceso antes de publicar resultados clínicos.
 
 La [vinculación presencial](docs/VINCULACION.md) permite que recepción entregue un código a la familia y que esta acepte desde su cuenta verificada, conservando bebé, inscripción, fila y evaluaciones.
+
+La [gestión de cuentas](docs/CUENTAS_EQUIPO.md) permite crear y editar usuarios del equipo, asignar perfiles, desactivar accesos y cambiar contraseñas desde administración, con revocación de sesiones y auditoría.

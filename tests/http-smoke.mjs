@@ -1,14 +1,22 @@
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
 import { randomBytes } from "node:crypto"
+import { readFile, readdir } from "node:fs/promises"
+import { PGlite } from "@electric-sql/pglite"
+import { PGLiteSocketServer } from "@electric-sql/pglite-socket"
+import { once } from "node:events"
 import { setTimeout as pause } from "node:timers/promises"
 import { hashPassword } from "../src/lib/passwords.mjs"
 const base = "http://localhost:3117", password = randomBytes(20).toString("base64url")
 const accounts = await Promise.all(["KINESIOLOGO", "RECEPCION", "ADMIN"].map(async role => ({ id: `smoke-${role}`, email: `${role.toLowerCase()}@example.com`, name: `Prueba ${role}`, role, active: true, passwordHash: await hashPassword(password) })))
+const db = new PGlite(), socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: 0 })
+await db.waitReady
+for (const migration of (await readdir("prisma/migrations", { withFileTypes: true })).filter(value => value.isDirectory()).map(value => value.name).sort()) await db.exec(await readFile(`prisma/migrations/${migration}/migration.sql`, "utf8"))
+await socket.start()
 const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--port", "3117"], {
-  cwd: process.cwd(), env: { ...process.env, CASKU_TEST_MODE: "1", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify(accounts), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", DATABASE_URL: "postgresql://smoke:smoke@127.0.0.1:1/smoke?connect_timeout=1" }, stdio: ["ignore", "pipe", "pipe"],
+  cwd: process.cwd(), env: { ...process.env, CASKU_TEST_MODE: "1", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify(accounts), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", DATABASE_URL: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"],
 })
-let log = "", exited = false
+let log = "", exited = false, testFailed = false
 child.stdout.on("data", b => { log = (log + b).slice(-10000) }); child.stderr.on("data", b => { log = (log + b).slice(-10000) }); child.on("exit", () => { exited = true })
 function client() {
   const cookies = new Map()
@@ -47,5 +55,7 @@ try {
     console.log(`OK HTTP: ${account.role}, permisos y cierre de sesión.`)
   }
   console.log("Pruebas HTTP completas. No se usó la base real ni se enviaron correos.")
-} catch (error) { console.error(error); console.error(log); process.exitCode = 1 }
-finally { child.kill("SIGTERM") }
+} catch (error) { console.error(error); console.error(log); testFailed = true }
+finally { if (!exited) { child.kill("SIGTERM"); await Promise.race([once(child, "exit"), pause(5000)]) }; await socket.stop(); await db.close() }
+
+if (testFailed) process.exitCode = 1

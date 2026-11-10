@@ -36,8 +36,11 @@ export async function clinicOverview(staffId: string, eventoId: string) {
     return { atencion: active ? summary(active) : null, esperando: waiting, previas: waiting - presenciales, presenciales, politica: queuePolicy, proximo: row && next ? { numero: row.inscripcion.numero, bebe: row.inscripcion.paciente.nombre, origen: row.inscripcion.origen, motivo: next.motivo } : null }
   }, { isolationLevel: "RepeatableRead" })
 }
-export async function callNext(staffId: string, eventoId: string, requestId: string) {
+export async function callNext(staffId: string, eventoId: string, requestId: string, version: number) {
   const save = () => prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "CuentaEquipo" WHERE id=${staffId} FOR UPDATE`
+    const account = await tx.cuentaEquipo.findUnique({ where: { id: staffId } })
+    if (!account?.active || account.role !== "KINESIOLOGO" || account.version !== version) throw new AttentionConflict("Tu acceso cambió. Vuelve a iniciar sesión antes de llamar.")
     const event = await tx.$queryRaw<Array<{ id: string; previosConsecutivos: number }>>`SELECT "id", "previosConsecutivos" FROM "Evento" WHERE "id" = ${eventoId}::uuid FOR UPDATE`
     if (!event.length) throw new AttentionUnavailable()
     const replay = await tx.llamadaFila.findUnique({ where: { id: requestId } })

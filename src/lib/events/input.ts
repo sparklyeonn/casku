@@ -24,4 +24,10 @@ export function parseEventInput(input: unknown) {
   return { id, nombre, fecha, lugar, cupos: raw.cupos }
 }
 export type EventInput = ReturnType<typeof parseEventInput>
-export type EventSummary = { id: string; nombre: string; fecha: string; lugar: string; cupos: number; inscritos: number; inscripcionesAbiertas: boolean }
+export function parseEventEdit(id: string, input: unknown) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new EventInputError("Los datos del evento no son válidos.")
+  const raw = input as Record<string, unknown>
+  if (!Number.isSafeInteger(raw.revision) || Number(raw.revision) < 1) throw new EventInputError("Actualiza el evento antes de guardar.")
+  return { ...parseEventInput({ ...raw, id }), revision: Number(raw.revision) }
+}
+export type EventSummary = { id: string; nombre: string; fecha: string; lugar: string; cupos: number; inscritos: number; inscripcionesAbiertas: boolean; revision: number }

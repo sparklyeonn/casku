@@ -56,7 +56,7 @@ export async function resultsChecks({ db, client, signIn, password, accounts, ad
   assert.deepEqual(responses.map(r => r.status).sort(), [200, 201])
   const publishedResponses = await Promise.all(responses.map(r => r.json())), published = publishedResponses[0].resultado.publicacion
   assert.equal(published.id, publishedResponses[1].resultado.publicacion.id)
-  assert.equal(mails.length, beforeMails + 1)
+  assert.equal(mails.length, beforeMails + 1, `Correo tras publicar: ${JSON.stringify(publishedResponses.map(row => row.resultado.publicacion.correo))}`)
   const resultMail = mails.at(-1)
   assert.equal(resultMail.subject, "Tu resultado de craneometría en Casku")
   assert([].concat(resultMail.to).includes(f1.user.email)); assert(![].concat(resultMail.to).includes("intruso@example.com"))

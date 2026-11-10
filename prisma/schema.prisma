@@ -54,8 +54,22 @@ model Evento {
   fila            EntradaFila[]
   llamadas        LlamadaFila[]
   previosConsecutivos Int @default(0)
+  revision Int @default(1)
+  cambios CambioEvento[]
 
   @@index([fecha, createdAt])
+}
+
+model CambioEvento {
+  id String @id @default(uuid()) @db.Uuid
+  eventoId String @db.Uuid
+  evento Evento @relation(fields: [eventoId], references: [id], onDelete: Restrict)
+  revision Int
+  actorId String
+  anterior Json
+  nueva Json
+  createdAt DateTime @default(now())
+  @@unique([eventoId, revision])
 }
 
 // Contexto de trabajo por cuenta. No activa ni cierra un evento globalmente.
@@ -315,6 +329,7 @@ enum EstadoCorreo {
 }
 
 model CorreoInscripcion {
+  datosEvento   Json?
   id            String @id @default(uuid()) @db.Uuid
   inscripcionId String @unique @db.Uuid
   inscripcion   Inscripcion @relation(fields: [inscripcionId], references: [id], onDelete: Restrict)

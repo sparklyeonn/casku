@@ -19,7 +19,7 @@ Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas d
 - `npm test`: contraseñas, permisos, cuentas y validación de evaluaciones.
 - `npm run test:http`: inicio/cierre de sesión y permisos mediante servidor temporal en el puerto 3117, con cuentas efímeras y PostgreSQL local temporal. No utiliza la base configurada ni envía correos.
 - `npm run test:events`: migración y gestión de eventos con PostgreSQL temporal aislado. No utiliza la base real de Casku.
-- `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR, correo, recepción y kinesiología (llegadas, reservas, formularios, guardado y permisos), publicación de resultados, vinculación presencial, gestión de cuentas del equipo y resumen administrativo, con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
+- `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR, correo, recepción y kinesiología (llegadas, reservas, formularios, guardado y permisos), publicación de resultados, vinculación presencial, gestión de cuentas del equipo, resumen y edición de eventos, con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
 - `npx tsc --noEmit`, `npm run lint`, `npm run build`.
 
 Consulta [el plan de implementación](docs/IMPLEMENTACION.md) para conocer el alcance, las etapas pendientes y las condiciones antes de publicar.
@@ -43,3 +43,5 @@ La [vinculación presencial](docs/VINCULACION.md) permite que recepción entregu
 La [gestión de cuentas](docs/CUENTAS_EQUIPO.md) permite crear y editar usuarios del equipo, asignar perfiles, desactivar accesos y cambiar contraseñas desde administración, con revocación de sesiones y auditoría.
 
 El [resumen administrativo](docs/RESUMEN_ADMINISTRATIVO.md) muestra por evento inscritos, atendidos, en espera, ausentes y resultados pendientes de publicación, con actualización automática y contadores complementarios, sin exponer datos clínicos.
+
+La [edición de eventos](docs/EDICION_EVENTOS.md) permite corregir nombre, lugar y capacidad, y cambiar la fecha antes de recibir inscripciones, con revisión de conflictos y auditoría. Conserva números, QR, fila y copias ya preparadas de confirmación.

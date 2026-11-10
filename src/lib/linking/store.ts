@@ -1,3 +1,4 @@
+import { mailEvent } from "@/lib/events/mail-snapshot"
 import type { Prisma, VinculacionPresencial } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { privateHash, takeLimit } from "@/lib/families/security"
@@ -79,7 +80,7 @@ export async function familyLink(familyId: string, code: string, accept: boolean
     await tx.inscripcion.update({ where: { id: row.id }, data: { apoderadoId: family.id } })
     await tx.vinculacionPresencial.update({ where: { id: invite.id }, data: { consumidaAt: new Date(), apoderadoId: family.id } })
     // Un registro sin correo previo obtiene una orden recuperable; no se reenvían órdenes existentes.
-    await tx.correoInscripcion.upsert({ where: { inscripcionId: row.id }, create: { inscripcionId: row.id }, update: {} })
+    await tx.correoInscripcion.upsert({ where: { inscripcionId: row.id }, create: { inscripcionId: row.id, datosEvento: mailEvent(await tx.evento.findUniqueOrThrow({ where: { id: row.eventoId } })) }, update: {} })
     return { estado: "OK" as const, vinculada: true, vinculacion: preview }
   }, { timeout: 15000 })
 }

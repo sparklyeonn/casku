@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { chileToday, type RegistrationInput } from "./input"
 import { RegistrationConflict } from "./http"
 import { takeLimit } from "./security"
+import { mailEvent } from "@/lib/events/mail-snapshot"
 
 export const registrationInclude = { evento: true, paciente: true, correo: true } satisfies Prisma.InscripcionInclude
 type RegistrationRow = Prisma.InscripcionGetPayload<{ include: typeof registrationInclude }>
@@ -44,7 +45,7 @@ export async function createRegistration(familyId: string, input: RegistrationIn
     }
     await tx.apoderado.update({ where: { id: familyId }, data: { nombre: input.nombreApoderado, telefono: input.telefono || null, rut: input.rutApoderado } })
     const updated = await tx.evento.update({ where: { id: event.id }, data: { inscritos: { increment: 1 }, ultimoNumero: { increment: 1 } } })
-    return tx.inscripcion.create({ data: { id: input.id, solicitudHash: hash, eventoId: event.id, pacienteId: baby.id, apoderadoId: familyId, origen: event.fecha.toISOString().slice(0, 10) === today ? "PRESENCIAL" : "PREVIA", numero: updated.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), correo: { create: {} } }, include: registrationInclude })
+    return tx.inscripcion.create({ data: { id: input.id, solicitudHash: hash, eventoId: event.id, pacienteId: baby.id, apoderadoId: familyId, origen: event.fecha.toISOString().slice(0, 10) === today ? "PRESENCIAL" : "PREVIA", numero: updated.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), correo: { create: { datosEvento: mailEvent(event) } } }, include: registrationInclude })
   }, { timeout: 15000 })
   for (let attempt = 0; ; attempt++) {
     try { return await save() } catch (error) {

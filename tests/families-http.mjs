@@ -6,6 +6,7 @@ import { createServer } from "node:http"
 import { readFile, readdir } from "node:fs/promises"
 import { setTimeout as pause } from "node:timers/promises"
 import QRCode from "qrcode"
+import { Pool, types as pgTypes } from "pg"
 import { PGlite } from "@electric-sql/pglite"
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket"
 import { hashPassword } from "../src/lib/passwords.mjs"
@@ -19,8 +20,11 @@ import { resultsChecks } from "./results-checks.mjs"
 import { linkingChecks } from "./linking-checks.mjs"
 import { teamChecks } from "./team-checks.mjs"
 import { overviewChecks } from "./overview-checks.mjs"
+import { eventEditChecks } from "./event-edit-checks.mjs"
+import { seedBeforeEventEditMigration } from "./event-edit-migration.mjs"
 
-const db = new PGlite(), socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: 0, maxConnections: 20 })
+const embeddedDb = new PGlite(), socket = new PGLiteSocketServer({ db: embeddedDb, host: "127.0.0.1", port: 0, maxConnections: 20 })
+let db = embeddedDb, fixturePool
 const base = "http://localhost:3120", password = randomBytes(20).toString("base64url")
 const mails = [], deduped = new Map(), sentPayloads = new Map()
 let failConfirmation = false, failResults = false, failAll = false, testFailed = false, child, exited = false, log = ""
@@ -30,7 +34,7 @@ const mailServer = createServer(async (request, response) => {
   response.setHeader("Content-Type", "application/json")
   if (failAll || (failResults && body.subject === "Tu resultado de craneometría en Casku") || (failConfirmation && body.subject?.startsWith("Inscripción"))) { response.writeHead(503); response.end(JSON.stringify({ name: "test_failure", message: "Temporary failure" })); return }
   const key = request.headers["idempotency-key"]
-  if (deduped.has(key)) { if (body.subject === "Tu resultado de craneometría en Casku" && JSON.stringify(body) !== JSON.stringify(sentPayloads.get(key))) { response.writeHead(409); response.end(JSON.stringify({ name: "validation_error", message: "Idempotency payload changed" })); return }; response.end(JSON.stringify({ id: deduped.get(key) })); return }
+  if (deduped.has(key)) { if (JSON.stringify(body) !== JSON.stringify(sentPayloads.get(key))) { response.writeHead(409); response.end(JSON.stringify({ name: "validation_error", message: "Idempotency payload changed" })); return }; response.end(JSON.stringify({ id: deduped.get(key) })); return }
   const id = randomUUID(); deduped.set(key, id); sentPayloads.set(key, body); mails.push({ ...body, providerId: id, key })
   response.end(JSON.stringify({ id }))
 })
@@ -80,12 +84,17 @@ try {
     INSERT INTO "Evaluacion" (id,"pacienteId","correoPadre",anteroposterior,biparietal,"diagonalIzq","diagonalDer","indiceCraneal","indiceAsimetria",diagnostico,recomendacion,kinesiologa) VALUES ('legacy-evaluation','legacy-baby','legacy@example.com',140,120,135,138,85.7,3,'Ejemplo','Ejemplo','Profesional ficticio');`)
   const before = await clinicalSnapshot()
   for (const name of migrations.filter(name => name >= "20261109000200_inscripcion_familiar")) {
-    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : name === "20261109000700_publicacion_resultados" ? await seedBeforeResultsMigration(db) : null
+    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : name === "20261109000700_publicacion_resultados" ? await seedBeforeResultsMigration(db) : name === "20261110000100_edicion_eventos" ? await seedBeforeEventEditMigration(db) : null
     await db.exec(await readFile(`prisma/migrations/${name}/migration.sql`, "utf8"))
     if (verify) await verify()
   }
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
-  await socket.start(); await new Promise(resolve => mailServer.listen(0, "127.0.0.1", resolve))
+  await socket.start()
+  // Las comprobaciones también pasan por el multiplexor: una consulta directa a
+  // PGlite podría entrar en la transacción que la aplicación aún está revirtiendo.
+  fixturePool = new Pool({ connectionString: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?sslmode=disable`, max: 1, types: { getTypeParser: (oid, format) => oid === 1114 && format !== "binary" ? value => new Date(value.replace(" ", "T") + "Z") : pgTypes.getTypeParser(oid, format) } })
+  db = { query: (sql, values) => fixturePool.query(sql, values?.map(value => value instanceof Date ? value.toISOString() : value)), exec: sql => fixturePool.query(sql) }
+  await new Promise(resolve => mailServer.listen(0, "127.0.0.1", resolve))
   const adminAccount = { id: "family-test-admin", email: "admin@example.com", name: "Admin ficticio", role: "ADMIN", active: true, passwordHash: await hashPassword(password) }
   const receptionAccounts = await Promise.all(["RECEPCION", "RECEPCION", "KINESIOLOGO", "KINESIOLOGO"].map(async (role, i) => ({ id: `reception-test-${i}`, email: `reception-${i}@example.com`, name: `Equipo ficticio ${i}`, role, active: true, passwordHash: await hashPassword(password) })))
   child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--port", "3120"], { cwd: process.cwd(), env: { ...process.env, NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts]), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", RESEND_API_KEY: "re_local_test_only", RESEND_FROM: "Casku <test@example.com>", CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"] })
@@ -206,13 +215,15 @@ try {
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await overviewChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  await eventEditChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
+  assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await teamChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   console.log("Pruebas completas con PostgreSQL y correo locales. No se usó Neon ni se enviaron mensajes reales.")
 } catch (error) { console.error(error); console.error(log.slice(-3000)); testFailed = true }
 finally {
   if (child && !exited) { child.kill("SIGTERM"); await Promise.race([once(child, "exit"), pause(5000)]) }
-  mailServer.closeAllConnections(); await new Promise(resolve => mailServer.close(resolve)); await socket.stop(); await db.close()
+  mailServer.closeAllConnections(); await new Promise(resolve => mailServer.close(resolve)); if (fixturePool) await fixturePool.end(); await socket.stop(); await embeddedDb.close()
 }
 
 // El cierre de la base WASM puede modificar exitCode: aplicar el resultado al final.

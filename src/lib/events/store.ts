@@ -1,12 +1,38 @@
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
-import type { EventInput } from "./input"
+import type { EventInput, parseEventEdit } from "./input"
+import { chileToday } from "@/lib/families/input"
 
 export class EventConflict extends Error {}
+export class EventEditConflict extends Error {}
 
 // La fecha es un día calendario: siempre se serializa y muestra sin conversión horaria.
-export function summarizeEvent(event: { id: string; nombre: string; fecha: Date; lugar: string; cupos: number; inscritos: number; inscripcionesAbiertas: boolean }) {
-  return { id: event.id, nombre: event.nombre, fecha: event.fecha.toISOString().slice(0, 10), lugar: event.lugar, cupos: event.cupos, inscritos: event.inscritos, inscripcionesAbiertas: event.inscripcionesAbiertas }
+export function summarizeEvent(event: { id: string; nombre: string; fecha: Date; lugar: string; cupos: number; inscritos: number; inscripcionesAbiertas: boolean; revision: number }) {
+  return { id: event.id, nombre: event.nombre, fecha: event.fecha.toISOString().slice(0, 10), lugar: event.lugar, cupos: event.cupos, inscritos: event.inscritos, inscripcionesAbiertas: event.inscripcionesAbiertas, revision: event.revision }
+}
+
+export async function editEvent(actor: { id: string; version: number }, input: ReturnType<typeof parseEventEdit>) {
+  return prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT "id" FROM "Evento" WHERE "id"=${input.id}::uuid FOR UPDATE`
+    const event = await tx.evento.findUnique({ where: { id: input.id } })
+    if (!event) return null
+    const admin = await tx.cuentaEquipo.findUnique({ where: { id: actor.id } })
+    if (!admin?.active || admin.role !== "ADMIN" || admin.version !== actor.version) throw new EventEditConflict("Tu acceso cambió. Vuelve a iniciar sesión.")
+    const same = event.nombre === input.nombre && event.lugar === input.lugar && event.fecha.getTime() === input.fecha.getTime() && event.cupos === input.cupos
+    // Una respuesta perdida se recupera sin volver a editar ni duplicar la auditoría.
+    if (same) return { evento: summarizeEvent(event), actualizado: false }
+    if (event.revision !== input.revision) throw new EventEditConflict("El evento cambió en otra pantalla. Recarga sus datos antes de guardar.")
+    const occupied = Math.max(event.inscritos, await tx.inscripcion.count({ where: { eventoId: event.id } }))
+    if (input.cupos < occupied) throw new EventEditConflict(`No puedes reducir los cupos por debajo de las ${occupied} inscripciones reservadas.`)
+    if (event.fecha.getTime() !== input.fecha.getTime()) {
+      if (occupied > 0) throw new EventEditConflict("No puedes cambiar la fecha de un evento que ya tiene inscripciones.")
+      if (event.inscripcionesAbiertas) throw new EventEditConflict("Cierra las inscripciones antes de cambiar la fecha.")
+      if (input.fecha.toISOString().slice(0, 10) < chileToday()) throw new EventEditConflict("La nueva fecha no puede ser anterior a hoy en Chile.")
+    }
+    const updated = await tx.evento.update({ where: { id: event.id }, data: { nombre: input.nombre, lugar: input.lugar, fecha: input.fecha, cupos: input.cupos, revision: { increment: 1 } } })
+    await tx.cambioEvento.create({ data: { eventoId: event.id, actorId: actor.id, revision: updated.revision, anterior: summarizeEvent(event), nueva: summarizeEvent(updated) } })
+    return { evento: summarizeEvent(updated), actualizado: true }
+  }, { timeout: 15000 })
 }
 
 export async function listEventsFor(userId: string) {

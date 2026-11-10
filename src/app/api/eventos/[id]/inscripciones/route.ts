@@ -16,7 +16,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const event = await tx.evento.findUnique({ where: { id } })
       if (!event) return null
       if (data.abiertas && event.fecha.toISOString().slice(0, 10) < chileToday()) throw new FamilyInputError("No puedes abrir inscripciones de un evento que ya pasó.")
-      return tx.evento.update({ where: { id }, data: { inscripcionesAbiertas: data.abiertas } })
+      if (event.inscripcionesAbiertas === data.abiertas) return event
+      return tx.evento.update({ where: { id }, data: { inscripcionesAbiertas: data.abiertas, revision: { increment: 1 } } })
     })
     return updated ? familyResponse({ evento: summarizeEvent(updated) }) : familyResponse({ error: "Evento no disponible." }, 404)
   } catch (error) { return familyFailure(error) }

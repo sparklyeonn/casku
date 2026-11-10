@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import type { FormEvent } from "react"
 import type { EventSummary } from "@/lib/events/input"
 import { EventOverview } from "./EventOverview"
+import { EventEditor } from "./EventEditor"
 
 type EventsState = { eventos: EventSummary[]; seleccionadoId: string | null }
 const emptyForm = { nombre: "", fecha: "", lugar: "", cupos: "" }
@@ -21,6 +22,7 @@ async function responseData(response: Response) {
 export function EventManager() {
   const [data, setData] = useState<EventsState>({ eventos: [], seleccionadoId: null })
   const [form, setForm] = useState(emptyForm)
+  const [editing, setEditing] = useState<EventSummary | null>(null)
   const [loading, setLoading] = useState(true), [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState(""), [success, setSuccess] = useState("")
@@ -100,7 +102,8 @@ export function EventManager() {
       {selected && <p className="mt-3 text-sm font-medium">Inscripciones {selected.inscripcionesAbiertas ? "abiertas" : "cerradas"}</p>}
       <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">La selección se guarda para tu cuenta y no cambia el evento de otros administradores.</p>
     </section>
-    {selected && <EventOverview key={selected.id} eventoId={selected.id} />}
+    {selected && <EventOverview key={`${selected.id}:${selected.revision}`} eventoId={selected.id} />}
+    {editing && <EventEditor key={editing.id} event={editing} disabled={disabled} onStart={() => { if (inFlight.current) return false; inFlight.current = true; setBusy("edit"); return true }} onFinish={() => { inFlight.current = false; setBusy(null) }} onCancel={() => setEditing(null)} onReloaded={event => setData(previous => ({ ...previous, eventos: previous.eventos.map(row => row.id === event.id ? event : row).sort((a, b) => b.fecha.localeCompare(a.fecha)) }))} onSaved={(event, changed) => { setData(previous => ({ ...previous, eventos: previous.eventos.map(row => row.id === event.id ? event : row).sort((a, b) => b.fecha.localeCompare(a.fecha)) })); setEditing(null); setError(""); setSuccess(changed ? `Cambios guardados en “${event.nombre}”. Las inscripciones existentes se conservaron.` : "El evento ya tenía estos datos. No se duplicaron cambios.") }} />}
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
       <section aria-labelledby="events-list-title" className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
         <h2 id="events-list-title" className="text-xl font-semibold">Eventos creados {loaded && <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({data.eventos.length})</span>}</h2>
@@ -109,6 +112,7 @@ export function EventManager() {
           <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="min-w-0 break-words text-lg font-medium">{event.nombre}</h3>{data.seleccionadoId === event.id && <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-medium text-teal-800 dark:bg-teal-900 dark:text-teal-100">Seleccionado</span>}</div>
           <p className="break-words text-sm text-gray-600 dark:text-gray-300">{showDate(event.fecha)} · {event.lugar}</p><p className="text-sm">{event.inscritos} inscritos / {event.cupos.toLocaleString("es-CL")} cupos · Inscripciones {event.inscripcionesAbiertas ? "abiertas" : "cerradas"}</p>
           {data.seleccionadoId !== event.id && <button type="button" disabled={disabled} onClick={() => select(event)} className="rounded-lg border border-teal-700 px-4 py-2 text-sm font-medium text-teal-800 disabled:opacity-50 dark:border-teal-400 dark:text-teal-200">{busy === event.id ? "Seleccionando…" : "Trabajar en este evento"}</button>}
+          <button type="button" disabled={disabled || editing !== null} onClick={() => { if (inFlight.current) return; setEditing(event); setError(""); setSuccess("") }} className="rounded-lg border px-4 py-2 text-sm disabled:opacity-50">Editar evento</button>
           <button type="button" disabled={disabled} onClick={() => toggleRegistrations(event)} className="ml-2 rounded-lg border px-4 py-2 text-sm disabled:opacity-50">{busy === event.id ? "Actualizando…" : event.inscripcionesAbiertas ? "Cerrar inscripciones" : "Abrir inscripciones"}</button>
         </li>)}</ul>}
       </section>

@@ -1,8 +1,22 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { parseEventInput, parseEventId, EventInputError } from "../src/lib/events/input.ts"
+import { parseEventInput, parseEventId, parseEventEdit, EventInputError } from "../src/lib/events/input.ts"
+import { mailEvent, readMailEvent } from "../src/lib/events/mail-snapshot.ts"
 
 const input = { id: "0D6BB472-58D0-4DAB-8E0D-BC0E65197D33", nombre: " Expo Bebé ", fecha: "2026-12-20", lugar: " Santiago ", cupos: 100 }
+test("edición: exige revisión y usa el identificador de la ruta, sin aceptar contadores ni actor", () => {
+  const edited = parseEventEdit(input.id, { ...input, id: "otro", revision: 2, inscritos: 999, creadoPorId: "otro" })
+  assert.equal(edited.id, input.id.toLowerCase()); assert.equal(edited.revision, 2)
+  assert(!Object.hasOwn(edited, "inscritos")); assert(!Object.hasOwn(edited, "creadoPorId"))
+  for (const revision of [undefined, 0, -1, "1", 1.2]) assert.throws(() => parseEventEdit(input.id, { ...input, revision }), EventInputError)
+})
+test("confirmación: la copia del evento conserva el día calendario y solo sus datos públicos", () => {
+  const row = { nombre: "Evento original", lugar: "Lugar original", fecha: new Date("2026-12-20T00:00:00Z"), inscritos: 5 }
+  const snapshot = mailEvent(row)
+  row.nombre = "Evento corregido"
+  assert.deepEqual(readMailEvent(snapshot), { nombre: "Evento original", lugar: "Lugar original", fecha: "2026-12-20" })
+  assert.throws(() => readMailEvent(null)); assert.throws(() => readMailEvent({ ...snapshot, fecha: "inválida" }))
+})
 test("evento: conserva el día calendario y normaliza los campos", () => {
   const event = parseEventInput(input)
   assert.equal(event.id, input.id.toLowerCase())

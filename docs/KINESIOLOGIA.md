@@ -8,7 +8,7 @@
 4. Confirmar con la familia el número y nombre del bebé. Abrir el formulario de craneometría desde la tarjeta de atención.
 5. El formulario existente carga nombre, fecha de nacimiento, RUT si existe y correo del apoderado. Esos campos son de solo lectura. El nombre profesional proviene de la sesión; solo se ingresan las cuatro medidas. Una inscripción presencial puede no tener correo de contacto; esto no impide guardar su evaluación. **Limpiar medidas** conserva los datos del bebé.
 6. Guardar crea la evaluación sobre el paciente ya registrado y marca la atención `ATENDIDO` en la misma transacción. No crea otro paciente y admite bebés sin RUT.
-7. Volver a **Mi atención** para llamar al siguiente. Los resultados clínicos todavía no se publican ni se envían automáticamente por correo.
+7. Volver a **Mi atención** para llamar al siguiente. La evaluación guardada queda como borrador. **Revisar y publicar resultado** y **Mis resultados** permiten corregirlo y publicarlo para la familia, con intento de correo explícito al publicar (ver RESULTADOS.md).
 
 Si no puede atenderse todavía, **Devolver a la fila** conserva la hora y orden originales de llegada. Esta acción no guarda mediciones escritas en otra pestaña. Antes de un nuevo llamado, el formulario anterior queda invalidado para guardar. La inscripción no pierde el cupo y recepción no debe confirmarla de nuevo.
 

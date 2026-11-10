@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { familyResultPath } from "@/lib/results/input"
 
 export async function getFamilyUser() {
   const session = await auth()
@@ -8,8 +9,9 @@ export async function getFamilyUser() {
   const family = await prisma.apoderado.findUnique({ where: { id: session.user.id.slice(8) } })
   return family?.activo ? family : null
 }
-export async function requireFamilyUser() {
+export async function requireFamilyUser(resultId?: string) {
   const family = await getFamilyUser()
-  if (!family) redirect("/login?portal=familias")
+  const destination = familyResultPath(resultId) ? `&resultado=${encodeURIComponent(resultId!)}` : ""
+  if (!family) redirect(`/login?portal=familias${destination}`)
   return family
 }

@@ -70,6 +70,12 @@ model Evaluacion {
   createdAt       DateTime @default(now())
   filaId          String? @unique @db.Uuid
   fila            EntradaFila? @relation(fields: [filaId], references: [id], onDelete: Restrict)
+  autorId         String?
+  revision        Int @default(1)
+  publicacion     ResultadoPublicado?
+  revisiones      RevisionEvaluacion[]
+
+  @@index([autorId, createdAt])
 }
 
 model Apoderado {
@@ -84,6 +90,55 @@ model Apoderado {
   updatedAt      DateTime @updatedAt
   bebes          Paciente[]
   inscripciones  Inscripcion[]
+  resultados     ResultadoPublicado[]
+}
+
+model ResultadoPublicado {
+  id              String @id @default(uuid()) @db.Uuid
+  evaluacionId    String @unique
+  evaluacion      Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Restrict)
+  apoderadoId     String @db.Uuid
+  apoderado       Apoderado @relation(fields: [apoderadoId], references: [id], onDelete: Restrict)
+  publicadoPorId  String
+  publicadoAt     DateTime @default(now())
+  revision        Int
+  datos           Json
+  correo          CorreoResultado?
+
+  @@index([apoderadoId, publicadoAt])
+}
+
+model RevisionEvaluacion {
+  id            String @id @default(uuid()) @db.Uuid
+  evaluacionId  String
+  evaluacion    Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Restrict)
+  revision      Int
+  autorId       String
+  anterior      Json
+  nueva         Json
+  createdAt     DateTime @default(now())
+
+  @@unique([evaluacionId, revision])
+}
+
+model CorreoResultado {
+  id             String @id @default(uuid()) @db.Uuid
+  publicacionId  String @unique @db.Uuid
+  publicacion    ResultadoPublicado @relation(fields: [publicacionId], references: [id], onDelete: Restrict)
+  destinatario   String
+  portalUrl      String?
+  estado         EstadoCorreo @default(PENDIENTE)
+  intentos       Int @default(0)
+  disponibleAt   DateTime @default(now())
+  bloqueoToken   String? @db.Uuid
+  bloqueoHasta   DateTime?
+  enviadoAt      DateTime?
+  proveedorId    String?
+  ultimoError    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([estado, disponibleAt])
 }
 
 model CodigoAccesoFamilia {

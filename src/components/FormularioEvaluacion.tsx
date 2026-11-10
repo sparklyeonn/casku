@@ -25,6 +25,7 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
   })
   const [guardando, setGuardando] = useState(false)
   const [guardada, setGuardada] = useState(false)
+  const [savedId, setSavedId] = useState<string | null>(null)
   const inFlight = useRef(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -66,7 +67,8 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "No se pudo guardar")
-      mostrarToast("Evaluación guardada. El envío se habilitará con la publicación.")
+      mostrarToast("Evaluación guardada como borrador. Ya puedes revisarla.")
+      setSavedId(data.evaluacionId)
       if (atencion) setGuardada(true)
       else setForm(initial)
     } catch (error) {
@@ -79,6 +81,7 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
 
   return (
     <div className="max-w-xl mx-auto px-4 py-7">
+      {savedId && <section className="mb-5 space-y-3 rounded-xl border border-teal-300 p-4"><p role="status">Borrador guardado. Revisa el resultado antes de publicarlo para la familia.</p><Link href={`/kinesiologia/resultados/${savedId}`} className="inline-block rounded-lg bg-teal-700 px-5 py-3 text-white">Revisar y publicar resultado</Link></section>}
       {atencion && <section className="mb-6 space-y-3 rounded-xl border border-teal-300 p-4"><h1 className="text-xl font-semibold">Craneometría · Inscripción N.º {String(atencion.numero).padStart(3, "0")}</h1><p>{atencion.evento.nombre}</p><p className="text-sm">Datos recuperados de la inscripción. Verifica el nombre del bebé antes de medir.</p>{guardada && <p role="status" className="font-medium text-teal-700 dark:text-teal-300">Evaluación guardada y atención finalizada.</p>}<Link href="/kinesiologia" className="inline-block underline">{guardada ? "Volver y llamar al siguiente bebé" : "Volver a mi atención"}</Link></section>}
       <fieldset disabled={guardando || guardada} className="min-w-0">
 
@@ -226,7 +229,7 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
         </button>
       </div>
 
-      <p className="mt-4 text-sm text-gray-500">Guardar registra la evaluación. Los resultados no se envían por correo automáticamente.</p>
+      <p className="mt-4 text-sm text-gray-500">Guardar crea un borrador. El resultado se habilita para la familia y se intenta enviar por correo al publicarlo.</p>
       </fieldset>
 
       {/* Toast */}

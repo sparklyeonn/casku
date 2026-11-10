@@ -35,3 +35,5 @@ La vista de [kinesiología](docs/KINESIOLOGIA.md) permite llamar al siguiente be
 La [inscripción presencial y prioridad](docs/PRESENCIAL_Y_PRIORIDAD.md) permite registrar en recepción el día del evento, compartir cupos y llamar tres previas por una del día, con prioridad por espera desde treinta minutos.
 
 La [gestión de ausencias](docs/AUSENCIAS.md) permite marcar a quien no responde y reincorporarlo desde recepción con la misma inscripción, reiniciando su espera al regresar.
+
+La [publicación de resultados](docs/RESULTADOS.md) incorpora revisión de borradores, publicación explícita, consulta en la cuenta familiar y correo con reintento. Las inscripciones presenciales sin vinculación verificada quedan pendientes de ese proceso antes de publicar resultados clínicos.

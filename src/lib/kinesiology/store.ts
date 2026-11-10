@@ -93,7 +93,7 @@ export async function saveAssignedEvaluation(staff: { id: string; name: string }
       return { evaluacionId: old.id, nueva: false }
     }
     if (row.estado !== "EN_ATENCION") throw new AttentionConflict("Esta atención ya no está activa. Vuelve a tu fila.")
-    const saved = await tx.evaluacion.create({ data: { filaId: row.id, pacienteId: row.inscripcion.pacienteId, correoPadre: row.inscripcion.apoderado?.correo || row.inscripcion.contactoCorreo || null,
+    const saved = await tx.evaluacion.create({ data: { autorId: staff.id, filaId: row.id, pacienteId: row.inscripcion.pacienteId, correoPadre: row.inscripcion.apoderado?.correo || row.inscripcion.contactoCorreo || null,
       anteroposterior: measures.ap, biparietal: measures.bp, diagonalIzq: measures.di, diagonalDer: measures.dd,
       indiceCraneal: measures.indiceCraneal, indiceAsimetria: measures.indiceAsimetria, diagnostico: measures.diagnostico, recomendacion: measures.recomendacion, kinesiologa: staff.name } })
     await tx.entradaFila.update({ where: { id }, data: { estado: "ATENDIDO", finalizadaAt: new Date() } })

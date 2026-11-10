@@ -33,14 +33,13 @@ export async function POST(req: Request) {
       if (paciente && (paciente.nombre.trim().toLocaleLowerCase() !== data.nombre.toLocaleLowerCase() || paciente.fechaNacimiento.toISOString().slice(0, 10) !== data.fecha.toISOString().slice(0, 10))) throw new PatientConflict()
       if (!paciente) paciente = await tx.paciente.create({ data: { rut: data.rut, nombre: data.nombre, fechaNacimiento: data.fecha } })
       return tx.evaluacion.create({ data: {
-        pacienteId: paciente.id, correoPadre: data.correo, anteroposterior: data.ap, biparietal: data.bp,
+        autorId: user.id, pacienteId: paciente.id, correoPadre: data.correo, anteroposterior: data.ap, biparietal: data.bp,
         diagonalIzq: data.di, diagonalDer: data.dd, indiceCraneal: data.indiceCraneal, indiceAsimetria: data.indiceAsimetria,
         diagnostico: data.diagnostico, recomendacion: data.recomendacion, kinesiologa: user.name,
       } })
     })
-    // La publicación y la entrega de resultados se integran en la etapa 4.
-    // Guardar nunca se presenta como confirmación de un correo enviado.
-    return NextResponse.json({ ok: true, evaluacionId: evaluacion.id, correo: "no_enviado", mensaje: "Evaluación guardada. El envío de resultados se habilitará con la publicación." }, { status: 201 })
+    // La revisión y publicación se realizan por separado del guardado.
+    return NextResponse.json({ ok: true, evaluacionId: evaluacion.id, correo: "no_enviado", mensaje: "Borrador guardado. Revisa el resultado antes de publicarlo." }, { status: 201 })
   } catch (error) {
     if (error instanceof InvalidEvaluation) return NextResponse.json({ error: error.message }, { status: 400 })
     if (error instanceof PatientConflict || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) return NextResponse.json({ error: error instanceof PatientConflict && error.message ? error.message : "El RUT ya está registrado con otros datos o se está registrando. Revisa la identidad antes de continuar." }, { status: 409 })

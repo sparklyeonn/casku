@@ -4,6 +4,7 @@ import { signIn, getSession } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { isRole, roleHomes } from "@/lib/roles"
+import { familyResultPath } from "@/lib/results/input"
 import { FamilyAccess } from "@/components/FamilyAccess"
 
 function LoginContent() {
@@ -13,7 +14,10 @@ function LoginContent() {
   const [error, setError] = useState(""), [loading, setLoading] = useState(false)
   const router = useRouter()
   const requestedEvent = search.get("evento")
+  const requestedResult = search.get("resultado")
   function familyDestination() {
+    const resultPath = familyResultPath(requestedResult)
+    if (resultPath) { router.replace(resultPath); router.refresh(); return }
     const suffix = requestedEvent && /^[a-f0-9-]{36}$/i.test(requestedEvent) ? `?evento=${encodeURIComponent(requestedEvent)}` : ""
     router.replace(`/familias${suffix}`); router.refresh()
   }

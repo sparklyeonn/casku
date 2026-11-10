@@ -14,19 +14,21 @@ import { kinesiologyChecks } from "./kinesiology-checks.mjs"
 import { onsiteChecks } from "./onsite-checks.mjs"
 import { absenceChecks } from "./absence-checks.mjs"
 import { seedBeforeAbsenceMigration } from "./absence-migration.mjs"
+import { seedBeforeResultsMigration } from "./results-migration.mjs"
+import { resultsChecks } from "./results-checks.mjs"
 
 const db = new PGlite(), socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: 0, maxConnections: 20 })
 const base = "http://localhost:3120", password = randomBytes(20).toString("base64url")
-const mails = [], deduped = new Map()
-let failConfirmation = false, failAll = false, testFailed = false, child, exited = false, log = ""
+const mails = [], deduped = new Map(), sentPayloads = new Map()
+let failConfirmation = false, failResults = false, failAll = false, testFailed = false, child, exited = false, log = ""
 const mailServer = createServer(async (request, response) => {
   const chunks = []; for await (const chunk of request) chunks.push(chunk)
   const body = JSON.parse(Buffer.concat(chunks).toString())
   response.setHeader("Content-Type", "application/json")
-  if (failAll || (failConfirmation && body.subject?.startsWith("Inscripción"))) { response.writeHead(503); response.end(JSON.stringify({ name: "test_failure", message: "Temporary failure" })); return }
+  if (failAll || (failResults && body.subject === "Tu resultado de craneometría en Casku") || (failConfirmation && body.subject?.startsWith("Inscripción"))) { response.writeHead(503); response.end(JSON.stringify({ name: "test_failure", message: "Temporary failure" })); return }
   const key = request.headers["idempotency-key"]
-  if (deduped.has(key)) { response.end(JSON.stringify({ id: deduped.get(key) })); return }
-  const id = randomUUID(); deduped.set(key, id); mails.push({ ...body, providerId: id, key })
+  if (deduped.has(key)) { if (body.subject === "Tu resultado de craneometría en Casku" && JSON.stringify(body) !== JSON.stringify(sentPayloads.get(key))) { response.writeHead(409); response.end(JSON.stringify({ name: "validation_error", message: "Idempotency payload changed" })); return }; response.end(JSON.stringify({ id: deduped.get(key) })); return }
+  const id = randomUUID(); deduped.set(key, id); sentPayloads.set(key, body); mails.push({ ...body, providerId: id, key })
   response.end(JSON.stringify({ id }))
 })
 function client() {
@@ -66,7 +68,7 @@ async function createEvent(admin, nombre, cupos, open = true) {
   return input
 }
 const registration = (event, changes = {}) => ({ id: randomUUID(), eventoId: event.id, nombreApoderado: "Apoderado ficticio", nombreBebe: "Bebé ficticio", fechaNacimiento: "2026-01-01", ...changes })
-const clinicalSnapshot = () => db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) - 'filaId' FROM "Evaluacion" e WHERE id='legacy-evaluation'`)
+const clinicalSnapshot = () => db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' FROM "Evaluacion" e WHERE id='legacy-evaluation'`)
 try {
   await db.waitReady
   const migrations = (await readdir("prisma/migrations", { withFileTypes: true })).filter(e => e.isDirectory()).map(e => e.name).sort()
@@ -75,7 +77,7 @@ try {
     INSERT INTO "Evaluacion" (id,"pacienteId","correoPadre",anteroposterior,biparietal,"diagonalIzq","diagonalDer","indiceCraneal","indiceAsimetria",diagnostico,recomendacion,kinesiologa) VALUES ('legacy-evaluation','legacy-baby','legacy@example.com',140,120,135,138,85.7,3,'Ejemplo','Ejemplo','Profesional ficticio');`)
   const before = await clinicalSnapshot()
   for (const name of migrations.filter(name => name >= "20261109000200_inscripcion_familiar")) {
-    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : null
+    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : name === "20261109000700_publicacion_resultados" ? await seedBeforeResultsMigration(db) : null
     await db.exec(await readFile(`prisma/migrations/${name}/migration.sql`, "utf8"))
     if (verify) await verify()
   }
@@ -194,6 +196,8 @@ try {
   await onsiteChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent, mails, setMailFailure: value => { failConfirmation = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await absenceChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent, mails })
+  assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  await resultsChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, post, createEvent, mails, setResultFailure: value => { failResults = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   console.log("Pruebas completas con PostgreSQL y correo locales. No se usó Neon ni se enviaron mensajes reales.")
 } catch (error) { console.error(error); console.error(log.slice(-3000)); testFailed = true }

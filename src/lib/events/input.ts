@@ -30,4 +30,4 @@ export function parseEventEdit(id: string, input: unknown) {
   if (!Number.isSafeInteger(raw.revision) || Number(raw.revision) < 1) throw new EventInputError("Actualiza el evento antes de guardar.")
   return { ...parseEventInput({ ...raw, id }), revision: Number(raw.revision) }
 }
-export type EventSummary = { id: string; nombre: string; fecha: string; lugar: string; cupos: number; inscritos: number; inscripcionesAbiertas: boolean; revision: number }
+export type EventSummary = { id: string; nombre: string; fecha: string; lugar: string; cupos: number; inscritos: number; inscripcionesAbiertas: boolean; revision: number; fechaProtegida: boolean }

@@ -5,6 +5,7 @@ import { rutVariants } from "./input"
 import type { Role } from "@/lib/roles"
 export class DataConflict extends Error {}
 export const dataSelect = {
+  cancelacion: { select: { id: true } },
   id: true, numero: true, eventoId: true, apoderadoId: true, contactoNombre: true, contactoCorreo: true, contactoTelefono: true, revisionContacto: true,
   evento: { select: { nombre: true } },
   paciente: { select: { id: true, nombre: true, fechaNacimiento: true, rut: true, nombreNormalizado: true, apoderadoId: true, revisionDatos: true } },
@@ -19,7 +20,7 @@ function consistent(row: Record) {
 }
 function summary(row: Record) {
   consistent(row)
-  return { id: row.id, numero: row.numero, evento: row.evento.nombre, bebe: { id: row.paciente.id, revision: row.paciente.revisionDatos, ...babyData(row.paciente) }, apoderado: row.apoderado ? { tipo: "CUENTA" as const, id: row.apoderado.id, revision: row.apoderado.revisionDatos, correo: row.apoderado.correo, ...guardianData(row.apoderado) } : { tipo: "CONTACTO" as const, id: row.id, revision: row.revisionContacto, ...contactData(row) } }
+  return { cancelada: !!row.cancelacion, id: row.id, numero: row.numero, evento: row.evento.nombre, bebe: { id: row.paciente.id, revision: row.paciente.revisionDatos, ...babyData(row.paciente) }, apoderado: row.apoderado ? { tipo: "CUENTA" as const, id: row.apoderado.id, revision: row.apoderado.revisionDatos, correo: row.apoderado.correo, ...guardianData(row.apoderado) } : { tipo: "CONTACTO" as const, id: row.id, revision: row.revisionContacto, ...contactData(row) } }
 }
 async function history(tx: Prisma.TransactionClient, row: Record, page: number) {
   const where = { OR: [{ entidad: "BEBE", registroId: row.paciente.id }, { entidad: "CONTACTO", registroId: row.id }, ...(row.apoderadoId ? [{ entidad: "APODERADO", registroId: row.apoderadoId }] : [])] }
@@ -72,6 +73,7 @@ export async function correctRecord(actor: { id: string; role: Role; version: nu
       const updated = await tx.apoderado.update({ where: { id: row.apoderado.id }, data: { ...input.datos, revisionDatos: { increment: 1 } } })
       await tx.cambioDatos.create({ data: { ...audit, entidad: "APODERADO", registroId: updated.id, revision: updated.revisionDatos, anterior: previous, nueva: input.datos } })
     } else {
+      if (row.cancelacion) throw new DataConflict("La inscripción está cancelada. Su contacto y confirmación se conservan como historial.")
       if (row.apoderadoId) throw new DataConflict("La inscripción ya tiene una cuenta verificada. Corrige su perfil familiar, no el contacto presencial.")
       const previous = contactData(row)
       if (JSON.stringify(previous) === JSON.stringify(input.datos)) return { actualizado: false }

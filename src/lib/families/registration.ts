@@ -1,3 +1,4 @@
+import { cancellationSelect, cancellationSummary } from "@/lib/cancellations/store"
 import { mailFamily } from "./identity-snapshot"
 import { rutVariants } from "@/lib/data-corrections/input"
 import { createHash, randomBytes } from "node:crypto"
@@ -8,10 +9,10 @@ import { RegistrationConflict } from "./http"
 import { takeLimit } from "./security"
 import { mailEvent } from "@/lib/events/mail-snapshot"
 
-export const registrationInclude = { evento: true, paciente: true, correo: true } satisfies Prisma.InscripcionInclude
+export const registrationInclude = { evento: true, paciente: true, correo: true, cancelacion: { select: cancellationSelect } } satisfies Prisma.InscripcionInclude
 type RegistrationRow = Prisma.InscripcionGetPayload<{ include: typeof registrationInclude }>
 export function summarizeRegistration(row: RegistrationRow) {
-  return { id: row.id, numero: row.numero, origen: row.origen, evento: { id: row.evento.id, nombre: row.evento.nombre, fecha: row.evento.fecha.toISOString().slice(0, 10), lugar: row.evento.lugar }, bebe: { id: row.paciente.id, nombre: row.paciente.nombre }, correo: { estado: row.correo?.estado ?? "PENDIENTE", reintentarDesde: row.correo?.disponibleAt.toISOString() ?? null } }
+  return { cancelacion: row.cancelacion ? cancellationSummary(row.cancelacion) : null, id: row.id, numero: row.numero, origen: row.origen, evento: { id: row.evento.id, nombre: row.evento.nombre, fecha: row.evento.fecha.toISOString().slice(0, 10), lugar: row.evento.lugar }, bebe: { id: row.paciente.id, nombre: row.paciente.nombre }, correo: { estado: row.correo?.estado ?? "PENDIENTE", reintentarDesde: row.correo?.disponibleAt.toISOString() ?? null } }
 }
 export async function createRegistration(familyId: string, input: RegistrationInput) {
   const hash = createHash("sha256").update(JSON.stringify({ familyId, ...input })).digest("hex")
@@ -20,6 +21,7 @@ export async function createRegistration(familyId: string, input: RegistrationIn
     const existingId = await tx.inscripcion.findUnique({ where: { id: input.id }, include: registrationInclude })
     if (existingId) {
       if (existingId.apoderadoId !== familyId || existingId.solicitudHash !== hash) throw new RegistrationConflict("Este envío ya corresponde a otra inscripción. Actualiza la página.")
+      if (existingId.cancelacion) throw new RegistrationConflict("Esta inscripción está cancelada. No se reactiva ni reserva otro cupo al reenviar el formulario.")
       return existingId
     }
     const event = await tx.evento.findUnique({ where: { id: input.eventoId } })
@@ -31,6 +33,7 @@ export async function createRegistration(familyId: string, input: RegistrationIn
     if (input.bebeId && !baby) throw new RegistrationConflict("Selecciona un bebé vinculado a tu cuenta.")
     if (baby) {
       const existing = await tx.inscripcion.findUnique({ where: { eventoId_pacienteId: { eventoId: event.id, pacienteId: baby.id } }, include: registrationInclude })
+      if (existing?.cancelacion) throw new RegistrationConflict("El bebé ya tiene una inscripción cancelada en este evento. Solicita revisión a Casku; no se creó otra ficha ni se reactivó la reserva.")
       if (existing) return existing
     }
     if (!event.inscripcionesAbiertas || event.fecha.toISOString().slice(0, 10) < today) throw new RegistrationConflict("Las inscripciones de este evento están cerradas.")

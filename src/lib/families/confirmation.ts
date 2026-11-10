@@ -11,7 +11,7 @@ export const registrationQr = (token: string) => QRCode.toBuffer(qrContent(token
 
 export async function deliverConfirmation(inscripcionId: string) {
   const now = new Date(), lock = randomUUID()
-  const claimed = await prisma.correoInscripcion.updateMany({ where: { inscripcionId, OR: [{ estado: { in: ["PENDIENTE", "FALLIDO"] }, disponibleAt: { lte: now } }, { estado: "ENVIANDO", bloqueoHasta: { lt: now } }] }, data: { estado: "ENVIANDO", bloqueoToken: lock, bloqueoHasta: new Date(now.getTime() + 120000), intentos: { increment: 1 } } })
+  const claimed = await prisma.correoInscripcion.updateMany({ where: { inscripcionId, inscripcion: { cancelacion: { is: null } }, OR: [{ estado: { in: ["PENDIENTE", "FALLIDO"] }, disponibleAt: { lte: now } }, { estado: "ENVIANDO", bloqueoHasta: { lt: now } }] }, data: { estado: "ENVIANDO", bloqueoToken: lock, bloqueoHasta: new Date(now.getTime() + 120000), intentos: { increment: 1 } } })
   if (!claimed.count) return
   try {
     const mail = await prisma.correoInscripcion.findUniqueOrThrow({ where: { inscripcionId }, include: { inscripcion: { include: { paciente: true, evento: true, apoderado: true } } } })

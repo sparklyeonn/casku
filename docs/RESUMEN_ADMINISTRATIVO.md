@@ -6,7 +6,8 @@ En `/administracion`, seleccionar un evento con **Trabajar en este evento**. Deb
 
 | Indicador | Criterio |
 | --- | --- |
-| Inscritos | Todas las inscripciones del evento, previas y presenciales, con o sin cuenta familiar vinculada. |
+| Inscritos | Reservas vigentes del evento, previas y presenciales, con o sin cuenta familiar vinculada. Excluye canceladas. |
+| Canceladas | Inscripciones canceladas, con cupo liberado y conservadas como historial. |
 | Atendidos | Inscripciones cuya entrada está actualmente en `ATENDIDO`, estado que se asigna al guardar su evaluación. |
 | En espera | Inscripciones con llegada confirmada y entrada actualmente en `EN_ESPERA`. |
 | Ausentes | Inscripciones actualmente en `AUSENTE`, hasta que recepción confirme su regreso. |
@@ -15,7 +16,7 @@ En `/administracion`, seleccionar un evento con **Trabajar en este evento**. Deb
 | En atención | Inscripciones actualmente reservadas por una profesional (`EN_ATENCION`). |
 | Resultados publicados | Evaluaciones del evento con publicación, independientemente del estado de su correo. |
 
-La unidad de atención es una inscripción por bebé. Una familia con dos bebés representa dos inscripciones; no se intenta deducir familias únicas a partir de un correo o nombre de contacto. Inscritos es la suma de sin llegada, en espera, en atención, atendidos y ausentes.
+La unidad de atención es una inscripción por bebé. Una familia con dos bebés representa dos inscripciones; no se intenta deducir familias únicas a partir de un correo o nombre de contacto. Inscritos vigentes es la suma de sin llegada, en espera, en atención, atendidos y ausentes. Las canceladas se muestran por separado.
 
 Los pendientes de publicación forman parte de las evaluaciones guardadas; no se suman a los estados de fila. No significan que todos puedan publicarse inmediatamente. Un correo fallido no convierte un resultado publicado en pendiente de publicación. Las evaluaciones sin inscripción no se atribuyen a un evento por coincidencia de bebé, profesional o fecha.
 

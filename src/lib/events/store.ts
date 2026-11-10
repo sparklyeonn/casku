@@ -7,8 +7,8 @@ export class EventConflict extends Error {}
 export class EventEditConflict extends Error {}
 
 // La fecha es un día calendario: siempre se serializa y muestra sin conversión horaria.
-export function summarizeEvent(event: { id: string; nombre: string; fecha: Date; lugar: string; cupos: number; inscritos: number; inscripcionesAbiertas: boolean; revision: number }) {
-  return { id: event.id, nombre: event.nombre, fecha: event.fecha.toISOString().slice(0, 10), lugar: event.lugar, cupos: event.cupos, inscritos: event.inscritos, inscripcionesAbiertas: event.inscripcionesAbiertas, revision: event.revision }
+export function summarizeEvent(event: { id: string; nombre: string; fecha: Date; lugar: string; cupos: number; inscritos: number; inscripcionesAbiertas: boolean; revision: number; ultimoNumero: number }) {
+  return { fechaProtegida: event.ultimoNumero > 0 || event.inscritos > 0, id: event.id, nombre: event.nombre, fecha: event.fecha.toISOString().slice(0, 10), lugar: event.lugar, cupos: event.cupos, inscritos: event.inscritos, inscripcionesAbiertas: event.inscripcionesAbiertas, revision: event.revision }
 }
 
 export async function editEvent(actor: { id: string; version: number }, input: ReturnType<typeof parseEventEdit>) {
@@ -22,10 +22,10 @@ export async function editEvent(actor: { id: string; version: number }, input: R
     // Una respuesta perdida se recupera sin volver a editar ni duplicar la auditoría.
     if (same) return { evento: summarizeEvent(event), actualizado: false }
     if (event.revision !== input.revision) throw new EventEditConflict("El evento cambió en otra pantalla. Recarga sus datos antes de guardar.")
-    const occupied = Math.max(event.inscritos, await tx.inscripcion.count({ where: { eventoId: event.id } }))
+    const occupied = Math.max(event.inscritos, await tx.inscripcion.count({ where: { eventoId: event.id, cancelacion: { is: null } } }))
     if (input.cupos < occupied) throw new EventEditConflict(`No puedes reducir los cupos por debajo de las ${occupied} inscripciones reservadas.`)
     if (event.fecha.getTime() !== input.fecha.getTime()) {
-      if (occupied > 0) throw new EventEditConflict("No puedes cambiar la fecha de un evento que ya tiene inscripciones.")
+      if (await tx.inscripcion.count({ where: { eventoId: event.id } }) > 0) throw new EventEditConflict("No puedes cambiar la fecha de un evento que ya tiene inscripciones.")
       if (event.inscripcionesAbiertas) throw new EventEditConflict("Cierra las inscripciones antes de cambiar la fecha.")
       if (input.fecha.toISOString().slice(0, 10) < chileToday()) throw new EventEditConflict("La nueva fecha no puede ser anterior a hoy en Chile.")
     }

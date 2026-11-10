@@ -57,4 +57,6 @@ Verificación de esta etapa: diecinueve pruebas unitarias, recorrido integral de
 
 ## Fuera de esta etapa
 
-La gestión de ausencias y regreso está disponible (ver AUSENCIAS.md). Siguen pendientes reasignación supervisada, cancelación de reservas, recuperación de cupos de ausentes, lista de espera con evento lleno y revisión supervisada de fichas coincidentes. La política 3:1 y el umbral de treinta minutos son constantes del sistema en esta entrega; aún no se editan por evento desde administración.
+La gestión de ausencias y regreso está disponible (ver AUSENCIAS.md). Siguen pendientes reasignación supervisada, reactivación de reservas canceladas y lista de espera con evento lleno y revisión supervisada de fichas coincidentes. La política 3:1 y el umbral de treinta minutos son constantes del sistema en esta entrega; aún no se editan por evento desde administración.
+
+La cancelación y recuperación de cupos está implementada con estados e historial conservados (ver CANCELACIONES.md). Un comprobante cancelado no puede confirmar llegada ni reincorporarse.

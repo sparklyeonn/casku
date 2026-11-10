@@ -7,8 +7,8 @@ En **Administración → Eventos**, usar **Editar evento** en la lista. La panta
 | Campo | Control |
 | --- | --- |
 | Nombre y lugar | Se pueden corregir con inscripciones existentes. El portal muestra los datos actuales; las copias ya publicadas y los correos de confirmación preparados conservan su versión. |
-| Fecha | Solo puede cambiarse sin inscripciones y con las inscripciones cerradas. La nueva fecha debe ser hoy o un día futuro en Chile. La fecha permanece como día calendario, sin conversión horaria. |
-| Cupos | Entero entre 1 y 100.000. Nunca puede ser menor que las reservas existentes: se comprueba tanto el contador del evento como el número real de inscripciones. Puede quedar exactamente lleno. |
+| Fecha | Solo puede cambiarse sin inscripciones y con las inscripciones cerradas. La nueva fecha debe ser hoy o un día futuro en Chile. La fecha permanece como día calendario, sin conversión horaria. Tener solo inscripciones canceladas tampoco permite cambiarla. |
+| Cupos | Entero entre 1 y 100.000. Nunca puede ser menor que las reservas vigentes (excluyendo canceladas): se comprueba tanto el contador del evento como el número real de inscripciones. Puede quedar exactamente lleno. |
 
 Las reservas previas todavía sin llegada también consumen cupo. Editar no cancela ni elimina inscripciones, no renumera, no modifica QR, origen, estado/orden de fila, bebés, evaluaciones, publicaciones ni selección de trabajo. No abre ni cierra inscripciones automáticamente.
 

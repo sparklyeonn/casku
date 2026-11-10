@@ -207,6 +207,7 @@ model LimiteSolicitud {
 }
 
 model Inscripcion {
+  cancelacion CancelacionInscripcion?
   revisionContacto Int @default(1)
   id             String @id @db.Uuid
   solicitudHash  String
@@ -263,6 +264,7 @@ enum EstadoFila {
   EN_ATENCION
   ATENDIDO
   AUSENTE
+  CANCELADO
 }
 
 model EntradaFila {
@@ -329,6 +331,20 @@ enum EstadoCorreo {
   ENVIANDO
   ENVIADO
   FALLIDO
+  CANCELADO
+}
+
+model CancelacionInscripcion {
+  id String @id @default(uuid()) @db.Uuid
+  inscripcionId String @unique @db.Uuid
+  inscripcion Inscripcion @relation(fields: [inscripcionId], references: [id], onDelete: Restrict)
+  actorId String
+  perfilActor String
+  nombreActor String
+  motivo String
+  estadoFilaAnterior String?
+  estadoCorreoAnterior String?
+  createdAt DateTime @default(now())
 }
 
 model CorreoInscripcion {

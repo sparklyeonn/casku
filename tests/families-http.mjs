@@ -24,6 +24,8 @@ import { eventEditChecks } from "./event-edit-checks.mjs"
 import { seedBeforeEventEditMigration } from "./event-edit-migration.mjs"
 import { dataCorrectionsChecks } from "./data-corrections-checks.mjs"
 import { seedBeforeDataCorrectionMigration } from "./data-corrections-migration.mjs"
+import { cancellationChecks } from "./cancellations-checks.mjs"
+import { seedBeforeCancellationMigration } from "./cancellations-migration.mjs"
 
 const embeddedDb = new PGlite(), socket = new PGLiteSocketServer({ db: embeddedDb, host: "127.0.0.1", port: 0, maxConnections: 20 })
 let db = embeddedDb, fixturePool
@@ -86,7 +88,7 @@ try {
     INSERT INTO "Evaluacion" (id,"pacienteId","correoPadre",anteroposterior,biparietal,"diagonalIzq","diagonalDer","indiceCraneal","indiceAsimetria",diagnostico,recomendacion,kinesiologa) VALUES ('legacy-evaluation','legacy-baby','legacy@example.com',140,120,135,138,85.7,3,'Ejemplo','Ejemplo','Profesional ficticio');`)
   const before = await clinicalSnapshot()
   for (const name of migrations.filter(name => name >= "20261109000200_inscripcion_familiar")) {
-    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : name === "20261109000700_publicacion_resultados" ? await seedBeforeResultsMigration(db) : name === "20261110000100_edicion_eventos" ? await seedBeforeEventEditMigration(db) : name === "20261110000200_correccion_datos" ? await seedBeforeDataCorrectionMigration(db) : null
+    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : name === "20261109000700_publicacion_resultados" ? await seedBeforeResultsMigration(db) : name === "20261110000100_edicion_eventos" ? await seedBeforeEventEditMigration(db) : name === "20261110000200_correccion_datos" ? await seedBeforeDataCorrectionMigration(db) : name === "20261110000300_cancelacion_inscripciones" ? await seedBeforeCancellationMigration(db) : null
     await db.exec(await readFile(`prisma/migrations/${name}/migration.sql`, "utf8"))
     if (verify) await verify()
   }
@@ -220,6 +222,8 @@ try {
   await eventEditChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await dataCorrectionsChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
+  assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  await cancellationChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await teamChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)

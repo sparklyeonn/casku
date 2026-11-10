@@ -17,19 +17,20 @@ async function source(tx: Prisma.TransactionClient, eventoId: string, inscripcio
   // Orden compartido: evento, paciente y después invitación; nunca se bloquea por correo.
   await tx.$queryRaw`SELECT "id" FROM "Evento" WHERE "id" = ${eventoId}::uuid FOR UPDATE`
   await tx.$queryRaw`SELECT "id" FROM "Paciente" WHERE "id" = ${known.pacienteId} FOR UPDATE`
-  return tx.inscripcion.findFirst({ where: { id: inscripcionId, eventoId }, include: { paciente: true } })
+  return tx.inscripcion.findFirst({ where: { id: inscripcionId, eventoId }, include: { paciente: true, cancelacion: true } })
 }
 export async function linkStatus(staffId: string, eventoId: string, inscripcionId: string) {
-  const row = await prisma.inscripcion.findFirst({ where: { id: inscripcionId, eventoId }, select: { apoderadoId: true, registradoPorId: true, origen: true, contactoCorreo: true, paciente: { select: { apoderadoId: true } } } })
+  const row = await prisma.inscripcion.findFirst({ where: { id: inscripcionId, eventoId }, select: { cancelacion: { select: { id: true } }, apoderadoId: true, registradoPorId: true, origen: true, contactoCorreo: true, paciente: { select: { apoderadoId: true } } } })
   if (!row) return null
   const invitation = await prisma.vinculacionPresencial.findFirst({ where: { inscripcionId, revocadaAt: null, consumidaAt: null }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] })
     || await prisma.vinculacionPresencial.findFirst({ where: { inscripcionId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] })
-  return { vinculada: !!row.apoderadoId && row.apoderadoId === row.paciente.apoderadoId, disponible: row.origen === "PRESENCIAL" && !!row.registradoPorId && !row.apoderadoId && !row.paciente.apoderadoId, correoSugerido: row.contactoCorreo || "", vinculacion: invitation ? invitationSummary(invitation, staffId) : null }
+  return { cancelada: !!row.cancelacion, vinculada: !!row.apoderadoId && row.apoderadoId === row.paciente.apoderadoId, disponible: !row.cancelacion && row.origen === "PRESENCIAL" && !!row.registradoPorId && !row.apoderadoId && !row.paciente.apoderadoId, correoSugerido: row.contactoCorreo || "", vinculacion: invitation ? invitationSummary(invitation, staffId) : null }
 }
 export async function createInvitation(staffId: string, input: ReturnType<typeof invitationInput>) {
   return prisma.$transaction(async tx => {
     const row = await source(tx, input.eventoId, input.inscripcionId)
     if (!row) return null
+    if (row.cancelacion) throw new ReceptionConflict("La inscripción está cancelada. No se puede emitir una vinculación nueva.")
     const existing = await tx.vinculacionPresencial.findUnique({ where: { id: input.id } })
     if (existing) {
       if (existing.creadoPorId !== staffId || existing.inscripcionId !== row.id || existing.pacienteId !== row.pacienteId || existing.correo !== input.correo) throw new ReceptionConflict("Este envío ya corresponde a otra invitación. Actualiza antes de continuar.")
@@ -66,7 +67,7 @@ export async function familyLink(familyId: string, code: string, accept: boolean
     const row = await source(tx, known.inscripcion.eventoId, known.inscripcionId)
     await tx.$queryRaw`SELECT "id" FROM "VinculacionPresencial" WHERE "id" = ${known.id}::uuid FOR UPDATE`
     const invite = await tx.vinculacionPresencial.findUniqueOrThrow({ where: { id: known.id } })
-    if (!row || row.pacienteId !== invite.pacienteId || invite.revocadaAt || invite.correo !== family.correo) return { estado: "NO_DISPONIBLE" as const }
+    if (!row || row.cancelacion || row.pacienteId !== invite.pacienteId || invite.revocadaAt || invite.correo !== family.correo) return { estado: "NO_DISPONIBLE" as const }
     const already = !!invite.consumidaAt && invite.apoderadoId === family.id && row.apoderadoId === family.id && row.paciente.apoderadoId === family.id
     if (invite.consumidaAt && !already) return { estado: "NO_DISPONIBLE" as const }
     if (!already && invite.expiraAt <= new Date()) return { estado: "NO_DISPONIBLE" as const }

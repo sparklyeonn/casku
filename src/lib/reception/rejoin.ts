@@ -8,6 +8,7 @@ export async function rejoinQueue(staffId: string, eventoId: string, inscripcion
     if (!events.length) return null
     const row = await tx.inscripcion.findFirst({ where: { id: inscripcionId, eventoId }, select: receptionSelect })
     if (!row) return null
+    if (row.cancelacion) throw new ReceptionConflict("La inscripción está cancelada. No puede reincorporarse con el comprobante anterior.")
     if (!row.fila || row.fila.ausenciaId !== ausenciaId) throw new ReceptionConflict("La ausencia cambió o ya no está disponible. Busca nuevamente la inscripción.")
     if (row.fila.estado !== "AUSENTE") {
       if (row.fila.reincorporadaAt) return { inscripcion: receptionSummary(row), reincorporada: false }

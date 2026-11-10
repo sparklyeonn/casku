@@ -27,7 +27,7 @@ Conservar DATABASE_URL en la configuración privada. Las cuentas iniciales se im
 
 En la entrega inicial pasaron las cinco pruebas unitarias, TypeScript, ESLint y `npm run test:http` (ingreso, permisos, apertura de pantalla y cierre de sesión de los tres perfiles). La compilación de producción quedó bloqueada por `Operation not permitted` al abrir el proceso auxiliar de estilos de Turbopack en este entorno. No se verificó el guardado contra la base real. En aquella entrega inicial no se aplicaron migraciones; las entregas posteriores se documentan por separado.
 
-Antes de publicar en internet: configurar HTTPS, AUTH_URL y AUTH_SECRET; usar almacenamiento compartido para limitar intentos si hay varias instancias; las cuentas del equipo ya son persistentes y se gestionan desde administración. El límite actual es por cuenta y proceso (5 intentos / 15 minutos). Las fórmulas clínicas existentes se conservaron sin validar ni alterar sus umbrales médicos.
+Antes de publicar en internet: configurar HTTPS, AUTH_URL y AUTH_SECRET; los límites de acceso y sesiones del equipo ya usan PostgreSQL compartido (ver SEGURIDAD_EQUIPO.md); las cuentas del equipo ya son persistentes y se gestionan desde administración. El límite del equipo es compartido por cuenta (cinco intentos fallidos o en curso cada quince minutos), con límite global y sesiones revocables. Las fórmulas clínicas existentes se conservaron sin validar ni alterar sus umbrales médicos.
 
 ## Etapa 2 — Familias, eventos e inscripciones
 
@@ -63,3 +63,7 @@ Primer incremento implementado: borradores revisables por su autora, copia publi
 ## Corrección de datos personales — implementada
 
 Recepción y administración corrigen datos de bebé, perfil del apoderado y contactos presenciales mediante una inscripción, con revisiones, motivos e historial transaccional. Conserva relaciones, números, QR, fila y evaluaciones; protege el correo de acceso y rechaza posibles duplicados en vez de fusionar fichas. Consultar [CORRECCION_DATOS.md](CORRECCION_DATOS.md). Siguen pendientes las fusiones supervisadas, cambios de apoderado y cambio verificado de correo de acceso.
+
+## Seguridad del equipo — implementada
+
+Límites de ingreso compartidos, sesiones revocables con plazos absoluto y de inactividad, cierre propio y administrativo auditado, y pruebas con dos servidores (ver [SEGURIDAD_EQUIPO.md](SEGURIDAD_EQUIPO.md)). La recuperación de contraseña y el cambio inicial obligatorio continúan pendientes, al igual que los demás puntos críticos y altos acordados.

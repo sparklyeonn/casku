@@ -20,7 +20,7 @@ Guardar un cambio incrementa la versión de la cuenta e invalida sus sesiones an
 - Las cuentas se desactivan, no se eliminan. Los identificadores de autoría y movimientos permanecen estables.
 - `CambioCuentaEquipo` registra actor, cuenta, hora, valores anteriores/nuevos y si cambió la contraseña. La auditoría se guarda en la misma transacción y no contiene contraseñas ni hashes; su pantalla de consulta sigue pendiente.
 
-Las respuestas son privadas y sin caché. Se conserva el límite de intentos de acceso del equipo por proceso; trasladarlo a un almacén compartido sigue pendiente antes de operar varias instancias.
+Las respuestas son privadas y sin caché. El límite de intentos del equipo ya usa PostgreSQL compartido. La pantalla permite cerrar las sesiones de otras cuentas con auditoría; cada integrante gestiona las propias desde Seguridad y sesiones (ver SEGURIDAD_EQUIPO.md).
 
 ## Transición desde la configuración anterior
 

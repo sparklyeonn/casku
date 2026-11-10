@@ -25,7 +25,7 @@ function LoginContent() {
     event.preventDefault(); setLoading(true); setError("")
     try {
       const result = await signIn("equipo", { email, password, redirect: false })
-      if (result?.error || !result?.ok) { setError("No pudimos iniciar sesión. Revisa los datos o consulta a administración."); return }
+      if (result?.error || !result?.ok) { setError("No pudimos iniciar sesión. Revisa los datos. Si hubo varios intentos fallidos, espera quince minutos antes de reintentar."); return }
       const session = await getSession()
       if (!isRole(session?.user.role)) { setError("No hay un perfil habilitado para esta cuenta."); return }
       setPassword(""); router.replace(roleHomes[session.user.role]); router.refresh()

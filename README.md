@@ -17,6 +17,7 @@ Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas d
 ## Verificación
 
 - `npm test`: contraseñas, permisos, cuentas y validación de evaluaciones.
+- `npm run test:security`: límites de acceso y sesiones del equipo con dos servidores simultáneos y base temporal. No utiliza datos reales.
 - `npm run test:http`: inicio/cierre de sesión y permisos mediante servidor temporal en el puerto 3117, con cuentas efímeras y PostgreSQL local temporal. No utiliza la base configurada ni envía correos.
 - `npm run test:events`: migración y gestión de eventos con PostgreSQL temporal aislado. No utiliza la base real de Casku.
 - `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR, correo, recepción y kinesiología (llegadas, reservas, formularios, guardado y permisos), publicación de resultados, vinculación presencial, gestión de cuentas del equipo, resumen y edición de eventos y corrección de datos familiares, cancelaciones y lista de espera FIFO, con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
@@ -51,3 +52,7 @@ La [corrección de datos familiares](docs/CORRECCION_DATOS.md) permite a recepci
 La [cancelación de inscripciones](docs/CANCELACIONES.md) permite liberar capacidad con permisos y motivo, conservando número, QR e historial. Bloquea reingresos con comprobantes cancelados y protege las atenciones y evaluaciones existentes.
 
 La [lista de espera](docs/LISTA_ESPERA.md) permite solicitar cupos en eventos llenos, consultar posición y retirarse; las cancelaciones y ampliaciones confirman reservas por orden, con número, QR y correo recuperable.
+
+La [seguridad del equipo](docs/SEGURIDAD_EQUIPO.md) incorpora límites compartidos, sesiones con vencimiento y cierre remoto, y revocación administrativa auditada.
+
+El [listado prioritario de pendientes](docs/PENDIENTES.md) distingue las entregas implementadas de la validación final para producción.

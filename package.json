@@ -9,6 +9,7 @@
     "lint": "eslint",
     "account:create": "node scripts/crear-cuenta-equipo.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:security": "node tests/team-auth-http.mjs",
     "test:http": "node tests/http-smoke.mjs",
     "test:events": "node tests/events-http.mjs",
     "db:deploy": "prisma migrate deploy",

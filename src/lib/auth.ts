@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client"
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { teamAccount, teamRevision } from "./team/store"
@@ -6,8 +7,8 @@ import { isRole } from "./roles"
 import { consumeFamilyCode } from "./families/otp"
 import { prisma } from "./prisma"
 
-// Límite por proceso: sustituir por almacén compartido antes de escalar.
-const attempts = new Map<string, { count: number; until: number }>()
+import { reserveTeamLogin } from "./team-auth/limits"
+import { DUMMY_PASSWORD_HASH, openTeamSession, validateTeamSession, closeTeamSession } from "./team-auth/sessions"
 export const { handlers, signIn, signOut, auth } = NextAuth({
   pages: { signIn: "/login" },
   session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
@@ -15,16 +16,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     id: "equipo", name: "Equipo Casku",
     credentials: { email: { type: "email" }, password: { type: "password" } },
     async authorize(credentials) {
-      if (typeof credentials.email !== "string" || typeof credentials.password !== "string" || credentials.email.length > 254) return null
-      const email = credentials.email.toLowerCase().trim(), now = Date.now()
-      for (const [key, entry] of attempts) if (entry.until <= now) attempts.delete(key)
-      const entry = attempts.get(email) ?? { count: 0, until: now + 15 * 60_000 }
-      if (entry.count >= 5 || attempts.size > 10_000) return null
-      entry.count++; attempts.set(email, entry)
-      const account = await teamAccount({ email })
-      if (!account?.active || !await verifyPassword(credentials.password, account.passwordHash)) return null
-      attempts.delete(email)
-      return { id: account.id, email: account.email, name: account.name, role: account.role, teamVersion: account.version }
+      if (typeof credentials.email !== "string" || typeof credentials.password !== "string" || credentials.email.length > 254 || credentials.password.length < 1 || credentials.password.length > 128) return null
+      const email = credentials.email.toLowerCase().trim()
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null
+      try {
+        const reservation = await reserveTeamLogin(email)
+        if (!reservation) return null
+        const account = await teamAccount({ email })
+        const correct = await verifyPassword(credentials.password, account?.active ? account.passwordHash : DUMMY_PASSWORD_HASH)
+        if (!account?.active || !correct) return null
+        const session = await openTeamSession(account, reservation)
+        if (!session) return null
+        return { id: account.id, email: account.email, name: account.name, role: account.role, teamVersion: account.version, teamSessionToken: session.secret }
+      } catch (error) {
+        console.error("Acceso del equipo temporalmente no disponible", error instanceof Error ? error.name : "Error", error instanceof Prisma.PrismaClientKnownRequestError ? error.code : "")
+        return null
+      }
     },
   }), Credentials({
     id: "familias", name: "Familias Casku",
@@ -36,6 +43,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       } catch { return null }
     },
   })],
+  events: {
+    async signOut(message) { if ("token" in message) await closeTeamSession(message.token?.teamSessionToken) },
+  },
   callbacks: {
     async jwt({ token, user }) {
       if (user?.role === "APODERADO" || (!user && token.role === "APODERADO")) {
@@ -51,11 +61,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (typeof id !== "string") return null
       const account = await teamAccount({ id })
       if (!account?.active || (user && user.teamVersion !== account.version) || (!user && token.revision !== teamRevision(account))) return null
+      const activeSession = await validateTeamSession(user?.teamSessionToken ?? token.teamSessionToken, account.id, account.version)
+      if (!activeSession) return null
+      if (user) token.teamSessionToken = user.teamSessionToken
+      token.teamSessionId = activeSession.id
+      token.teamExpiresAt = activeSession.expiraAt.toISOString()
       token.id = account.id; token.role = account.role; token.revision = teamRevision(account)
       token.name = account.name; token.email = account.email; token.teamVersion = account.version
       return token
     },
     async session({ session, token }) {
+      session.user.teamSessionId = typeof token.teamSessionId === "string" ? token.teamSessionId : undefined
+      if (typeof token.teamExpiresAt === "string") session.expires = new Date(Math.min(new Date(session.expires).getTime(), new Date(token.teamExpiresAt).getTime())).toISOString() as typeof session.expires
       session.user.teamVersion = typeof token.teamVersion === "number" ? token.teamVersion : undefined
       session.user.id = typeof token.id === "string" ? token.id : ""
       session.user.role = isRole(token.role) || token.role === "APODERADO" ? token.role : undefined

@@ -1,0 +1,6 @@
+export const TEAM_LOGIN_LIMIT = 5
+export const TEAM_LOGIN_WINDOW_MINUTES = 15
+export const TEAM_GLOBAL_LOGIN_LIMIT = 60
+export const TEAM_SESSION_HOURS = 8
+export const TEAM_SESSION_IDLE_MINUTES = 30
+export const TEAM_ACTIVE_SESSIONS = 5

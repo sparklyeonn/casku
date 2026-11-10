@@ -61,7 +61,25 @@ export async function saveAccount(actor: { id: string; version: number }, id: st
     if (losesRole && await tx.entradaFila.findFirst({ where: { profesionalId: id, estado: "EN_ATENCION" }, select: { id: true } })) throw new TeamConflict("Esta profesional tiene una atención activa. Debe finalizarla o devolverla a la fila antes de cambiar su perfil o desactivarla.")
     if (previous.email === input.email && previous.name === input.name && previous.role === input.role && previous.active === input.active && !passwordHash) return { cuenta: safeAccount(previous), creada: false }
     const row = await tx.cuentaEquipo.update({ where: { id }, data: { email: input.email, name: input.name, role: input.role, active: input.active, ...(passwordHash && { passwordHash }), version: { increment: 1 } } })
+    await tx.sesionEquipo.updateMany({ where: { cuentaId: id, revocadaAt: null }, data: { revocadaAt: new Date(), motivo: "CAMBIO_CUENTA" } })
     await tx.cambioCuentaEquipo.create({ data: { cuentaId: id, actorId: actor.id, accion: "EDITAR", anterior: safeAccount(previous), nueva: { ...safeAccount(row), cambioContrasena: !!passwordHash } } })
     return { cuenta: safeAccount(row), creada: false }
   }, { timeout: 15000 })
+}
+
+export async function revokeAccountSessions(actor: { id: string; version: number }, id: string, version: number) {
+  return prisma.$transaction(async tx => {
+    await lockRegistry(tx)
+    const admin = await tx.cuentaEquipo.findUnique({ where: { id: actor.id } })
+    if (!admin?.active || admin.role !== "ADMIN" || admin.version !== actor.version) throw new TeamForbidden()
+    if (id === actor.id) throw new TeamConflict("Cierra tus propias sesiones desde Seguridad y sesiones.")
+    await tx.$queryRaw`SELECT id FROM "CuentaEquipo" WHERE id=${id} FOR UPDATE`
+    const previous = await tx.cuentaEquipo.findUnique({ where: { id } })
+    if (!previous) return null
+    if (previous.version !== version) throw new TeamConflict("La cuenta cambió. Actualiza la lista antes de cerrar sus sesiones.")
+    const row = await tx.cuentaEquipo.update({ where: { id }, data: { version: { increment: 1 } } })
+    await tx.sesionEquipo.updateMany({ where: { cuentaId: id, revocadaAt: null }, data: { revocadaAt: new Date(), motivo: "CIERRE_ADMINISTRACION" } })
+    await tx.cambioCuentaEquipo.create({ data: { cuentaId: id, actorId: actor.id, accion: "CERRAR_SESIONES", anterior: safeAccount(previous), nueva: safeAccount(row) } })
+    return { cuenta: safeAccount(row) }
+  })
 }

@@ -7,6 +7,7 @@ datasource db {
 }
 
 model CuentaEquipo {
+  sesiones SesionEquipo[]
   id String @id
   email String @unique
   name String
@@ -418,3 +419,19 @@ model CambioDatos {
   @@index([apoderadoId, createdAt])
 }
 
+
+// El secreto de sesión solo viaja dentro del JWT cifrado; la base conserva su HMAC.
+model SesionEquipo {
+  id String @id @db.Uuid
+  cuentaId String
+  cuenta CuentaEquipo @relation(fields: [cuentaId], references: [id], onDelete: Restrict)
+  secretoHash String @unique
+  version Int
+  createdAt DateTime @default(now())
+  actividadAt DateTime @default(now())
+  expiraAt DateTime
+  revocadaAt DateTime?
+  motivo String?
+  @@index([cuentaId, createdAt])
+  @@index([expiraAt])
+}

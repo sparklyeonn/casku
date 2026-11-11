@@ -1,3 +1,4 @@
+import { familyConsent } from "./privacy-fixtures.mjs"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 
@@ -10,7 +11,7 @@ export async function resultsChecks({ db, client, signIn, password, accounts, ad
   }
   const event = await createEvent(admin, "Publicación ficticia", 6, true), registrations = []
   for (let i = 0; i < 4; i++) {
-    const response = await f1.request("/api/familias/inscripciones", post({ id: randomUUID(), eventoId: event.id, nombreBebe: i === 0 ? "Bebé <script>ficticio</script>" : `Bebé publicación ${i}`, fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado ficticio" }))
+    const response = await f1.request("/api/familias/inscripciones", post({ ...familyConsent, id: randomUUID(), eventoId: event.id, nombreBebe: i === 0 ? "Bebé <script>ficticio</script>" : `Bebé publicación ${i}`, fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado ficticio" }))
     assert.equal(response.status, 201); const row = (await response.json()).inscripcion; registrations.push(row)
     assert.equal((await reception("/api/recepcion/llegadas", post({ eventoId: event.id, inscripcionId: row.id }))).status, 201)
   }

@@ -61,7 +61,7 @@ export function KinesiologyDesk() {
     try {
       const data = await read(await fetch("/api/kinesiologia/llamar", post({ eventoId: selected, id: requestId.current })))
       requestId.current = null; setUncertain(false); setActive(data.atencion)
-      setMessage(data.resultado === "VACIA" ? "No hay bebés en espera en este evento." : data.resultado === "TERMINADA" ? "Ese llamado ya terminó. Actualiza tu atención antes de continuar." : `Llamado registrado: inscripción N.º ${String(data.atencion.numero).padStart(3, "0")}. Confirma con la familia el nombre del bebé.`)
+      setMessage(data.resultado === "VACIA" ? "No hay bebés habilitados para llamar. Si hay familias en espera, solicita a recepción que revise sus autorizaciones." : data.resultado === "TERMINADA" ? "Ese llamado ya terminó. Actualiza tu atención antes de continuar." : `Llamado registrado: inscripción N.º ${String(data.atencion.numero).padStart(3, "0")}. Confirma con la familia el nombre del bebé.`)
     } catch (cause) { setUncertain(true); setError(cause instanceof Error ? cause.message : "No pudimos confirmar el llamado. Reintenta sin cambiar el evento.") }
     finally { operation.current = false; setBusy(false); await refresh() }
   }

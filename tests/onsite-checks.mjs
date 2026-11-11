@@ -1,3 +1,4 @@
+import { paperConsent } from "./privacy-fixtures.mjs"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 
@@ -13,7 +14,7 @@ export async function onsiteChecks({ db, client, signIn, password, accounts, adm
   const today = `${part("year")}-${part("month")}-${part("day")}`
   const setToday = event => db.query('UPDATE "Evento" SET fecha=$1::date WHERE id=$2', [today, event.id])
   async function currentEvent(name, cupos, open = false) { const event = await createEvent(admin, name, cupos, open); await setToday(event); return event }
-  const input = (event, name, changes = {}) => ({ id: randomUUID(), eventoId: event.id, nombreBebe: name, fechaNacimiento: "2026-01-01", nombreApoderado: "Familia presencial ficticia", correo: "", telefono: "", ...changes })
+  const input = (event, name, changes = {}) => ({ ...paperConsent, id: randomUUID(), eventoId: event.id, nombreBebe: name, fechaNacimiento: "2026-01-01", nombreApoderado: "Familia presencial ficticia", correo: "", telefono: "", ...changes })
   async function onsite(payload, request = reception) {
     const response = await request("/api/recepcion/presencial", post(payload)), data = await response.json()
     assert([200, 201].includes(response.status), `Registro presencial: ${response.status}`)
@@ -74,7 +75,7 @@ export async function onsiteChecks({ db, client, signIn, password, accounts, adm
   assert.equal((await onsite(payload)).inscripcion.id, w1.inscripcion.id)
   assert.equal((await onsite({ ...payload, id: randomUUID() }, otherReception)).inscripcion.id, w1.inscripcion.id)
   assert.equal((await otherReception("/api/recepcion/presencial", post(payload))).status, 409)
-  assert.equal((await reception("/api/recepcion/presencial", post({ ...payload, nombreBebe: "Otro" }))).status, 409)
+  assert.equal((await reception("/api/recepcion/presencial", post({ ...paperConsent, ...payload, nombreBebe: "Otro" }))).status, 409)
   await arrive(mixed, prev)
   const w2 = await onsite(input(mixed, "Presencial sin correo"))
   assert.equal(w2.inscripcion.numero, 8); assert.equal(w2.correo, "SIN_CORREO")
@@ -131,7 +132,7 @@ export async function onsiteChecks({ db, client, signIn, password, accounts, adm
 
   const concurrent = await currentEvent("Duplicado simultáneo", 3)
   const same = input(concurrent, "Bebé simultáneo")
-  const simultaneous = await Promise.all([reception("/api/recepcion/presencial", post(same)), otherReception("/api/recepcion/presencial", post({ ...same, id: randomUUID() }))])
+  const simultaneous = await Promise.all([reception("/api/recepcion/presencial", post(same)), otherReception("/api/recepcion/presencial", post({ ...paperConsent, ...same, id: randomUUID() }))])
   assert.deepEqual(simultaneous.map(r => r.status).sort(), [200, 201])
   assert.equal((await db.query('SELECT count(*)::int n FROM "EntradaFila" WHERE "eventoId"=$1', [concurrent.id])).rows[0].n, 1)
   assert.equal((await reception("/api/recepcion/presencial", post(input(concurrent, "RUT histórico", { rutBebe: "11111111-1" })))).status, 409)

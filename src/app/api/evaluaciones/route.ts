@@ -28,7 +28,8 @@ export async function POST(req: Request) {
       } catch (error) { return clinicalFailure(error) }
     }
     const data = parseEvaluation(input)
-    const privacy = parsePrivacy(input.privacidad), declaration = paperDeclaration(input.declaracion)
+    const body = input as Record<string, unknown>
+    const privacy = parsePrivacy(body.privacidad), declaration = paperDeclaration(body.declaracion)
     if (privacy.correoResultados || privacy.seguimiento) throw new PrivacyInputError("El correo clínico requiere autorización desde una cuenta familiar verificada.")
     const evaluacion = await prisma.$transaction(async tx => {
       const matches = await tx.paciente.findMany({ where: { rut: { in: data.rutVariants } }, take: 2 })

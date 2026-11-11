@@ -1,3 +1,4 @@
+import { paperConsent } from "./privacy-fixtures.mjs"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 
@@ -86,7 +87,7 @@ export async function kinesiologyChecks({ db, client, signIn, password, accounts
   const otherEntry = activeEntry.eventoId === a.id ? arrivalB.id : t2.id
   await assert.rejects(db.query('UPDATE "EntradaFila" SET "profesionalId"=$1,estado=\'EN_ATENCION\' WHERE id=$2', [accounts[2].id, otherEntry]), "El índice impide dos activas en eventos distintos")
   await db.query('UPDATE "Paciente" SET rut=$1 WHERE id=$2', ["12345678-5", first.bebe.id])
-  const bypass = await kine("/api/evaluaciones", post({ ...measures, nombre: first.bebe.nombre, rut: "12345678-5", fnac: "2026-01-01", correo: "intruso@example.com" }))
+  const bypass = await kine("/api/evaluaciones", post({ ...paperConsent, ...measures, nombre: first.bebe.nombre, rut: "12345678-5", fnac: "2026-01-01", correo: "intruso@example.com" }))
   assert.equal(bypass.status, 409, "El formulario sin inscripción no elude la reserva del bebé vinculado")
   const page = await kine("/kinesiologia"); assert.equal(page.status, 200); assert((await page.text()).includes("Mi atención"))
   console.log("OK kinesiología: reserva exclusiva, datos precargados, bebés sin RUT, devolución segura, guardado atómico e idempotente y sin correo clínico.")

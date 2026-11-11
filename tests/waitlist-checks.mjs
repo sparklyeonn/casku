@@ -1,10 +1,11 @@
+import { familyConsent } from "./privacy-fixtures.mjs"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 export async function waitlistChecks({ db, client, signIn, password, accounts, admin, anonymous, family, post, createEvent, mails, setMailFailure }) {
   const a = await family("wait-a@example.com"), b = await family("wait-b@example.com"), reception = client(), kine = client()
   for (const [request, account] of [[reception, accounts[0]], [kine, accounts[2]]]) await signIn(request, "equipo", { email: account.email, password })
   const path = "/api/familias/lista-espera", full = await createEvent(admin, "Lista FIFO", 1)
-  const payload = (event, name, extra = {}) => ({ id: randomUUID(), eventoId: event.id, nombreBebe: name, fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado espera", aceptaAsignacion: true, ...extra })
+  const payload = (event, name, extra = {}) => ({ ...familyConsent, id: randomUUID(), eventoId: event.id, nombreBebe: name, fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado espera", aceptaAsignacion: true, ...extra })
   async function ok(request, url, body, expected = 200, method = "POST") {
     const response = await request(url, { ...post(body), method }), value = await response.json()
     assert.equal(response.status, expected, `${url}: ${JSON.stringify(value)}`); return value

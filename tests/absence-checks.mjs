@@ -1,3 +1,4 @@
+import { familyConsent, paperConsent } from "./privacy-fixtures.mjs"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 
@@ -13,7 +14,7 @@ export async function absenceChecks({ db, client, signIn, password, accounts, ad
   async function previous(event, count) {
     const rows = []
     for (let i = 0; i < count; i++) {
-      const response = await f1.request("/api/familias/inscripciones", post({ id: randomUUID(), eventoId: event.id, nombreBebe: `Bebé ${event.nombre} ${i}`, fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado ficticio" }))
+      const response = await f1.request("/api/familias/inscripciones", post({ ...familyConsent, id: randomUUID(), eventoId: event.id, nombreBebe: `Bebé ${event.nombre} ${i}`, fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado ficticio" }))
       assert.equal(response.status, 201); rows.push((await response.json()).inscripcion)
     }
     for (const row of rows) assert.equal((await reception("/api/recepcion/llegadas", post({ eventoId: event.id, inscripcionId: row.id }))).status, 201)
@@ -32,7 +33,7 @@ export async function absenceChecks({ db, client, signIn, password, accounts, ad
   const parts = new Intl.DateTimeFormat("en", { timeZone: "America/Santiago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date())
   const part = key => parts.find(value => value.type === key).value
   await db.query('UPDATE "Evento" SET fecha=$1::date WHERE id=$2', [`${part("year")}-${part("month")}-${part("day")}`, event.id])
-  const walkinResponse = await reception("/api/recepcion/presencial", post({ id: randomUUID(), eventoId: event.id, nombreBebe: "Bebé del día ausente", fechaNacimiento: "2026-01-01", nombreApoderado: "Familia ficticia" }))
+  const walkinResponse = await reception("/api/recepcion/presencial", post({ ...paperConsent, id: randomUUID(), eventoId: event.id, nombreBebe: "Bebé del día ausente", fechaNacimiento: "2026-01-01", nombreApoderado: "Familia ficticia" }))
   assert.equal(walkinResponse.status, 201)
   const walkin = (await walkinResponse.json()).inscripcion
   const original = new Date(Date.now() - 50 * 60000)

@@ -32,18 +32,40 @@ export async function recordConsent(tx: Prisma.TransactionClient, context: { pac
   return row
 }
 export async function requireDataConsent(tx: Prisma.TransactionClient, id: string | null | undefined, pacienteId: string, apoderadoId?: string | null) {
+  if (id) await tx.$queryRaw`SELECT id FROM "AutorizacionPrivacidad" WHERE id=${id}::uuid FOR UPDATE`
   const row = id ? await tx.autorizacionPrivacidad.findUnique({ where: { id } }) : null
   if (!row?.datos || row.versionTexto !== PRIVACY_VERSION || row.pacienteId !== pacienteId || (apoderadoId !== undefined && row.apoderadoId !== apoderadoId)) throw new PrivacyConflict("La autorización de datos está pendiente o retirada. Solicita su registro antes de continuar con la evaluación.")
   return row
 }
-export async function familyPermissions(familyId: string) {
+export async function familyPermissions(familyId: string, page = 1) {
   return prisma.$transaction(async tx => {
-    const rows = await tx.inscripcion.findMany({ where: { apoderadoId: familyId, paciente: { apoderadoId: familyId } }, include: { autorizacion: { include: { cambios: { orderBy: { revision: "desc" }, take: 10, select: { revision: true, createdAt: true, canal: true, versionTexto: true, anterior: true, nueva: true } } } }, paciente: { select: { nombre: true } }, evento: { select: { nombre: true } } }, orderBy: { createdAt: "desc" } })
-    const waits = await tx.listaEspera.findMany({ where: { apoderadoId: familyId, paciente: { apoderadoId: familyId }, inscripcionId: null }, include: { autorizacion: { include: { cambios: { orderBy: { revision: "desc" }, take: 10, select: { revision: true, createdAt: true, canal: true, versionTexto: true, anterior: true, nueva: true } } } }, paciente: { select: { nombre: true } }, evento: { select: { nombre: true } } }, orderBy: { createdAt: "desc" } })
-    const byScope = new Map<string, { pacienteId: string; eventoId: string; bebe: string; evento: string; autorizacion: typeof rows[number]["autorizacion"] }>()
-    for (const row of [...rows,...waits]) byScope.set(`${row.eventoId}:${row.pacienteId}`, { pacienteId: row.pacienteId, eventoId: row.eventoId, bebe: row.paciente.nombre, evento: row.evento.nombre, autorizacion: row.autorizacion?.apoderadoId === familyId ? row.autorizacion : null })
-    return { autorizaciones: [...byScope.values()].map(row => ({ ...row, autorizacion: row.autorizacion ? { id: row.autorizacion.id, revision: row.autorizacion.revision, version: row.autorizacion.versionTexto, datos: row.autorizacion.datos, correoResultados: row.autorizacion.correoResultados, seguimiento: row.autorizacion.seguimiento, historial: row.autorizacion.cambios.map(change => ({ revision: change.revision, canal: change.canal, versionTexto: change.versionTexto, createdAt: change.createdAt.toISOString(), nueva: publicChoice(change.nueva) })) } : null })) }
-  }, { isolationLevel: "RepeatableRead" })
+    const scopes = await tx.$queryRaw<Array<{ pacienteId: string; eventoId: string }>>`
+      SELECT r."pacienteId",r."eventoId" FROM (
+        SELECT i."pacienteId",i."eventoId",i."createdAt" FROM "Inscripcion" i JOIN "Paciente" p ON p.id=i."pacienteId"
+          WHERE i."apoderadoId"=${familyId}::uuid AND p."apoderadoId"=${familyId}::uuid
+        UNION ALL
+        SELECT w."pacienteId",w."eventoId",w."createdAt" FROM "ListaEspera" w JOIN "Paciente" p ON p.id=w."pacienteId"
+          WHERE w."apoderadoId"=${familyId}::uuid AND p."apoderadoId"=${familyId}::uuid AND w."inscripcionId" IS NULL
+      ) r GROUP BY r."pacienteId",r."eventoId" ORDER BY MAX(r."createdAt") DESC,r."eventoId",r."pacienteId"
+      OFFSET ${(page-1)*20} LIMIT 21`
+    const autorizaciones = await Promise.all(scopes.slice(0,20).map(async scope => {
+      const [baby,event,permission] = await Promise.all([
+        tx.paciente.findUniqueOrThrow({where:{id:scope.pacienteId},select:{nombre:true}}),
+        tx.evento.findUniqueOrThrow({where:{id:scope.eventoId},select:{nombre:true}}),
+        tx.autorizacionPrivacidad.findFirst({where:{ambito:`evento:${scope.eventoId}:bebe:${scope.pacienteId}`,apoderadoId:familyId}}),
+      ])
+      return {...scope,bebe:baby.nombre,evento:event.nombre,autorizacion:permission?{id:permission.id,revision:permission.revision,version:permission.versionTexto,datos:permission.datos,correoResultados:permission.correoResultados,seguimiento:permission.seguimiento}:null}
+    }))
+    return {autorizaciones,pagina:page,hayMas:scopes.length>20}
+  },{isolationLevel:"RepeatableRead"})
+}
+export async function familyConsentHistory(familyId: string, id: string, page: number) {
+  return prisma.$transaction(async tx=>{
+    const own=await tx.autorizacionPrivacidad.findFirst({where:{id,apoderadoId:familyId,paciente:{apoderadoId:familyId}},select:{id:true}})
+    if(!own)return null
+    const rows=await tx.cambioPrivacidad.findMany({where:{autorizacionId:id},orderBy:{revision:"desc"},skip:(page-1)*10,take:11,select:{revision:true,createdAt:true,canal:true,versionTexto:true,nueva:true}})
+    return {pagina:page,hayMas:rows.length>10,cambios:rows.slice(0,10).map(row=>({...row,createdAt:row.createdAt.toISOString(),nueva:publicChoice(row.nueva)}))}
+  },{isolationLevel:"RepeatableRead"})
 }
 export async function updateFamilyPermissions(familyId: string, raw: unknown) {
   const data = raw as Record<string, unknown>, choice = parsePrivacy(data?.privacidad, false)
@@ -66,7 +88,7 @@ export async function updateFamilyPermissions(familyId: string, raw: unknown) {
   })
 }
 
-export async function staffPermission(actor: { id: string; role: string; version: number }, eventoId: string, inscripcionId: string, declaration?: { declarante: string; referencia: string }) {
+export async function staffPermission(actor: { id: string; role: string; version: number }, eventoId: string, inscripcionId: string, declaration?: { declarante: string; referencia: string }, expectedRevision?: number) {
   return prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT id FROM "Evento" WHERE id=${eventoId}::uuid FOR UPDATE`
     const inscription = await tx.inscripcion.findFirst({ where: { id: inscripcionId, eventoId }, include: { autorizacion: true } })
@@ -76,15 +98,18 @@ export async function staffPermission(actor: { id: string; role: string; version
     if (!staff?.active || staff.version !== actor.version || staff.role !== actor.role || !["ADMIN","RECEPCION"].includes(actor.role)) throw new PrivacyConflict("Tu acceso cambió. Vuelve a ingresar.")
     let authorization = inscription.autorizacion
     if (declaration) {
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision! < 0) throw new PrivacyInputError("Actualiza la autorización antes de registrar el documento.")
+      if ((authorization?.revision ?? 0) !== expectedRevision) throw new PrivacyConflict("La autorización cambió. Actualiza la pantalla y revisa la nueva declaración del apoderado.")
+      if (authorization && !authorization.datos && await tx.cambioPrivacidad.findFirst({where:{autorizacionId:authorization.id,referencia:declaration.referencia},select:{id:true}})) throw new PrivacyConflict("Ese documento ya fue registrado antes de la retirada. Se requiere una nueva autorización del apoderado.")
       const paciente = await tx.paciente.findUniqueOrThrow({ where: { id: inscription.pacienteId } })
       if (paciente.apoderadoId !== inscription.apoderadoId) throw new PrivacyConflict("La vinculación requiere revisión antes de registrar la autorización.")
-      const current = authorization?.apoderadoId === inscription.apoderadoId ? authorization : null
+      const current = authorization?.apoderadoId === inscription.apoderadoId && authorization.versionTexto === PRIVACY_VERSION ? authorization : null
       // El equipo registra evidencia de datos; solo la cuenta verificada puede habilitar correo.
       authorization = await recordConsent(tx, { pacienteId: inscription.pacienteId, eventoId, apoderadoId: inscription.apoderadoId }, { version: PRIVACY_VERSION, datos: true, correoResultados: current?.correoResultados ?? false, seguimiento: current?.seguimiento ?? false }, actor, declaration)
       await tx.inscripcion.update({ where: { id: inscription.id }, data: { autorizacionId: authorization.id } })
     }
     await trace(tx, actor, "CONSULTAR", "AUTORIZACION_INSCRIPCION", inscription.id)
-    return { datos: authorization?.datos ?? false, estado: authorization ? authorization.datos ? "AUTORIZADO" : "RETIRADO" : "PENDIENTE", version: authorization?.versionTexto ?? null, revision: authorization?.revision ?? 0 }
+    return { datos: !!authorization?.datos && authorization.versionTexto === PRIVACY_VERSION, estado: authorization ? authorization.versionTexto !== PRIVACY_VERSION ? "PENDIENTE_RENOVACION" : authorization.datos ? "AUTORIZADO" : "RETIRADO" : "PENDIENTE", version: authorization?.versionTexto ?? null, revision: authorization?.revision ?? 0 }
   })
 }
 export async function privacyAudit(page: number, actor: PrivacyActor) {

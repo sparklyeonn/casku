@@ -30,6 +30,7 @@ export async function ownedReview(staffId: string, id: string) {
 export async function ownResults(staffId: string, page: number, state: "TODOS" | "BORRADOR" | "PUBLICADO", eventoId?: string) {
   const where: Prisma.EvaluacionWhereInput = { autorId: staffId, ...(eventoId ? { fila: { is: { eventoId } } } : {}), ...(state === "BORRADOR" ? { publicacion: { is: null } } : state === "PUBLICADO" ? { publicacion: { isNot: null } } : {}) }
   const [total, rows] = await prisma.$transaction([prisma.evaluacion.count({ where }), prisma.evaluacion.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * 20, take: 20, select: { id: true, revision: true, createdAt: true, paciente: { select: { nombre: true } }, fila: { select: { inscripcion: { select: { numero: true, evento: { select: { nombre: true } } } } } }, publicacion: { select: { id: true, datos: true, correo: { select: { estado: true } } } } } })])
+  await trace(prisma, { id: staffId, role: "KINESIOLOGO" }, "CONSULTAR_LISTA", "EVALUACIONES", `pagina:${page}`)
   return { total, pagina: page, hayMas: page * 20 < total, resultados: rows.map(row => { const snapshot = row.publicacion ? parseSnapshot(row.publicacion.datos) : null; return { id: row.id, revision: row.revision, nombreBebe: snapshot?.nombreBebe || row.paciente.nombre, fecha: row.createdAt.toISOString(), evento: snapshot?.evento || row.fila?.inscripcion.evento.nombre || null, numero: snapshot?.numero ?? row.fila?.inscripcion.numero ?? null, estado: row.publicacion ? "PUBLICADO" : "BORRADOR", correo: row.publicacion?.correo?.estado ?? null } }) }
 }
 async function lockOwned(tx: Prisma.TransactionClient, staffId: string, id: string) {
@@ -74,6 +75,7 @@ export const familyResultScope = (familyId: string): Prisma.ResultadoPublicadoWh
 export async function familyPublishedResults(familyId: string, page: number) {
   const where = familyResultScope(familyId)
   const [total, rows] = await prisma.$transaction([prisma.resultadoPublicado.count({ where }), prisma.resultadoPublicado.findMany({ where, orderBy: [{ publicadoAt: "desc" }, { id: "desc" }], skip: (page - 1) * 20, take: 20, select: { id: true, publicadoAt: true, datos: true } })])
+  await trace(prisma, { id: `familia:${familyId}`, role: "APODERADO" }, "CONSULTAR_LISTA", "PUBLICACIONES", `pagina:${page}`)
   return { total, pagina: page, hayMas: page * 20 < total, resultados: rows.map(row => ({ id: row.id, publicadoAt: row.publicadoAt.toISOString(), datos: parseSnapshot(row.datos) })) }
 }
 export async function familyPublishedResult(familyId: string, id: string) {

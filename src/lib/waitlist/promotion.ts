@@ -1,3 +1,4 @@
+import { PRIVACY_VERSION } from "@/lib/privacy/policy"
 import { randomBytes } from "node:crypto"
 import type { Prisma } from "@prisma/client"
 import { chileToday } from "@/lib/families/input"
@@ -21,7 +22,7 @@ export async function promoteLocked(tx: Prisma.TransactionClient, eventoId: stri
     await tx.$queryRaw`SELECT id FROM "Paciente" WHERE id=${head.pacienteId} FOR UPDATE`
     const authorization = head.autorizacionId ? await tx.autorizacionPrivacidad.findUnique({ where: { id: head.autorizacionId } }) : null
     const [baby, family] = await Promise.all([tx.paciente.findUnique({ where: { id: head.pacienteId } }), tx.apoderado.findUnique({ where: { id: head.apoderadoId } })])
-    if (!baby || !family?.activo || baby.apoderadoId !== family.id || !authorization?.datos || authorization.apoderadoId !== family.id || authorization.pacienteId !== baby.id) {
+    if (!baby || !family?.activo || baby.apoderadoId !== family.id || !authorization?.datos || authorization.versionTexto !== PRIVACY_VERSION || authorization.eventoId !== eventoId || authorization.apoderadoId !== family.id || authorization.pacienteId !== baby.id) {
       await tx.listaEspera.update({ where: { id: head.id }, data: { estado: "NO_ELEGIBLE", resueltaAt: new Date(), motivoResolucion: "La cuenta, autorización o vinculación del bebé requiere revisión.", origenResolucion: origen } })
       continue
     }

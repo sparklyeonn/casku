@@ -9,5 +9,5 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   const access=await dataAccess(); if(access.response) return access.response
-  try { const body=await familyJson(request);const result=await staffPermission(access.user,parseEventId(body?.eventoId),parseEventId(body?.inscripcionId),paperDeclaration(body?.declaracion));return result ? familyResponse(result) : familyResponse({error:"Inscripción no disponible."},404) } catch(error) {return familyFailure(error)}
+  try { const body=await familyJson(request);const result=await staffPermission(access.user,parseEventId(body?.eventoId),parseEventId(body?.inscripcionId),paperDeclaration(body?.declaracion),body?.revision);return result ? familyResponse(result) : familyResponse({error:"Inscripción no disponible."},404) } catch(error) {return familyFailure(error)}
 }

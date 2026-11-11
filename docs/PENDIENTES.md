@@ -3,7 +3,7 @@
 El dominio y el remitente verificado se gestionan por separado. Este estado corresponde al código; las pruebas locales no sustituyen la validación de producción.
 
 1. [x] **Crítica — Seguridad de autenticación y límites compartidos.** Límites de acceso en PostgreSQL; sesiones revocables con vencimiento; controles propios y administrativos; prueba con dos servidores. Ver [SEGURIDAD_EQUIPO.md](SEGURIDAD_EQUIPO.md).
-2. [ ] **Crítica — Consentimiento, trazabilidad y controles de privacidad.** Completar el registro de consentimiento y las revisiones de acceso y privacidad.
+2. [x] **Crítica — Consentimiento, trazabilidad y controles de privacidad.** Aceptación versionada por bebé/evento, permisos separados para resultados y seguimiento, retirada desde la cuenta familiar, evidencia presencial y auditoría de accesos sin contenido clínico. Migración aplicada y pruebas locales completas. Ver [CONSENTIMIENTO_PRIVACIDAD.md](CONSENTIMIENTO_PRIVACIDAD.md); Casku debe aprobar textos y procedimientos antes del uso oficial.
 3. [ ] **Crítica — Compilación completa y pruebas técnicas.** Completar la compilación de producción y la validación técnica final. Las pruebas de desarrollo de cada entrega no cierran este pendiente.
 4. [ ] **Crítica — Integración real de correos y gestión de fallos.** Completar reintentos programados y notificaciones de entrega/rebote; la prueba real depende del remitente.
 5. [ ] **Alta — Corrección o retiro seguro de resultados publicados.** Nuevas versiones y retiro con motivo, permisos e historial.

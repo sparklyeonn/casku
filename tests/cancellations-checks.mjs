@@ -1,3 +1,4 @@
+import { familyConsent, paperConsent } from "./privacy-fixtures.mjs"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 export async function cancellationChecks({ db, client, signIn, password, accounts, admin, anonymous, family, post, createEvent, mails }) {
@@ -9,7 +10,7 @@ export async function cancellationChecks({ db, client, signIn, password, account
   const cancel = (request, event, id, extra = {}) => request(endpoint(id), post({ eventoId: event.id, motivo: reason, actorId: "intruso", perfilActor: "ADMIN", ...extra }))
   const status = (request, event, id) => request(`${endpoint(id)}?eventoId=${event.id}`)
   async function register(request, event, name, extra = {}) {
-    const payload = { id: randomUUID(), eventoId: event.id, nombreBebe: name, fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado cancelación", ...extra }
+    const payload = { ...familyConsent, id: randomUUID(), eventoId: event.id, nombreBebe: name, fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado cancelación", ...extra }
     const response = await request("/api/familias/inscripciones", post(payload)); assert.equal(response.status, 201)
     return { row: (await response.json()).inscripcion, payload }
   }
@@ -44,7 +45,7 @@ export async function cancellationChecks({ db, client, signIn, password, account
   assert.equal((await reception("/api/recepcion/correo", post({ eventoId: event.id, inscripcionId: row.id }))).status, 409)
   assert.equal((await reception("/api/recepcion/llegadas", post({ eventoId: event.id, inscripcionId: row.id }))).status, 409)
   assert.equal((await a.request("/api/familias/inscripciones", post(payload))).status, 409)
-  assert.equal((await a.request("/api/familias/inscripciones", post({ ...payload, id: randomUUID() }))).status, 409)
+  assert.equal((await a.request("/api/familias/inscripciones", post({ ...familyConsent, ...payload, id: randomUUID() }))).status, 409)
   const lookup = await reception("/api/recepcion/buscar", post({ eventoId: event.id, consulta: `CASKU:INSCRIPCION:${token}` })); assert.equal(lookup.status, 200); assert((await lookup.json()).inscripcion.cancelacion)
   const next = (await register(b.request, event, "Usa el cupo liberado")).row
   assert.equal(next.numero, 2)
@@ -103,7 +104,7 @@ export async function cancellationChecks({ db, client, signIn, password, account
   await db.exec('DROP TRIGGER cancellation_fail_trigger ON "CancelacionInscripcion"; DROP FUNCTION cancellation_fail();')
   assert.equal((await cancel(reception, recovery, retry.id)).status, 200)
   const racing = await createEvent(admin, "Último cupo frente a cancelación", 1), old = (await register(a.request, racing, "Reserva antes de liberar")).row
-  const race = await Promise.all([cancel(reception, racing, old.id), b.request("/api/familias/inscripciones", post({ id: randomUUID(), eventoId: racing.id, nombreBebe: "Reserva concurrente", fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado cancelación" }))])
+  const race = await Promise.all([cancel(reception, racing, old.id), b.request("/api/familias/inscripciones", post({ ...familyConsent, id: randomUUID(), eventoId: racing.id, nombreBebe: "Reserva concurrente", fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado cancelación" }))])
   assert.equal(race[0].status, 200); assert([201, 409].includes(race[1].status))
   const count = (await db.query('SELECT count(*)::int n FROM "Inscripcion" i WHERE "eventoId"=$1 AND NOT EXISTS (SELECT 1 FROM "CancelacionInscripcion" c WHERE c."inscripcionId"=i.id)', [racing.id])).rows[0].n
   assert.equal((await db.query('SELECT inscritos FROM "Evento" WHERE id=$1', [racing.id])).rows[0].inscritos, count); assert(count <= 1)
@@ -121,12 +122,12 @@ export async function cancellationChecks({ db, client, signIn, password, account
   // Un código entregado antes de cancelar no permite adquirir la inscripción cancelada.
   const day = await createEvent(admin, "Código cancelado", 2, false), parts = new Intl.DateTimeFormat("en", { timeZone: "America/Santiago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()), part = key => parts.find(p => p.type === key).value
   await db.query('UPDATE "Evento" SET fecha=$1::date WHERE id=$2', [`${part("year")}-${part("month")}-${part("day")}`, day.id])
-  response = await reception("/api/recepcion/presencial", post({ id: randomUUID(), eventoId: day.id, nombreBebe: "Presencial cancelado", fechaNacimiento: "2026-01-01", nombreApoderado: "Contacto ficticio" })); assert.equal(response.status, 201)
+  response = await reception("/api/recepcion/presencial", post({ ...paperConsent, id: randomUUID(), eventoId: day.id, nombreBebe: "Presencial cancelado", fechaNacimiento: "2026-01-01", nombreApoderado: "Contacto ficticio" })); assert.equal(response.status, 201)
   const onsite = (await response.json()).inscripcion, invite = { id: randomUUID(), eventoId: day.id, inscripcionId: onsite.id, correo: a.user.email }
   const code = (await (await reception("/api/recepcion/vinculaciones", post(invite))).json()).codigo
   assert.equal((await cancel(reception, day, onsite.id)).status, 200)
-  assert.equal((await a.request("/api/familias/vinculaciones", post({ codigo: code }))).status, 404)
+  assert.equal((await a.request("/api/familias/vinculaciones", post({ ...familyConsent, codigo: code }))).status, 404)
   assert.equal((await reception("/api/recepcion/vinculaciones", post({ ...invite, id: randomUUID() }))).status, 409)
-  assert.equal((await reception("/api/recepcion/presencial", post({ id: randomUUID(), eventoId: day.id, nombreBebe: "Presencial cancelado", fechaNacimiento: "2026-01-01", nombreApoderado: "Contacto ficticio" }))).status, 409)
+  assert.equal((await reception("/api/recepcion/presencial", post({ ...paperConsent, id: randomUUID(), eventoId: day.id, nombreBebe: "Presencial cancelado", fechaNacimiento: "2026-01-01", nombreApoderado: "Contacto ficticio" }))).status, 409)
   console.log("OK recuperación y carreras: envío en curso protegido, rollback de auditoría/cupo, reserva simultánea sin sobreventa y código/reingreso presencial bloqueados tras cancelar.")
 }

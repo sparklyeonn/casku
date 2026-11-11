@@ -1,3 +1,6 @@
+import { beforePrivacyMigration } from "./privacy-migration.mjs"
+import { privacyChecks } from "./privacy-checks.mjs"
+import { familyConsent } from "./privacy-fixtures.mjs"
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
 import { once } from "node:events"
@@ -80,8 +83,8 @@ async function createEvent(admin, nombre, cupos, open = true) {
   if (open) { const opened = await admin(`/api/eventos/${input.id}/inscripciones`, { ...post({ abiertas: true }), method: "PATCH" }); assert.equal(opened.status, 200) }
   return input
 }
-const registration = (event, changes = {}) => ({ id: randomUUID(), eventoId: event.id, nombreApoderado: "Apoderado ficticio", nombreBebe: "Bebé ficticio", fechaNacimiento: "2026-01-01", ...changes })
-const clinicalSnapshot = () => db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' - 'revisionDatos' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' FROM "Evaluacion" e WHERE id='legacy-evaluation'`)
+const registration = (event, changes = {}) => ({ ...familyConsent, id: randomUUID(), eventoId: event.id, nombreApoderado: "Apoderado ficticio", nombreBebe: "Bebé ficticio", fechaNacimiento: "2026-01-01", ...changes })
+const clinicalSnapshot = () => db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' - 'revisionDatos' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' - 'autorizacionId' FROM "Evaluacion" e WHERE id='legacy-evaluation'`)
 try {
   await db.waitReady
   const migrations = (await readdir("prisma/migrations", { withFileTypes: true })).filter(e => e.isDirectory()).map(e => e.name).sort()
@@ -90,7 +93,7 @@ try {
     INSERT INTO "Evaluacion" (id,"pacienteId","correoPadre",anteroposterior,biparietal,"diagonalIzq","diagonalDer","indiceCraneal","indiceAsimetria",diagnostico,recomendacion,kinesiologa) VALUES ('legacy-evaluation','legacy-baby','legacy@example.com',140,120,135,138,85.7,3,'Ejemplo','Ejemplo','Profesional ficticio');`)
   const before = await clinicalSnapshot()
   for (const name of migrations.filter(name => name >= "20261109000200_inscripcion_familiar")) {
-    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : name === "20261109000700_publicacion_resultados" ? await seedBeforeResultsMigration(db) : name === "20261110000100_edicion_eventos" ? await seedBeforeEventEditMigration(db) : name === "20261110000200_correccion_datos" ? await seedBeforeDataCorrectionMigration(db) : name === "20261110000300_cancelacion_inscripciones" ? await seedBeforeCancellationMigration(db) : name === "20261110000400_lista_espera" ? await beforeWaitlistMigration(db) : null
+    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : name === "20261109000700_publicacion_resultados" ? await seedBeforeResultsMigration(db) : name === "20261110000100_edicion_eventos" ? await seedBeforeEventEditMigration(db) : name === "20261110000200_correccion_datos" ? await seedBeforeDataCorrectionMigration(db) : name === "20261110000300_cancelacion_inscripciones" ? await seedBeforeCancellationMigration(db) : name === "20261110000400_lista_espera" ? await beforeWaitlistMigration(db) : name === "20261111000100_consentimiento_privacidad" ? await beforePrivacyMigration(db) : null
     await db.exec(await readFile(`prisma/migrations/${name}/migration.sql`, "utf8"))
     if (verify) await verify()
   }
@@ -115,7 +118,7 @@ try {
   const admin = client(); assert.equal((await signIn(admin, "equipo", { email: adminAccount.email, password })).role, "ADMIN")
   const a = await createEvent(admin, "Evento A", 2), b = await createEvent(admin, "Evento B", 20), closed = await createEvent(admin, "Evento cerrado", 10, false)
   const anonymous = client()
-  assert.equal((await anonymous("/api/familias/inscripciones", post({}))).status, 401)
+  assert.equal((await anonymous("/api/familias/inscripciones", post({ ...familyConsent,}))).status, 401)
   assert.equal((await anonymous("/api/familias/inscripciones")).status, 401)
   const available = await (await anonymous("/api/eventos/disponibles")).json()
   assert(available.eventos.some(e => e.id === a.id)); assert(!available.eventos.some(e => e.id === closed.id))
@@ -169,7 +172,7 @@ try {
   const mailCount = mails.length
   const duplicate = await (await f1.request("/api/familias/inscripciones", post(payload))).json()
   assert.equal(duplicate.inscripcion.id, first.id); assert.equal(mails.length, mailCount)
-  const duplicateNewKey = await (await f1.request("/api/familias/inscripciones", post({ ...payload, id: randomUUID() }))).json()
+  const duplicateNewKey = await (await f1.request("/api/familias/inscripciones", post({ ...familyConsent, ...payload, id: randomUUID() }))).json()
   assert.equal(duplicateNewKey.inscripcion.numero, 1)
   const second = await (await f1.request("/api/familias/inscripciones", post(registration(a, { nombreBebe: "Bebé segundo", rutApoderado: "12345678-5" })))).json()
   assert.equal(second.inscripcion.numero, 2)
@@ -228,6 +231,8 @@ try {
   await cancellationChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await waitlistChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails, setMailFailure: value => { failConfirmation = value } })
+  assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  await privacyChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, post, createEvent, mails, setResultFailure: value => { failResults = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await teamChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)

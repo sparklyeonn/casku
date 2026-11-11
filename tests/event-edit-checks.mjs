@@ -1,3 +1,4 @@
+import { familyConsent } from "./privacy-fixtures.mjs"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 export async function eventEditChecks({ db, client, signIn, password, accounts, admin, anonymous, family, post, createEvent, mails }) {
@@ -33,7 +34,7 @@ export async function eventEditChecks({ db, client, signIn, password, accounts, 
 
   const booked = await create("Evento con familias", 3, true)
   async function register(eventoId, name) {
-    return parent.request("/api/familias/inscripciones", post({ id: randomUUID(), eventoId, nombreBebe: name, fechaNacimiento: "2026-01-01", nombreApoderado: "Familia ficticia de edición" }))
+    return parent.request("/api/familias/inscripciones", post({ ...familyConsent, id: randomUUID(), eventoId, nombreBebe: name, fechaNacimiento: "2026-01-01", nombreApoderado: "Familia ficticia de edición" }))
   }
   response = await register(booked.id, "Bebé edición"); assert.equal(response.status, 201)
   const receipt = (await response.json()).inscripcion, mailCount = mails.length

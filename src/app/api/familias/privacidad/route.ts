@@ -2,9 +2,9 @@ import { getFamilyUser } from "@/lib/families/access"
 import { familyPermissions, updateFamilyPermissions } from "@/lib/privacy/store"
 import { familyFailure, familyJson, familyResponse } from "@/lib/families/http"
 import { parseEventId } from "@/lib/events/input"
-export async function GET() {
+export async function GET(request: Request) {
   const family = await getFamilyUser(); if (!family) return familyResponse({ error: "Ingresa con tu cuenta familiar verificada." },401)
-  try { return familyResponse(await familyPermissions(family.id)) } catch(error) { return familyFailure(error) }
+  try { const page=Number(new URL(request.url).searchParams.get("pagina")||1); if(!Number.isSafeInteger(page)||page<1||page>100000)return familyResponse({error:"Página inválida."},400); return familyResponse(await familyPermissions(family.id,page)) } catch(error) { return familyFailure(error) }
 }
 export async function POST(request: Request) {
   const family = await getFamilyUser(); if (!family) return familyResponse({ error: "Ingresa con tu cuenta familiar verificada." },401)

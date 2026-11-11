@@ -56,3 +56,5 @@ La [lista de espera](docs/LISTA_ESPERA.md) permite solicitar cupos en eventos ll
 La [seguridad del equipo](docs/SEGURIDAD_EQUIPO.md) incorpora límites compartidos, sesiones con vencimiento y cierre remoto, y revocación administrativa auditada.
 
 El [listado prioritario de pendientes](docs/PENDIENTES.md) distingue las entregas implementadas de la validación final para producción.
+
+La [privacidad y las autorizaciones](docs/CONSENTIMIENTO_PRIVACIDAD.md) incorpora opciones separadas para datos, resultados y seguimiento, retirada desde la cuenta familiar, evidencia presencial y trazabilidad de accesos.

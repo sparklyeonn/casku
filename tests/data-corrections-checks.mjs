@@ -1,3 +1,4 @@
+import { familyConsent, paperConsent } from "./privacy-fixtures.mjs"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 export async function dataCorrectionsChecks({ db, client, signIn, password, accounts, admin, anonymous, family, post, createEvent, mails }) {
@@ -5,7 +6,7 @@ export async function dataCorrectionsChecks({ db, client, signIn, password, acco
   for (const [request, account] of [[reception, accounts[0]], [kine, accounts[2]]]) await signIn(request, "equipo", { email: account.email, password })
   const event = await createEvent(admin, "Corrección ficticia", 6)
   async function register(name) {
-    const response = await parent.request("/api/familias/inscripciones", post({ id: randomUUID(), eventoId: event.id, nombreBebe: name, fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado de corrección" }))
+    const response = await parent.request("/api/familias/inscripciones", post({ ...familyConsent, id: randomUUID(), eventoId: event.id, nombreBebe: name, fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado de corrección" }))
     assert.equal(response.status, 201); return (await response.json()).inscripcion
   }
   const first = await register("Bebé de corrección"), second = await register("Segundo bebé")
@@ -63,10 +64,10 @@ export async function dataCorrectionsChecks({ db, client, signIn, password, acco
   assert.equal((await fetchDetail(second.id)).ficha.apoderado.nombre, "Apoderado corregido")
   assert.equal((await db.query('SELECT correo FROM "Apoderado" WHERE id=$1', [ownerId])).rows[0].correo, parent.user.email)
   const future = await createEvent(admin, "Misma ficha corregida", 2)
-  const stale = { id: randomUUID(), eventoId: future.id, nombreBebe: "Bebé de corrección", fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado de corrección" }
+  const stale = { ...familyConsent, id: randomUUID(), eventoId: future.id, nombreBebe: "Bebé de corrección", fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado de corrección" }
   assert.equal((await parent.request("/api/familias/inscripciones", post(stale))).status, 409)
   const currentProfile = (await (await parent.request("/api/familias/inscripciones")).json()).perfil
-  response = await parent.request("/api/familias/inscripciones", post({ id: randomUUID(), eventoId: future.id, bebeId: first.bebe.id, nombreApoderado: currentProfile.nombre, telefono: currentProfile.telefono, rutApoderado: currentProfile.rut, revisionApoderado: currentProfile.revisionDatos }))
+  response = await parent.request("/api/familias/inscripciones", post({ ...familyConsent, id: randomUUID(), eventoId: future.id, bebeId: first.bebe.id, nombreApoderado: currentProfile.nombre, telefono: currentProfile.telefono, rutApoderado: currentProfile.rut, revisionApoderado: currentProfile.revisionDatos }))
   assert.equal(response.status, 201); assert.equal((await response.json()).inscripcion.bebe.id, first.bebe.id)
   // La confirmación preparada mantiene su cuerpo aunque se corrija el nombre del bebé.
   await db.query('UPDATE "CorreoInscripcion" SET estado=\'FALLIDO\',"disponibleAt"=$1 WHERE "inscripcionId"=$2', [new Date(Date.now() - 1000), first.id])
@@ -79,7 +80,7 @@ export async function dataCorrectionsChecks({ db, client, signIn, password, acco
   const parts = new Intl.DateTimeFormat("en", { timeZone: "America/Santiago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date())
   const part = key => parts.find(p => p.type === key).value
   await db.query('UPDATE "Evento" SET fecha=$1::date WHERE id=$2', [`${part("year")}-${part("month")}-${part("day")}`, day.id])
-  response = await reception("/api/recepcion/presencial", post({ id: randomUUID(), eventoId: day.id, nombreBebe: "Bebé presencial corregible", fechaNacimiento: "2026-01-01", nombreApoderado: "Contacto presencial", correo: "contacto-anterior@example.com" })); assert.equal(response.status, 201)
+  response = await reception("/api/recepcion/presencial", post({ ...paperConsent, id: randomUUID(), eventoId: day.id, nombreBebe: "Bebé presencial corregible", fechaNacimiento: "2026-01-01", nombreApoderado: "Contacto presencial", correo: "contacto-anterior@example.com" })); assert.equal(response.status, 201)
   const onsite = (await response.json()).inscripcion, onsiteDetail = `${root}/inscripciones/${onsite.id}`
   let onsiteRow = await fetchDetail(onsite.id, day.id)
   const invitation = await reception("/api/recepcion/vinculaciones", post({ id: randomUUID(), eventoId: day.id, inscripcionId: onsite.id, correo: parent.user.email })); assert.equal(invitation.status, 200)
@@ -88,7 +89,7 @@ export async function dataCorrectionsChecks({ db, client, signIn, password, acco
   const beforeContactMail = mails.length
   response = await patchContact(onsiteRow.ficha.apoderado.revision, "contacto-corregido@example.com"); assert.equal(response.status, 200); onsiteRow = await response.json()
   assert.equal(mails.length, beforeContactMail); assert.equal((await db.query('SELECT "apoderadoId" FROM "Inscripcion" WHERE id=$1', [onsite.id])).rows[0].apoderadoId, null)
-  assert.equal((await parent.request("/api/familias/vinculaciones", post({ codigo: code }))).status, 404)
+  assert.equal((await parent.request("/api/familias/vinculaciones", post({ ...familyConsent, codigo: code }))).status, 404)
   response = await reception("/api/recepcion/correo", post({ eventoId: day.id, inscripcionId: onsite.id })); assert.equal(response.status, 200); assert.equal((await response.json()).correo, "ENVIADO")
   assert.equal(mails.length, beforeContactMail + 1); assert([].concat(mails.at(-1).to).includes("contacto-corregido@example.com"))
   await db.query('UPDATE "CorreoInscripcion" SET estado=\'ENVIANDO\' WHERE "inscripcionId"=$1', [onsite.id])

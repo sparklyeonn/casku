@@ -1,3 +1,4 @@
+import { paperConsent } from "./privacy-fixtures.mjs"
 import assert from "node:assert/strict"
 import { randomBytes, randomUUID } from "node:crypto"
 export async function teamChecks({ db, client, signIn, password, accounts, admin, anonymous, f1, post, createEvent }) {
@@ -59,7 +60,7 @@ export async function teamChecks({ db, client, signIn, password, accounts, admin
   const parts = new Intl.DateTimeFormat("en", { timeZone: "America/Santiago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date())
   const part = key => parts.find(p => p.type === key).value
   await db.query('UPDATE "Evento" SET fecha=$1::date WHERE id=$2', [`${part("year")}-${part("month")}-${part("day")}`, event.id])
-  assert.equal((await reception("/api/recepcion/presencial", post({ id: randomUUID(), eventoId: event.id, nombreBebe: "Atención ficticia", fechaNacimiento: "2026-01-01", nombreApoderado: "Familia ficticia" }))).status, 201)
+  assert.equal((await reception("/api/recepcion/presencial", post({ ...paperConsent, id: randomUUID(), eventoId: event.id, nombreBebe: "Atención ficticia", fechaNacimiento: "2026-01-01", nombreApoderado: "Familia ficticia" }))).status, 201)
   const call = await request("/api/kinesiologia/llamar", post({ id: randomUUID(), eventoId: event.id })); assert.equal(call.status, 200)
   const attention = (await call.json()).atencion
   assert.equal((await patch(account, { active: false })).status, 409)

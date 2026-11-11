@@ -67,3 +67,7 @@ Recepción y administración corrigen datos de bebé, perfil del apoderado y con
 ## Seguridad del equipo — implementada
 
 Límites de ingreso compartidos, sesiones revocables con plazos absoluto y de inactividad, cierre propio y administrativo auditado, y pruebas con dos servidores (ver [SEGURIDAD_EQUIPO.md](SEGURIDAD_EQUIPO.md)). La recuperación de contraseña y el cambio inicial obligatorio continúan pendientes, al igual que los demás puntos críticos y altos acordados.
+
+## Consentimiento y privacidad
+
+Implementado el pendiente 2: autorizaciones expresas y versionadas, resultados y seguimiento por separado, retirada desde la cuenta familiar, evidencia documental en recepción y registro de accesos. Ver [CONSENTIMIENTO_PRIVACIDAD.md](CONSENTIMIENTO_PRIVACIDAD.md). Los registros anteriores no reciben permisos retroactivos. La programación de seguimiento sigue pendiente; no se modificaron las fórmulas clínicas.

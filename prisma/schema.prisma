@@ -38,6 +38,7 @@ model CambioCuentaEquipo {
 }
 
 model Evento {
+  autorizaciones AutorizacionPrivacidad[]
   ultimoOrdenEspera Int @default(0)
   listaEspera ListaEspera[]
   id             String                @id @default(uuid()) @db.Uuid
@@ -86,6 +87,7 @@ model EventoSeleccionado {
 }
 
 model Paciente {
+  autorizaciones AutorizacionPrivacidad[]
   listaEspera ListaEspera[]
   revisionDatos Int @default(1)
   id              String       @id @default(cuid())
@@ -104,6 +106,8 @@ model Paciente {
 }
 
 model Evaluacion {
+  autorizacionId String? @db.Uuid
+  autorizacion AutorizacionPrivacidad? @relation(fields: [autorizacionId], references: [id], onDelete: Restrict)
   id              String   @id @default(cuid())
   pacienteId      String
   paciente        Paciente @relation(fields: [pacienteId], references: [id])
@@ -129,6 +133,7 @@ model Evaluacion {
 }
 
 model Apoderado {
+  autorizaciones AutorizacionPrivacidad[]
   listaEspera ListaEspera[]
   revisionDatos Int @default(1)
   id             String @id @default(uuid()) @db.Uuid
@@ -212,6 +217,8 @@ model LimiteSolicitud {
 }
 
 model Inscripcion {
+  autorizacionId String? @db.Uuid
+  autorizacion AutorizacionPrivacidad? @relation(fields: [autorizacionId], references: [id], onDelete: Restrict)
   esperaOrigen ListaEspera?
   cancelacion CancelacionInscripcion?
   revisionContacto Int @default(1)
@@ -248,6 +255,8 @@ enum EstadoListaEspera {
 }
 
 model ListaEspera {
+  autorizacionId String? @db.Uuid
+  autorizacion AutorizacionPrivacidad? @relation(fields: [autorizacionId], references: [id], onDelete: Restrict)
   id String @id @db.Uuid
   eventoId String @db.Uuid
   evento Evento @relation(fields: [eventoId], references: [id], onDelete: Restrict)
@@ -434,4 +443,55 @@ model SesionEquipo {
   motivo String?
   @@index([cuentaId, createdAt])
   @@index([expiraAt])
+}
+
+model AutorizacionPrivacidad {
+  id String @id @default(uuid()) @db.Uuid
+  ambito String @unique
+  pacienteId String
+  paciente Paciente @relation(fields: [pacienteId], references: [id], onDelete: Restrict)
+  eventoId String? @db.Uuid
+  evento Evento? @relation(fields: [eventoId], references: [id], onDelete: Restrict)
+  apoderadoId String? @db.Uuid
+  apoderado Apoderado? @relation(fields: [apoderadoId], references: [id], onDelete: Restrict)
+  datos Boolean
+  correoResultados Boolean @default(false)
+  seguimiento Boolean @default(false)
+  revision Int @default(1)
+  versionTexto String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  inscripciones Inscripcion[]
+  solicitudes ListaEspera[]
+  evaluaciones Evaluacion[]
+  cambios CambioPrivacidad[]
+  @@index([apoderadoId, updatedAt])
+}
+model CambioPrivacidad {
+  id String @id @default(uuid()) @db.Uuid
+  autorizacionId String @db.Uuid
+  autorizacion AutorizacionPrivacidad @relation(fields: [autorizacionId], references: [id], onDelete: Restrict)
+  revision Int
+  actorId String
+  perfilActor String
+  declarante String
+  referencia String?
+  canal String
+  versionTexto String
+  textos Json
+  anterior Json?
+  nueva Json
+  createdAt DateTime @default(now())
+  @@unique([autorizacionId, revision])
+}
+model AccesoPrivado {
+  id String @id @default(uuid()) @db.Uuid
+  actorId String
+  perfilActor String
+  accion String
+  recurso String
+  recursoId String
+  createdAt DateTime @default(now())
+  @@index([createdAt, id])
+  @@index([actorId, createdAt])
 }

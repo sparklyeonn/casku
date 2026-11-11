@@ -1,3 +1,5 @@
+import { parsePrivacy } from "@/lib/privacy/policy"
+import { recordConsent } from "@/lib/privacy/store"
 import { mailFamily } from "@/lib/families/identity-snapshot"
 import { mailEvent } from "@/lib/events/mail-snapshot"
 import type { Prisma, VinculacionPresencial } from "@prisma/client"
@@ -57,7 +59,7 @@ export async function revokeInvitation(staffId: string, eventoId: string, inscri
     return true
   }, { timeout: 15000 })
 }
-export async function familyLink(familyId: string, code: string, accept: boolean) {
+export async function familyLink(familyId: string, code: string, accept: boolean, privacy?: unknown) {
   // Los intentos fallidos se devuelven como resultado para que el límite quede confirmado.
   return prisma.$transaction(async tx => {
     await takeLimit(tx, `family-link:${familyId}`, 10, 15 * 60000)
@@ -81,8 +83,9 @@ export async function familyLink(familyId: string, code: string, accept: boolean
     await tx.$queryRaw`SELECT id FROM "CorreoInscripcion" WHERE "inscripcionId"=${row.id}::uuid FOR UPDATE`
     const confirmation = await tx.correoInscripcion.findUnique({ where: { inscripcionId: row.id } })
     if (confirmation?.estado === "ENVIANDO") return { estado: "ENVIO_EN_CURSO" as const }
+    const authorization = await recordConsent(tx, { pacienteId: row.pacienteId, eventoId: row.eventoId, apoderadoId: family.id }, parsePrivacy(privacy), { id: `familia:${family.id}`, role: "APODERADO" }, { declarante: family.nombre || "Apoderado verificado" })
     await tx.paciente.update({ where: { id: row.pacienteId }, data: { apoderadoId: family.id, revisionDatos: { increment: 1 } } })
-    await tx.inscripcion.update({ where: { id: row.id }, data: { apoderadoId: family.id, revisionContacto: { increment: 1 } } })
+    await tx.inscripcion.update({ where: { id: row.id }, data: { autorizacionId: authorization.id, apoderadoId: family.id, revisionContacto: { increment: 1 } } })
     await tx.vinculacionPresencial.update({ where: { id: invite.id }, data: { consumidaAt: new Date(), apoderadoId: family.id } })
     // La cuenta verificada obtiene una copia recuperable con su propio destinatario.
     // No se reutiliza la clave de un comprobante enviado al contacto presencial.

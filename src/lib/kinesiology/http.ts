@@ -1,3 +1,5 @@
+import { PrivacyInputError } from "@/lib/privacy/policy"
+import { PrivacyConflict } from "@/lib/privacy/store"
 import { getTeamUser } from "@/lib/access"
 import { EventInputError } from "@/lib/events/input"
 import { InvalidEvaluation } from "@/lib/evaluation-input"
@@ -19,6 +21,8 @@ export async function clinicalJson(request: Request): Promise<Record<string, unk
   return data as Record<string, unknown>
 }
 export function clinicalFailure(error: unknown) {
+  if (error instanceof PrivacyInputError) return clinicalResponse({ error: error.message }, 400)
+  if (error instanceof PrivacyConflict) return clinicalResponse({ error: error.message }, 409)
   if (error instanceof EventInputError || error instanceof InvalidEvaluation) return clinicalResponse({ error: error.message }, 400)
   if (error instanceof AttentionConflict) return clinicalResponse({ error: error.message }, 409)
   if (error instanceof AttentionUnavailable) return clinicalResponse({ error: "La atención no está disponible para tu cuenta." }, 404)

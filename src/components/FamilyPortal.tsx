@@ -1,4 +1,6 @@
 "use client"
+import { PrivacyFields } from "./PrivacyFields"
+import { emptyPrivacy } from "@/lib/privacy/policy"
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { FormEvent } from "react"
 import Image from "next/image"
@@ -19,6 +21,7 @@ async function loadFamily(signal?: AbortSignal): Promise<{ family: FamilyData; e
   return { family, events: available.eventos }
 }
 export function FamilyPortal() {
+  const [privacy, setPrivacy] = useState(emptyPrivacy)
   const requestedEvent = useSearchParams().get("evento") || ""
   const [data, setData] = useState<FamilyData | null>(null), [events, setEvents] = useState<PublicEvent[]>([])
   const [eventoId, setEventoId] = useState(""), [form, setForm] = useState(blank)
@@ -51,17 +54,17 @@ export function FamilyPortal() {
     try {
       creationId.current ??= crypto.randomUUID()
       if (events.find(event => event.id === eventoId)?.listaEspera) {
-        await jsonResponse(await fetch("/api/familias/lista-espera", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, revisionApoderado: data?.perfil.revisionDatos, eventoId, id: creationId.current, aceptaAsignacion: accepted }) }))
-        creationId.current = null; setAccepted(false)
+        await jsonResponse(await fetch("/api/familias/lista-espera", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, privacidad: privacy, revisionApoderado: data?.perfil.revisionDatos, eventoId, id: creationId.current, aceptaAsignacion: accepted }) }))
+        creationId.current = null; setAccepted(false); setPrivacy(emptyPrivacy)
         setForm(previous => ({ ...blank, nombreApoderado: previous.nombreApoderado, rutApoderado: previous.rutApoderado, telefono: previous.telefono }))
         setMessage("Solicitud guardada. Consulta tu posición en Lista de espera; si ya recibiste un cupo, encontrarás el número y QR en tus inscripciones.")
         try { apply(await loadFamily()) } catch { /* La solicitud guardada se recupera desde la lista. */ }
         return
       }
-      const { inscripcion } = await jsonResponse(await fetch("/api/familias/inscripciones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, revisionApoderado: data?.perfil.revisionDatos, eventoId, id: creationId.current }) })) as { inscripcion: Receipt }
+      const { inscripcion } = await jsonResponse(await fetch("/api/familias/inscripciones", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, privacidad: privacy, revisionApoderado: data?.perfil.revisionDatos, eventoId, id: creationId.current }) })) as { inscripcion: Receipt }
       // Primero conservamos el comprobante, aunque falle la actualización de la lista.
       setData(previous => previous ? { ...previous, inscripciones: [inscripcion, ...previous.inscripciones.filter(row => row.id !== inscripcion.id)] } : previous)
-      creationId.current = null
+      creationId.current = null; setPrivacy(emptyPrivacy)
       setForm(previous => ({ ...blank, nombreApoderado: previous.nombreApoderado, rutApoderado: previous.rutApoderado, telefono: previous.telefono }))
       setMessage(inscripcion.correo.estado === "ENVIADO" ? `Inscripción confirmada: N.º ${String(inscripcion.numero).padStart(3, "0")}. Enviamos el comprobante a tu correo.` : `Inscripción confirmada: N.º ${String(inscripcion.numero).padStart(3, "0")}. El correo está pendiente; tu número y QR ya están disponibles aquí.`)
       try { apply(await loadFamily()) } catch { /* El comprobante recién confirmado sigue visible. */ }
@@ -95,8 +98,9 @@ export function FamilyPortal() {
         {data.bebes.length > 0 && <label className="block font-medium">Bebé<select value={form.bebeId} onChange={e => change("bebeId", e.target.value)} className={field}><option value="">Registrar otro bebé</option>{data.bebes.map(baby => <option key={baby.id} value={baby.id}>{baby.nombre} · {baby.fechaNacimiento}</option>)}</select></label>}
         {!form.bebeId && <div className="grid gap-5 sm:grid-cols-2"><label className="block text-sm font-medium">Nombre completo del bebé<input className={field} value={form.nombreBebe} onChange={e => change("nombreBebe", e.target.value)} maxLength={120} autoComplete="off" required /></label><label className="block text-sm font-medium">Fecha de nacimiento<input type="date" className={field} value={form.fechaNacimiento} onChange={e => change("fechaNacimiento", e.target.value)} min="1900-01-01" autoComplete="off" required /></label><label className="block text-sm font-medium sm:col-span-2">RUT del bebé · Opcional si aún no tiene<input className={field} value={form.rutBebe} onChange={e => change("rutBebe", e.target.value)} maxLength={20} placeholder="Sin puntos, con guion" autoComplete="off" /></label></div>}
         <div className="grid gap-5 border-t pt-6 sm:grid-cols-2"><label className="block text-sm font-medium">Nombre del apoderado<input className={field} value={form.nombreApoderado} onChange={e => change("nombreApoderado", e.target.value)} maxLength={120} autoComplete="name" required /></label><label className="block text-sm font-medium">Correo verificado<input className={field} value={data.perfil.correo} readOnly type="email" /></label><label className="block text-sm font-medium">Teléfono · Opcional<input className={field} value={form.telefono} onChange={e => change("telefono", e.target.value)} type="tel" maxLength={25} autoComplete="tel" /></label><label className="block text-sm font-medium">RUT del apoderado · Opcional<input className={field} value={form.rutApoderado} onChange={e => change("rutApoderado", e.target.value)} maxLength={20} placeholder="Sin puntos, con guion" autoComplete="off" /></label></div>
+        <PrivacyFields value={privacy} onChange={value => { creationId.current = null; setPrivacy(value) }} disabled={disabled} />
         {selected?.listaEspera && <label className="flex items-start gap-3 rounded-lg border border-amber-400 p-4"><input type="checkbox" checked={accepted} onChange={e => setAccepted(e.target.checked)} required /><span>Acepto que mi inscripción se confirme automáticamente cuando haya un cupo y llegue mi turno en la lista. Recibiré el número y QR en mi cuenta y por correo. Puedo retirarme antes de la asignación.</span></label>}
-        <p className="text-sm text-gray-600 dark:text-gray-300">El número se asigna por bebé y evento. La fila comienza cuando recepción confirme tu llegada. Los registros del mismo día se consideran inscripciones del día, también si se realizan por la web.</p><button className="rounded-lg bg-teal-700 px-6 py-3 text-white disabled:opacity-50" disabled={!eventoId || (!!selected?.listaEspera && !accepted)}>{busy === "register" ? "Guardando…" : selected?.listaEspera ? "Anotarme en lista de espera" : "Confirmar inscripción"}</button>
+        <p className="text-sm text-gray-600 dark:text-gray-300">El número se asigna por bebé y evento. La fila comienza cuando recepción confirme tu llegada. Los registros del mismo día se consideran inscripciones del día, también si se realizan por la web.</p><button className="rounded-lg bg-teal-700 px-6 py-3 text-white disabled:opacity-50" disabled={!privacy.datos || !eventoId || (!!selected?.listaEspera && !accepted)}>{busy === "register" ? "Guardando…" : selected?.listaEspera ? "Anotarme en lista de espera" : "Confirmar inscripción"}</button>
       </fieldset></form>}</section>
     </>}
   </main>

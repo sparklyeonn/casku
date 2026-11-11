@@ -1,5 +1,7 @@
 "use client"
 
+import { PaperPrivacy, emptyDeclaration } from "./PrivacyFields"
+import { PRIVACY_VERSION } from "@/lib/privacy/policy"
 import { useRef, useState } from "react"
 import Link from "next/link"
 
@@ -19,6 +21,7 @@ const colorVal = {
 
 export type AssignedForm = { id: string; reservaId: string; numero: number; evento: { nombre: string }; bebe: { nombre: string; rut: string; fnac: string }; correo: string }
 export default function FormularioEvaluacion({ profesional, atencion }: { profesional: string; atencion?: AssignedForm }) {
+  const [declaration, setDeclaration] = useState(emptyDeclaration)
   const initial = { nombre: atencion?.bebe.nombre || "", rut: atencion?.bebe.rut || "", fnac: atencion?.bebe.fnac || "", correo: atencion?.correo || "", ap: "", bp: "", di: "", dd: "", kine: "" }
   const [form, setForm] = useState({
     ...initial,
@@ -57,7 +60,7 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(atencion ? { atencionId: atencion.id, reservaId: atencion.reservaId, ap, bp, di, dd } : {
-          ...form,
+          ...form, declaracion: declaration, privacidad: { version: PRIVACY_VERSION, datos: declaration.documentada, correoResultados: false, seguimiento: false },
           ap, bp, di, dd,
           indiceCraneal: resultado.indiceCraneal,
           indiceAsimetria: resultado.indiceAsimetria,
@@ -217,6 +220,7 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
         <button onClick={() => setForm(initial)} className="border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 px-4 py-2.5 rounded-lg text-sm font-medium hover:border-gray-400 transition">
           {atencion ? "Limpiar medidas" : "Limpiar"}
         </button>
+        {!atencion && <PaperPrivacy value={declaration} onChange={setDeclaration} disabled={guardando} />}
         <button onClick={guardar} disabled={guardando} className="flex-1 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2">
           {guardando ? "Guardando..." : (
             <>

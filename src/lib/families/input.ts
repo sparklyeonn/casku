@@ -35,16 +35,17 @@ export function parseRegistration(input: unknown) {
   }
   const revisionApoderado = raw.revisionApoderado === undefined ? undefined : Number(raw.revisionApoderado)
   if (raw.revisionApoderado !== undefined && (typeof raw.revisionApoderado !== "number" || !Number.isSafeInteger(revisionApoderado) || revisionApoderado! < 1)) throw new FamilyInputError("Actualiza los datos de tu cuenta.")
+  const privacidad = raw.privacidad
   const id = parseEventId(raw.id), eventoId = parseEventId(raw.eventoId)
   const nombreApoderado = text("nombreApoderado", 120), telefono = text("telefono", 25, false)
   const rutApoderado = normalizeRut(raw.rutApoderado)
-  if (raw.bebeId) return { id, eventoId, revisionApoderado, nombreApoderado, telefono, rutApoderado, bebeId: text("bebeId", 100), nuevoBebe: null }
+  if (raw.bebeId) return { id, eventoId, privacidad, revisionApoderado, nombreApoderado, telefono, rutApoderado, bebeId: text("bebeId", 100), nuevoBebe: null }
   const nombre = text("nombreBebe", 120)
   const date = text("fechaNacimiento", 10)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < "1900-01-01" || date > chileToday()) throw new FamilyInputError("Revisa la fecha de nacimiento del bebé.")
   const fechaNacimiento = new Date(`${date}T00:00:00Z`)
   if (!Number.isFinite(fechaNacimiento.getTime()) || fechaNacimiento.toISOString().slice(0, 10) !== date) throw new FamilyInputError("La fecha de nacimiento no existe.")
-  return { id, eventoId, revisionApoderado, nombreApoderado, telefono, rutApoderado, bebeId: null,
+  return { id, eventoId, privacidad, revisionApoderado, nombreApoderado, telefono, rutApoderado, bebeId: null,
     nuevoBebe: { nombre, nombreNormalizado: nombre.toLocaleLowerCase("es-CL"), fechaNacimiento, rut: normalizeRut(raw.rutBebe) } }
 }
 export type RegistrationInput = ReturnType<typeof parseRegistration>

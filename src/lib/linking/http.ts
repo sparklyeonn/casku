@@ -1,3 +1,5 @@
+import { PrivacyInputError } from "@/lib/privacy/policy"
+import { PrivacyConflict } from "@/lib/privacy/store"
 import { Prisma } from "@prisma/client"
 import { FamilyInputError } from "@/lib/families/input"
 import { familyFailure, familyResponse } from "@/lib/families/http"
@@ -9,6 +11,8 @@ export function linkOutcome(result: Awaited<ReturnType<typeof familyLink>>) {
   return familyResponse({ vinculada: result.vinculada, vinculacion: result.vinculacion })
 }
 export function linkFailure(error: unknown) {
+  if (error instanceof PrivacyInputError) return familyResponse({ error: error.message },400)
+  if (error instanceof PrivacyConflict) return familyResponse({ error: error.message },409)
   if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code)) return familyResponse({ error: "La ficha cambió o coincide con otro registro. Actualiza o solicita revisión a Casku." }, 409)
   return familyFailure(error)
 }

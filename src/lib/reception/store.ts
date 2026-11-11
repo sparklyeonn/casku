@@ -1,3 +1,4 @@
+import { requireDataConsent } from "@/lib/privacy/store"
 import { cancellationSelect, cancellationSummary } from "@/lib/cancellations/store"
 import { ReceptionConflict } from "./http"
 import { Prisma } from "@prisma/client"
@@ -21,6 +22,8 @@ export function receptionSummary(row: ReceptionRow) {
 }
 export async function ensureArrival(tx: Prisma.TransactionClient, row: ReceptionRow, staffId: string) {
   if (row.cancelacion) throw new ReceptionConflict("La inscripción está cancelada. No puede volver a la fila ni reservar un cupo con este comprobante.")
+  const permission = await tx.inscripcion.findUniqueOrThrow({ where: { id: row.id }, select: { autorizacionId: true, pacienteId: true, apoderadoId: true } })
+  await requireDataConsent(tx, permission.autorizacionId, permission.pacienteId, permission.apoderadoId)
   if (row.fila) return { inscripcion: receptionSummary(row), nueva: false }
   const event = await tx.evento.update({ where: { id: row.eventoId }, data: { ultimoOrdenFila: { increment: 1 } }, select: { ultimoOrdenFila: true } })
   const fila = await tx.entradaFila.create({ data: { eventoId: row.eventoId, inscripcionId: row.id, orden: event.ultimoOrdenFila, confirmadoPorId: staffId }, select: receptionFilaSelect })

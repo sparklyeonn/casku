@@ -43,7 +43,7 @@ export async function createRegistration(familyId: string, input: RegistrationIn
     baby = prepared.baby
     const family = prepared.family
     const updated = await tx.evento.update({ where: { id: event.id }, data: { inscritos: { increment: 1 }, ultimoNumero: { increment: 1 } } })
-    return tx.inscripcion.create({ data: { id: input.id, solicitudHash: hash, eventoId: event.id, pacienteId: baby.id, apoderadoId: familyId, origen: event.fecha.toISOString().slice(0, 10) === today ? "PRESENCIAL" : "PREVIA", numero: updated.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), correo: { create: { datosEvento: mailEvent(event), datosFamilia: mailFamily(baby.nombre, family.correo, true) } } }, include: registrationInclude })
+    return tx.inscripcion.create({ data: { id: input.id, autorizacionId: prepared.autorizacion.id, solicitudHash: hash, eventoId: event.id, pacienteId: baby.id, apoderadoId: familyId, origen: event.fecha.toISOString().slice(0, 10) === today ? "PRESENCIAL" : "PREVIA", numero: updated.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), correo: { create: { datosEvento: mailEvent(event), datosFamilia: mailFamily(baby.nombre, family.correo, true) } } }, include: registrationInclude })
   }, { timeout: 15000 })
   for (let attempt = 0; ; attempt++) {
     try { return await save() } catch (error) {

@@ -1,9 +1,12 @@
+import { parsePrivacy } from "@/lib/privacy/policy"
+import { recordConsent } from "@/lib/privacy/store"
 import { Prisma, type Paciente } from "@prisma/client"
 import { type RegistrationInput } from "./input"
 import { RegistrationConflict } from "./http"
 import { takeLimit } from "./security"
 import { rutVariants } from "@/lib/data-corrections/input"
 export async function prepareRegistrationFamily(tx: Prisma.TransactionClient, familyId: string, input: RegistrationInput, found: Paciente | null) {
+  const choice = parsePrivacy(input.privacidad)
   let baby = found
   if (baby) {
     await tx.$queryRaw`SELECT id FROM "Paciente" WHERE id=${baby.id} FOR UPDATE`
@@ -31,5 +34,6 @@ export async function prepareRegistrationFamily(tx: Prisma.TransactionClient, fa
     const updatedFamily = await tx.apoderado.update({ where: { id: familyId }, data: { ...perfil, revisionDatos: { increment: 1 } } })
     await tx.cambioDatos.create({ data: { entidad: "APODERADO", registroId: familyId, apoderadoId: familyId, revision: updatedFamily.revisionDatos, actorId: `familia:${familyId}`, perfilActor: "APODERADO", motivo: "Datos confirmados al realizar la inscripción", anterior: previous, nueva: perfil } })
   }
-  return { baby, family }
+  const autorizacion = await recordConsent(tx, { pacienteId: baby.id, eventoId: input.eventoId, apoderadoId: familyId }, choice, { id: `familia:${familyId}`, role: "APODERADO" }, { declarante: input.nombreApoderado })
+  return { baby, family, autorizacion }
 }

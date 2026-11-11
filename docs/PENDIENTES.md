@@ -9,3 +9,7 @@ El dominio y el remitente verificado se gestionan por separado. Este estado corr
 5. [ ] **Alta — Corrección o retiro seguro de resultados publicados.** Nuevas versiones y retiro con motivo, permisos e historial.
 6. [ ] **Alta — Recuperación y cambio inicial de contraseñas.** Recuperación segura y cambio obligatorio de contraseñas temporales del equipo.
 7. [ ] **Alta — Pruebas integrales de recepción, turnos y concurrencia.** Validación conjunta en dispositivos y PostgreSQL real, además de las pruebas automatizadas locales existentes.
+
+## Alcance adicional acordado para integrar
+
+Se recibió la ampliación a siete medidas, clasificación con CI/CVA/CVAI/DPOE y tres correos clínicos de resultados y seguimiento, con seguimiento para plagiocefalia alterada o braquicefalia/dolicocefalia alterada; la plagiocefalia normal por sí sola no excluye los casos mixtos. El análisis y sus decisiones pendientes están en [ALCANCE_CRANEOMETRIA_Y_SEGUIMIENTO.md](ALCANCE_CRANEOMETRIA_Y_SEGUIMIENTO.md). No está implementado y no cambia el orden anterior: consentimiento en el punto 2; ampliación clínica confirmada antes de cerrar las pruebas del punto 3; programación de correos en el 4; versiones/retiros en el 5; validación conjunta en el 7. DPOE se prepara provisionalmente como el máximo de dos desviaciones, a la espera de confirmación clínica. La fórmula de CVAI, las fronteras y la regla ante discrepancias entre indicadores siguen pendientes de confirmación del equipo de Casku. La inclusión de casos mixtos ya fue aclarada por la responsable.

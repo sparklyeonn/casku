@@ -1,3 +1,4 @@
+import { requireDataConsent, trace } from "@/lib/privacy/store"
 import { randomUUID } from "node:crypto"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
@@ -23,6 +24,7 @@ function reviewSummary(row: Review) {
 export type ResultReview = ReturnType<typeof reviewSummary>
 export async function ownedReview(staffId: string, id: string) {
   const row = await prisma.evaluacion.findFirst({ where: { id, autorId: staffId }, include: reviewInclude })
+  if (row) await trace(prisma, { id: staffId, role: "KINESIOLOGO" }, "CONSULTAR", "EVALUACION", row.id)
   return row ? reviewSummary(row) : null
 }
 export async function ownResults(staffId: string, page: number, state: "TODOS" | "BORRADOR" | "PUBLICADO", eventoId?: string) {
@@ -40,6 +42,7 @@ export async function reviseResult(staffId: string, id: string, revision: number
     const row = await lockOwned(tx, staffId, id)
     if (row.publicacion) throw new AttentionConflict("El resultado ya está publicado. No se modificó su contenido.")
     if (row.revision !== revision) throw new AttentionConflict("La evaluación cambió en otra pantalla. Actualiza antes de guardar.")
+    await requireDataConsent(tx, row.autorizacionId ?? row.fila?.inscripcion.autorizacionId, row.pacienteId, row.paciente.apoderadoId)
     const anterior = draftSnapshot(row)
     const data = { anteroposterior: measures.ap, biparietal: measures.bp, diagonalIzq: measures.di, diagonalDer: measures.dd, indiceCraneal: measures.indiceCraneal, indiceAsimetria: measures.indiceAsimetria, diagnostico: measures.diagnostico, recomendacion: measures.recomendacion }
     if (Object.entries(data).every(([key, value]) => row[key as keyof typeof data] === value)) return reviewSummary(row)
@@ -58,10 +61,12 @@ export async function publishResult(staffId: string, id: string, revision: numbe
     if (row.publicacion) return { id: row.publicacion.id, nueva: false }
     const family = recipient(row)
     if (!family) throw new AttentionConflict("Primero debe verificarse la vinculación del bebé con una cuenta familiar activa. No se envió el resultado al correo de contacto.")
+    const authorization = await requireDataConsent(tx, row.autorizacionId ?? row.fila?.inscripcion.autorizacionId, row.pacienteId, family.id)
     const snapshot = draftSnapshot(row), checked = parseMeasurements(snapshot.medidas)
     if (snapshot.indiceCraneal !== checked.indiceCraneal || snapshot.indiceAsimetria !== checked.indiceAsimetria || snapshot.diagnostico !== checked.diagnostico || snapshot.recomendacion !== checked.recomendacion) throw new AttentionConflict("Revisa y guarda las medidas antes de publicar este resultado.")
     const publicationId = randomUUID()
-    await tx.resultadoPublicado.create({ data: { id: publicationId, evaluacionId: id, apoderadoId: family.id, publicadoPorId: staffId, revision, datos: snapshot, correo: { create: { destinatario: family.correo, portalUrl: portalUrl(publicationId) } } } })
+    await tx.resultadoPublicado.create({ data: { id: publicationId, evaluacionId: id, apoderadoId: family.id, publicadoPorId: staffId, revision, datos: snapshot, correo: { create: { destinatario: family.correo, portalUrl: portalUrl(publicationId), ...(authorization.correoResultados ? {} : { estado: "CANCELADO", ultimoError: "PRIVACIDAD" }) } } } })
+    await trace(tx, { id: staffId, role: "KINESIOLOGO" }, "PUBLICAR", "PUBLICACION", publicationId)
     return { id: publicationId, nueva: true }
   }, { timeout: 15000 })
 }
@@ -73,5 +78,6 @@ export async function familyPublishedResults(familyId: string, page: number) {
 }
 export async function familyPublishedResult(familyId: string, id: string) {
   const row = await prisma.resultadoPublicado.findFirst({ where: { id, ...familyResultScope(familyId) }, select: { id: true, publicadoAt: true, datos: true, correo: { select: { estado: true, disponibleAt: true } } } })
+  if (row) await trace(prisma, { id: `familia:${familyId}`, role: "APODERADO" }, "CONSULTAR", "PUBLICACION", row.id)
   return row ? { id: row.id, publicadoAt: row.publicadoAt.toISOString(), datos: parseSnapshot(row.datos), correo: mailSummary(row.correo) } : null
 }

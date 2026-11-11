@@ -1,3 +1,4 @@
+import { trace, type PrivacyActor } from "@/lib/privacy/store"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import type { correctionInput } from "./input"
@@ -28,10 +29,11 @@ async function history(tx: Prisma.TransactionClient, row: Record, page: number) 
   const staff = await tx.cuentaEquipo.findMany({ where: { id: { in: changes.slice(0, 20).filter(change => change.perfilActor !== "APODERADO").map(change => change.actorId) } }, select: { id: true, name: true } })
   return { cambios: changes.slice(0, 20).map(change => ({ ...change, actorName: change.perfilActor === "APODERADO" ? "Cuenta familiar" : staff.find(account => account.id === change.actorId)?.name || "Cuenta del equipo", createdAt: change.createdAt.toISOString() })), pagina: page, hayMas: changes.length > 20 }
 }
-export async function recordDetail(eventoId: string, where: { id: string } | { numero: number } | { qrToken: string }, page = 1) {
+export async function recordDetail(eventoId: string, where: { id: string } | { numero: number } | { qrToken: string }, page = 1, actor?: PrivacyActor) {
   return prisma.$transaction(async tx => {
     const row = await tx.inscripcion.findFirst({ where: { eventoId, ...where }, select: dataSelect })
     if (!row) return null
+    if (actor) await trace(tx, actor, "CONSULTAR", "DATOS_FAMILIA", row.id)
     const ficha = summary(row)
     return { ficha, historial: await history(tx, row, page) }
   }, { isolationLevel: "RepeatableRead" })

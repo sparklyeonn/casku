@@ -19,13 +19,14 @@ export async function promoteLocked(tx: Prisma.TransactionClient, eventoId: stri
       continue
     }
     await tx.$queryRaw`SELECT id FROM "Paciente" WHERE id=${head.pacienteId} FOR UPDATE`
+    const authorization = head.autorizacionId ? await tx.autorizacionPrivacidad.findUnique({ where: { id: head.autorizacionId } }) : null
     const [baby, family] = await Promise.all([tx.paciente.findUnique({ where: { id: head.pacienteId } }), tx.apoderado.findUnique({ where: { id: head.apoderadoId } })])
-    if (!baby || !family?.activo || baby.apoderadoId !== family.id) {
-      await tx.listaEspera.update({ where: { id: head.id }, data: { estado: "NO_ELEGIBLE", resueltaAt: new Date(), motivoResolucion: "La cuenta o vinculación del bebé requiere revisión.", origenResolucion: origen } })
+    if (!baby || !family?.activo || baby.apoderadoId !== family.id || !authorization?.datos || authorization.apoderadoId !== family.id || authorization.pacienteId !== baby.id) {
+      await tx.listaEspera.update({ where: { id: head.id }, data: { estado: "NO_ELEGIBLE", resueltaAt: new Date(), motivoResolucion: "La cuenta, autorización o vinculación del bebé requiere revisión.", origenResolucion: origen } })
       continue
     }
     event = await tx.evento.update({ where: { id: eventoId }, data: { inscritos: { increment: 1 }, ultimoNumero: { increment: 1 } } })
-    const registration = await tx.inscripcion.create({ data: { id: head.id, eventoId, pacienteId: baby.id, apoderadoId: family.id, solicitudHash: head.solicitudHash, origen: event.fecha.toISOString().slice(0, 10) === chileToday() ? "PRESENCIAL" : "PREVIA", numero: event.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), correo: { create: { datosEvento: mailEvent(event), datosFamilia: mailFamily(baby.nombre, family.correo, true) } } } })
+    const registration = await tx.inscripcion.create({ data: { id: head.id, autorizacionId: head.autorizacionId, eventoId, pacienteId: baby.id, apoderadoId: family.id, solicitudHash: head.solicitudHash, origen: event.fecha.toISOString().slice(0, 10) === chileToday() ? "PRESENCIAL" : "PREVIA", numero: event.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), correo: { create: { datosEvento: mailEvent(event), datosFamilia: mailFamily(baby.nombre, family.correo, true) } } } })
     await tx.listaEspera.update({ where: { id: head.id }, data: { estado: "ASIGNADA", inscripcionId: registration.id, resueltaAt: new Date(), motivoResolucion: "Cupo confirmado automáticamente por orden de lista.", origenResolucion: origen } })
     ids.push(registration.id)
   }

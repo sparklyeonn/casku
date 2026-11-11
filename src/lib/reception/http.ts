@@ -1,3 +1,5 @@
+import { PrivacyInputError } from "@/lib/privacy/policy"
+import { PrivacyConflict } from "@/lib/privacy/store"
 import { Prisma } from "@prisma/client"
 import { getTeamUser } from "@/lib/access"
 import { EventInputError } from "@/lib/events/input"
@@ -17,6 +19,8 @@ export async function receptionJson(request: Request) {
   try { return await request.json() } catch { throw new ReceptionInputError("No pudimos leer los datos enviados.") }
 }
 export function receptionFailure(error: unknown) {
+  if (error instanceof PrivacyInputError) return receptionResponse({ error: error.message }, 400)
+  if (error instanceof PrivacyConflict) return receptionResponse({ error: error.message }, 409)
   if (error instanceof ReceptionInputError || error instanceof EventInputError || error instanceof FamilyInputError) return receptionResponse({ error: error.message }, 400)
   if (error instanceof ReceptionConflict) return receptionResponse({ error: error.message }, 409)
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return receptionResponse({ error: "Estos datos ya están registrados o necesitan revisión. Busca la inscripción antes de continuar." }, 409)

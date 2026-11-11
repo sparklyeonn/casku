@@ -1,3 +1,5 @@
+import { parsePrivacy, paperDeclaration, PrivacyInputError } from "@/lib/privacy/policy"
+import { recordConsent } from "@/lib/privacy/store"
 import { mailFamily } from "@/lib/families/identity-snapshot"
 import { mailEvent } from "@/lib/events/mail-snapshot"
 import { createHash, randomBytes } from "node:crypto"
@@ -33,9 +35,12 @@ export async function registerOnsite(staffId: string, input: OnsiteInput) {
       const [body, digit] = input.bebe.rut.split("-"), formatted = `${body.replace(/\B(?=(\d{3})+(?!\d))/g, ".")}-${digit}`
       if (await tx.paciente.findFirst({ where: { rut: { in: [input.bebe.rut, formatted] } }, select: { id: true } })) throw new ReceptionConflict("El RUT ya está registrado. Busca su inscripción o solicita revisión a Casku; no se vinculó otro paciente.")
     }
+    const choice = parsePrivacy(input.privacidad), declaration = paperDeclaration(input.declaracion)
+    if (choice.correoResultados || choice.seguimiento) throw new PrivacyInputError("Los permisos de correo clínico deben confirmarse desde la cuenta familiar verificada.")
     const baby = await tx.paciente.create({ data: input.bebe })
+    const authorization = await recordConsent(tx, { pacienteId: baby.id, eventoId: event.id, apoderadoId: null }, choice, { id: staffId, role: "RECEPCION" }, declaration)
     const updated = await tx.evento.update({ where: { id: event.id }, data: { inscritos: { increment: 1 }, ultimoNumero: { increment: 1 } } })
-    const row = await tx.inscripcion.create({ data: { id: input.id, solicitudHash: hash, eventoId: event.id, pacienteId: baby.id, numero: updated.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), origen: "PRESENCIAL", registradoPorId: staffId, contactoNombre: input.nombreApoderado, contactoCorreo: input.correo, contactoTelefono: input.telefono || null, ...(input.correo ? { correo: { create: { datosEvento: mailEvent(event), datosFamilia: mailFamily(baby.nombre, input.correo, false) } } } : {}) }, select: receptionSelect })
+    const row = await tx.inscripcion.create({ data: { id: input.id, autorizacionId: authorization.id, solicitudHash: hash, eventoId: event.id, pacienteId: baby.id, numero: updated.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), origen: "PRESENCIAL", registradoPorId: staffId, contactoNombre: input.nombreApoderado, contactoCorreo: input.correo, contactoTelefono: input.telefono || null, ...(input.correo ? { correo: { create: { datosEvento: mailEvent(event), datosFamilia: mailFamily(baby.nombre, input.correo, false) } } } : {}) }, select: receptionSelect })
     return { ...await ensureArrival(tx, row, staffId), nuevaInscripcion: true }
   }, { timeout: 15000 })
   for (let attempt = 0; ; attempt++) {

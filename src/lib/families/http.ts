@@ -1,3 +1,5 @@
+import { PrivacyInputError } from "@/lib/privacy/policy"
+import { PrivacyConflict } from "@/lib/privacy/store"
 import { Prisma } from "@prisma/client"
 import { FamilyInputError } from "./input"
 import { EventInputError } from "@/lib/events/input"
@@ -13,6 +15,8 @@ export async function familyJson(request: Request) {
   try { return await request.json() } catch { throw new FamilyInputError("No pudimos leer el formulario.") }
 }
 export function familyFailure(error: unknown) {
+  if (error instanceof PrivacyInputError) return familyResponse({ error: error.message }, 400)
+  if (error instanceof PrivacyConflict) return familyResponse({ error: error.message }, 409)
   if (error instanceof FamilyInputError || error instanceof EventInputError) return familyResponse({ error: error.message }, 400)
   if (error instanceof RegistrationConflict) return familyResponse({ error: error.message }, 409)
   if (error instanceof RequestLimited) return familyResponse({ error: "Has realizado varios intentos. Intenta más tarde." }, 429)

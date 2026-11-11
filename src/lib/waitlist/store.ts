@@ -41,7 +41,7 @@ export async function joinWaitlist(familyId: string, input: RegistrationInput) {
     const prepared = await prepareRegistrationFamily(tx, familyId, input, baby)
     if (!prepared.family.activo) throw new RegistrationConflict("La cuenta familiar no está disponible.")
     const updated = await tx.evento.update({ where: { id: event.id }, data: { ultimoOrdenEspera: { increment: 1 } } })
-    const row = await tx.listaEspera.create({ data: { id: input.id, eventoId: event.id, pacienteId: prepared.baby.id, apoderadoId: familyId, nombreBebe: prepared.baby.nombre, orden: updated.ultimoOrdenEspera, solicitudHash: hash }, include })
+    const row = await tx.listaEspera.create({ data: { id: input.id, autorizacionId: prepared.autorizacion.id, eventoId: event.id, pacienteId: prepared.baby.id, apoderadoId: familyId, nombreBebe: prepared.baby.nombre, orden: updated.ultimoOrdenEspera, solicitudHash: hash }, include })
     return entrySummary(tx, row)
   }, { timeout: 15000 })
 }

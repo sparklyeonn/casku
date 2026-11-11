@@ -1,3 +1,4 @@
+import { requireDataConsent, trace } from "@/lib/privacy/store"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { AttentionConflict, AttentionUnavailable } from "./http"
@@ -22,6 +23,7 @@ export async function currentAttention(staffId: string) {
 }
 export async function assignedAttention(staffId: string, id: string, reservaId: string) {
   const row = await prisma.entradaFila.findFirst({ where: { id, profesionalId: staffId, reservaId, estado: "EN_ATENCION" }, select: attentionSelect })
+  if (row) await trace(prisma, { id: staffId, role: "KINESIOLOGO" }, "ABRIR_FORMULARIO", "ATENCION", row.id)
   return row ? summary(row) : null
 }
 export async function clinicOverview(staffId: string, eventoId: string) {
@@ -54,8 +56,9 @@ export async function callNext(staffId: string, eventoId: string, requestId: str
     if (!active) {
       const next = await nextWaiting(tx, eventoId, event[0].previosConsecutivos, new Date())
       if (next) {
-        const entry = await tx.entradaFila.findUniqueOrThrow({ where: { id: next.entrada.id }, select: { inscripcion: { select: { pacienteId: true } } } })
+        const entry = await tx.entradaFila.findUniqueOrThrow({ where: { id: next.entrada.id }, select: { inscripcion: { select: { pacienteId: true, autorizacionId: true, apoderadoId: true } } } })
         await tx.$queryRaw`SELECT id FROM "Paciente" WHERE id=${entry.inscripcion.pacienteId} FOR UPDATE`
+        await requireDataConsent(tx, entry.inscripcion.autorizacionId, entry.inscripcion.pacienteId, entry.inscripcion.apoderadoId)
         active = await tx.entradaFila.update({ where: { id: next.entrada.id }, data: { estado: "EN_ATENCION", profesionalId: staffId, reservaId: requestId, llamadaAt: new Date(), finalizadaAt: null }, select: attentionSelect })
         await tx.evento.update({ where: { id: eventoId }, data: { previosConsecutivos: next.siguientesPrevios } })
       }
@@ -98,9 +101,11 @@ export async function saveAssignedEvaluation(staff: { id: string; name: string }
       return { evaluacionId: old.id, nueva: false }
     }
     if (row.estado !== "EN_ATENCION") throw new AttentionConflict("Esta atención ya no está activa. Vuelve a tu fila.")
-    const saved = await tx.evaluacion.create({ data: { autorId: staff.id, filaId: row.id, pacienteId: row.inscripcion.pacienteId, correoPadre: row.inscripcion.apoderado?.correo || row.inscripcion.contactoCorreo || null,
+    const authorization = await requireDataConsent(tx, row.inscripcion.autorizacionId, row.inscripcion.pacienteId, row.inscripcion.apoderadoId)
+    const saved = await tx.evaluacion.create({ data: { autorizacionId: authorization.id, autorId: staff.id, filaId: row.id, pacienteId: row.inscripcion.pacienteId, correoPadre: row.inscripcion.apoderado?.correo || row.inscripcion.contactoCorreo || null,
       anteroposterior: measures.ap, biparietal: measures.bp, diagonalIzq: measures.di, diagonalDer: measures.dd,
       indiceCraneal: measures.indiceCraneal, indiceAsimetria: measures.indiceAsimetria, diagnostico: measures.diagnostico, recomendacion: measures.recomendacion, kinesiologa: staff.name } })
+    await trace(tx, { id: staff.id, role: "KINESIOLOGO" }, "GUARDAR", "EVALUACION", saved.id)
     await tx.entradaFila.update({ where: { id }, data: { estado: "ATENDIDO", finalizadaAt: new Date() } })
     return { evaluacionId: saved.id, nueva: true }
   }, { timeout: 15000 })

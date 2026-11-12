@@ -26,7 +26,7 @@ async function fixture({consent=true,followup=true,evaluated=now,published=now,l
  const attention=await db.entradaFila.create({data:{eventoId:event.id,inscripcionId:inscription.id,orden:1,estado:"ATENDIDO",confirmadoPorId:"fixture",profesionalId:"kine-ficticia",reservaId:randomUUID(),llamadaAt:now,finalizadaAt:now}})
  const evaluation=await db.evaluacion.create({data:{pacienteId:baby.id,filaId:attention.id,autorId:"kine-ficticia",autorizacionId:authorization.id,anteroposterior:140,biparietal:120,diagonalIzq:150,diagonalDer:130,indiceCraneal:85.71,indiceAsimetria:20,diagnostico:"Resultado ficticio",recomendacion:"Indicación revisada ficticia",kinesiologa:"Profesional ficticia",createdAt:evaluated}})
  const snapshot={nombreBebe:baby.nombre,fechaNacimiento:"2026-01-01",profesional:"Profesional ficticia",evento:event.nombre,numero:1,fechaEvaluacion:evaluated.toISOString(),medidas:{ap:140,bp:120,di:150,dd:130},indiceCraneal:85.71,indiceAsimetria:20,diagnostico:"Resultado ficticio",recomendacion:"Indicación revisada ficticia"}
- const publication=await db.resultadoPublicado.create({data:{evaluacionId:evaluation.id,apoderadoId:family.id,publicadoPorId:"kine-ficticia",revision:1,datos:snapshot,publicadoAt:published,correo:{create:{destinatario:family.correo,estado:legacySent?"ENVIADO":"PENDIENTE",...(legacySent?{enviadoAt:now,proveedorId:"anterior-ficticio"}:{})}}}})
+ const publication=await db.resultadoPublicado.create({data:{evaluacionId:evaluation.id,apoderadoId:family.id,publicadoPorId:"kine-ficticia",revision:1,datos:snapshot,publicadoAt:published,versiones:{create:{numero:1,revisionEvaluacion:1,datos:snapshot,motivo:"Publicación inicial ficticia",actorId:"kine-ficticia",createdAt:published}},correo:{create:{destinatario:family.correo,estado:legacySent?"ENVIADO":"PENDIENTE",...(legacySent?{enviadoAt:now,proveedorId:"anterior-ficticio"}:{})}}}})
  await db.$transaction(tx=>draftMailPlan(tx,publication.id))
  return {publication,family,baby,authorization,event}
 }
@@ -34,7 +34,29 @@ const orders=id=>db.ordenCorreo.findMany({where:{publicacionId:id},orderBy:{etap
 async function clearReady(){await db.ordenCorreo.updateMany({where:{estado:"PENDIENTE"},data:{estado:"CANCELADO",motivo:"FIN_CASO_FICTICIO"}})}
 try {
  await embedded.waitReady
- for(const migration of (await readdir("prisma/migrations")).filter(name=>/^\d/.test(name)).sort())await embedded.exec(await readFile(`prisma/migrations/${migration}/migration.sql`,"utf8"))
+ for(const migration of (await readdir("prisma/migrations")).filter(name=>/^\d/.test(name)).sort()) {
+  let legacy
+  if(migration==="20261112000200_versiones_resultados") {
+   const familyId=randomUUID(),publicationId=randomUUID(),mailId=randomUUID()
+   const snapshot={nombreBebe:"Histórico ficticio",fechaNacimiento:"2026-01-01",profesional:"Profesional ficticia",evento:null,numero:null,fechaEvaluacion:now.toISOString(),medidas:{ap:140,bp:120,di:150,dd:130},indiceCraneal:85.71,indiceAsimetria:20,diagnostico:"Diagnóstico histórico ficticio",recomendacion:"Recomendación histórica ficticia"}
+   await embedded.query(`INSERT INTO "Apoderado" (id,correo,"updatedAt") VALUES ($1,'migracion-versiones@example.com',CURRENT_TIMESTAMP)`,[familyId])
+   await embedded.exec(`INSERT INTO "Paciente" (id,nombre,"fechaNacimiento") VALUES ('version-legacy-baby','Histórico ficticio','2026-01-01'); INSERT INTO "Evaluacion" (id,"pacienteId",anteroposterior,biparietal,"diagonalIzq","diagonalDer","indiceCraneal","indiceAsimetria",diagnostico,recomendacion,kinesiologa) VALUES ('version-legacy-eval','version-legacy-baby',140,120,150,130,85.71,20,'Histórico','Histórico','Profesional ficticia');`)
+   await embedded.query(`INSERT INTO "ResultadoPublicado" (id,"evaluacionId","apoderadoId","publicadoPorId",revision,datos) VALUES ($1,'version-legacy-eval',$2,'autor-historico',1,$3::jsonb)`,[publicationId,familyId,JSON.stringify(snapshot)])
+   await embedded.query(`INSERT INTO "CorreoResultado" (id,"publicacionId",destinatario,estado,"proveedorId","enviadoAt","updatedAt") VALUES ($1,$2,'migracion-versiones@example.com','ENVIADO','historico-ficticio',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,[mailId,publicationId])
+   await embedded.query(`INSERT INTO "OrdenCorreo" (id,"publicacionId",etapa,estado,"claveIdempotencia","updatedAt") VALUES ($1,$2,'INICIAL','ACEPTADO','historico-ficticio',CURRENT_TIMESTAMP)`,[mailId,publicationId])
+   legacy={publicationId,snapshot,pub:(await embedded.query(`SELECT to_jsonb(t) data FROM "ResultadoPublicado" t WHERE id=$1`,[publicationId])).rows[0].data,mail:(await embedded.query(`SELECT to_jsonb(t) data FROM "CorreoResultado" t WHERE id=$1`,[mailId])).rows[0].data}
+  }
+  await embedded.exec(await readFile(`prisma/migrations/${migration}/migration.sql`,"utf8"))
+  if(legacy) {
+   assert.deepEqual((await embedded.query(`SELECT to_jsonb(t)-'estado'-'versionActual'-'revisionControl' data FROM "ResultadoPublicado" t WHERE id=$1`,[legacy.publicationId])).rows[0].data,legacy.pub)
+   assert.deepEqual((await embedded.query(`SELECT to_jsonb(t) data FROM "CorreoResultado" t WHERE "publicacionId"=$1`,[legacy.publicationId])).rows[0].data,legacy.mail)
+   const version=(await embedded.query(`SELECT * FROM "VersionResultado" WHERE "publicacionId"=$1`,[legacy.publicationId])).rows[0]
+   assert.equal(version.numero,1);assert.deepEqual(version.datos,legacy.snapshot);assert.equal(version.actorId,"autor-historico")
+   assert.equal((await embedded.query(`SELECT count(*)::int n FROM "OrdenCorreo" WHERE "publicacionId"=$1`,[legacy.publicationId])).rows[0].n,1)
+   assert.equal((await embedded.query(`SELECT count(*)::int n FROM "CambioResultado"`)).rows[0].n,0)
+   console.log("OK migración de versiones: conserva publicación, fecha, autor, correo aceptado y orden anterior; crea su copia inicial sin nuevos envíos.")
+  }
+ }
  await socket.start();gate=await protocolGate({host:"127.0.0.1",port:Number(socket.getServerConn().split(":").at(-1))})
  const adapter=()=>new PrismaPg({connectionString:`postgresql://postgres:postgres@127.0.0.1:${gate.port}/postgres?sslmode=disable`})
  db=new PrismaClient({adapter:adapter()});second=new PrismaClient({adapter:adapter()})
@@ -107,6 +129,33 @@ try {
  assert.equal(staleResult.aceptados,0);assert.equal((await db.ordenCorreo.findUnique({where:{id:staleJob.id}})).bloqueoToken,foreignToken)
  await db.ordenCorreo.update({where:{id:staleJob.id},data:{estado:"REVISION",bloqueoToken:null,bloqueoHasta:null}});await clearReady()
  console.log("OK recuperación: misma clave y contenido tras interrupción, cambios de destinatario bloqueados, correo inicial previo no repetido y respuestas de reservas antiguas descartadas.")
+
+
+ const cancelled=await fixture();await prepareMailPlan(db,cancelled.publication.id,mixed,policy,now)
+ const cancelledJob=(await orders(cancelled.publication.id)).find(row=>row.etapa==="INICIAL")
+ const acceptedAfterCancel=await processMailBatch(db,{...transport,async send(){
+   await db.$transaction(async tx=>{
+     await tx.resultadoPublicado.update({where:{id:cancelled.publication.id},data:{estado:"RETIRADO",revisionControl:{increment:1}}})
+     await tx.ordenCorreo.updateMany({where:{publicacionId:cancelled.publication.id,estado:{in:["PENDIENTE","ENVIANDO"]}},data:{estado:"CANCELADO",motivo:"VERSION_NO_VIGENTE",bloqueoToken:null,bloqueoHasta:null}})
+   })
+   return "aceptado-mientras-se-retiraba"
+ }},options(now,1))
+ assert.equal(acceptedAfterCancel.aceptados,0)
+ const cancelledSaved=await db.ordenCorreo.findUnique({where:{id:cancelledJob.id}})
+ assert.equal(cancelledSaved.estado,"CANCELADO");assert.equal(cancelledSaved.proveedorId,"aceptado-mientras-se-retiraba")
+ assert.equal((await db.intentoCorreo.findUnique({where:{ordenId_numero:{ordenId:cancelledJob.id,numero:1}}})).resultado,"ACEPTADO_TRAS_CANCELACION")
+ await assert.rejects(prepareMailPlan(db,cancelled.publication.id,mixed,policy,now))
+ await clearReady()
+ const staleVersion=await fixture();await prepareMailPlan(db,staleVersion.publication.id,mixed,policy,now)
+ await db.versionResultado.create({data:{publicacionId:staleVersion.publication.id,numero:2,revisionEvaluacion:2,datos:staleVersion.publication.datos,motivo:"Nueva versión ficticia",actorId:"kine-ficticia",createdAt:now}})
+ await db.resultadoPublicado.update({where:{id:staleVersion.publication.id},data:{versionActual:2,revisionControl:{increment:1}}})
+ const previousSent=sent.length
+ assert.equal((await processMailBatch(db,transport,options(now,1))).cancelados,1);assert.equal(sent.length,previousSent)
+ await db.$transaction(tx=>draftMailPlan(tx,staleVersion.publication.id,2))
+ const v2Jobs=(await orders(staleVersion.publication.id)).filter(row=>row.version===2)
+ assert.equal(v2Jobs.length,3);assert(v2Jobs.every(row=>row.estado==="BLOQUEADO"))
+ await clearReady()
+ console.log("OK versiones y correo: retiro durante un envío conserva aceptación tardía sin reactivar la orden; versión reemplazada bloqueada y claves nuevas por versión.")
 
  // Notificación antes de aceptación, repeticiones y orden invertido de eventos.
  const delivery=await fixture();await prepareMailPlan(db,delivery.publication.id,mixed,policy,now)

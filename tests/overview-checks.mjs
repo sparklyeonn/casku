@@ -6,7 +6,7 @@ export async function overviewChecks({ db, client, signIn, password, accounts, a
   for (const [request, account] of [[reception, accounts[0]], [kine, accounts[2]]]) await signIn(request, "equipo", { email: account.email, password })
   const event = await createEvent(admin, "Resumen ficticio A", 20, false), other = await createEvent(admin, "Resumen ficticio B", 20, false)
   const path = id => `/api/eventos/${id}/resumen`
-  const zero = { inscritos: 0, canceladas: 0, enEspera: 0, enAtencion: 0, atendidos: 0, ausentes: 0, sinLlegada: 0, resultadosPendientes: 0, resultadosPublicados: 0 }
+  const zero = { inscritos: 0, canceladas: 0, enEspera: 0, enAtencion: 0, atendidos: 0, ausentes: 0, sinLlegada: 0, resultadosPendientes: 0, resultadosPublicados: 0, resultadosRetirados: 0 }
   const empty = await admin(path(event.id)); assert.equal(empty.status, 200); assert.deepEqual((await empty.json()).totales, zero)
   for (const [request, status] of [[anonymous, 401], [f1.request, 401], [reception, 403], [kine, 403]]) assert.equal((await request(path(event.id))).status, status)
   assert.equal((await admin(path("inválido"))).status, 400)
@@ -47,7 +47,7 @@ export async function overviewChecks({ db, client, signIn, password, accounts, a
   assert.deepEqual(Object.keys(result).sort(), ["consultadoAt", "evento", "totales"])
   assert.deepEqual(result.evento, { id: event.id, nombre: event.nombre, cupos: 20 })
   assert(Number.isFinite(Date.parse(result.consultadoAt)))
-  assert.deepEqual(result.totales, { inscritos: 8, canceladas: 0, enEspera: 3, enAtencion: 1, atendidos: 2, ausentes: 1, sinLlegada: 1, resultadosPendientes: 1, resultadosPublicados: 1 })
+  assert.deepEqual(result.totales, { inscritos: 8, canceladas: 0, enEspera: 3, enAtencion: 1, atendidos: 2, ausentes: 1, sinLlegada: 1, resultadosPendientes: 1, resultadosPublicados: 1, resultadosRetirados: 0 })
   assert(!JSON.stringify(result).match(/privado|nombreBebe|pacienteId|apoderadoId|diagnostico|recomendacion|medidas|correo|qrToken|profesionalId/i))
   assert.deepEqual((await (await admin(path(other.id))).json()).totales, { ...zero, inscritos: 1, atendidos: 1, resultadosPendientes: 1 })
   assert.deepEqual((await db.query('SELECT to_jsonb(i) AS row FROM "Inscripcion" i WHERE "eventoId"=$1 UNION ALL SELECT to_jsonb(f) FROM "EntradaFila" f WHERE "eventoId"=$1', [event.id])).rows, before)

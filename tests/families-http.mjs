@@ -1,3 +1,4 @@
+import { resultVersionChecks } from "./result-version-checks.mjs"
 import { beforeMailMigration } from "./mail-migration.mjs"
 import { protocolGate } from "./pglite-protocol-gate.mjs"
 import { beforePrivacyMigration } from "./privacy-migration.mjs"
@@ -248,6 +249,7 @@ try {
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await privacyChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, post, createEvent, mails, setResultFailure: value => { failResults = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  await resultVersionChecks({db,client,signIn,password,accounts:receptionAccounts,admin,anonymous,f1,f2,post,createEvent,mails,setResultFailure:value=>{failResults=value}})
   await teamChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   console.log("Pruebas completas con PostgreSQL y correo locales. No se usó Neon ni se enviaron mensajes reales.")

@@ -152,6 +152,11 @@ model Apoderado {
 }
 
 model ResultadoPublicado {
+  estado String @default("VIGENTE")
+  versionActual Int @default(1)
+  revisionControl Int @default(1)
+  versiones VersionResultado[]
+  cambios CambioResultado[]
   ordenesCorreo OrdenCorreo[]
   id              String @id @default(uuid()) @db.Uuid
   evaluacionId    String @unique
@@ -499,6 +504,7 @@ model AccesoPrivado {
 
 // Sin campañas retroactivas: solo las nuevas publicaciones crean órdenes bloqueadas.
 model OrdenCorreo {
+  version Int @default(1)
   id String @id @default(uuid()) @db.Uuid
   publicacionId String @db.Uuid
   publicacion ResultadoPublicado @relation(fields: [publicacionId], references: [id], onDelete: Restrict)
@@ -526,7 +532,7 @@ model OrdenCorreo {
   updatedAt DateTime @updatedAt
   intentosRegistro IntentoCorreo[]
   notificaciones NotificacionCorreo[]
-  @@unique([publicacionId, etapa])
+  @@unique([publicacionId, version, etapa])
   @@unique([proveedor, proveedorId])
   @@index([estado, disponibleAt])
 }
@@ -558,4 +564,32 @@ model SupresionCorreo {
   clave String @id
   motivo String
   createdAt DateTime @default(now())
+}
+
+model VersionResultado {
+  id String @id @default(uuid()) @db.Uuid
+  publicacionId String @db.Uuid
+  publicacion ResultadoPublicado @relation(fields: [publicacionId], references: [id], onDelete: Restrict)
+  numero Int
+  revisionEvaluacion Int
+  datos Json
+  motivo String
+  actorId String
+  createdAt DateTime @default(now())
+  @@unique([publicacionId, numero])
+}
+model CambioResultado {
+  id String @id @db.Uuid
+  publicacionId String @db.Uuid
+  publicacion ResultadoPublicado @relation(fields: [publicacionId], references: [id], onDelete: Restrict)
+  actorId String
+  accion String
+  versionAnterior Int
+  versionNueva Int?
+  revisionControl Int
+  motivo String
+  solicitudHash String
+  enviosEnCurso Int @default(0)
+  createdAt DateTime @default(now())
+  @@unique([publicacionId, revisionControl])
 }

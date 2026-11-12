@@ -75,3 +75,7 @@ Implementado el pendiente 2: autorizaciones expresas y versionadas, resultados y
 ## Validación de producción de la versión actual
 
 La compilación y los recorridos del servidor compilado se comprueban con `npm run test:production`; `npm run check` reúne las verificaciones técnicas en serie. Ver [VALIDACION_PRODUCCION.md](VALIDACION_PRODUCCION.md). El pendiente 3 todavía requiere integrar y probar el protocolo clínico ampliado cuando Casku confirme sus reglas.
+
+## Corrección y retiro de publicaciones
+
+Implementado el punto 5: la autora conserva versiones y motivos al corregir o retirar, la familia consulta solo la versión vigente o el aviso de retiro y se detienen las órdenes de la copia afectada. Los correos de la nueva versión permanecen en preparación. Ver [VERSIONES_RESULTADOS.md](VERSIONES_RESULTADOS.md).

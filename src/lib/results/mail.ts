@@ -27,8 +27,17 @@ export async function deliverResult(publicacionId: string) {
     if (!family.activo || family.correo !== mail.destinatario || published.evaluacion.paciente.apoderadoId !== family.id || published.evaluacion.fila?.inscripcion.apoderadoId !== family.id || published.evaluacion.fila.estado !== "ATENDIDO") throw new Error("Vinculación no disponible")
     if (!await emailPermission(prisma, publicacionId, "RESULTADO")) throw new Error("Autorización retirada")
     const providerId = await sendMail({ to: mail.destinatario, ...resultMessage(parseSnapshot(published.datos), mail.portalUrl) }, `result-${mail.id}`)
-    await prisma.correoResultado.updateMany({ where: { publicacionId, bloqueoToken: token }, data: { estado: "ENVIADO", enviadoAt: new Date(), proveedorId: providerId, bloqueoToken: null, bloqueoHasta: null, ultimoError: null } })
-    await prisma.ordenCorreo.updateMany({where:{publicacionId,etapa:"INICIAL",estado:"BLOQUEADO"},data:{estado:"ACEPTADO",motivo:"ENVIO_INICIAL_EXISTENTE",proveedor:"legacy",proveedorId:providerId,aceptadoAt:new Date()}})
+    await prisma.$transaction(async tx=>{
+      const accepted=await tx.correoResultado.updateMany({where:{publicacionId,bloqueoToken:token},data:{estado:"ENVIADO",enviadoAt:new Date(),proveedorId:providerId,bloqueoToken:null,bloqueoHasta:null,ultimoError:null}})
+      if(accepted.count)await tx.ordenCorreo.updateMany({where:{publicacionId,version:1,etapa:"INICIAL",estado:"BLOQUEADO"},data:{estado:"ACEPTADO",motivo:"ENVIO_INICIAL_EXISTENTE",proveedor:"legacy",proveedorId:providerId,aceptadoAt:new Date()}})
+      else {
+        const late=await tx.correoResultado.updateMany({where:{publicacionId,estado:"CANCELADO",ultimoError:"VERSION_NO_VIGENTE",enviadoAt:null},data:{proveedorId:providerId,enviadoAt:new Date()}})
+        if(late.count){
+          await tx.ordenCorreo.updateMany({where:{publicacionId,version:1,etapa:"INICIAL",estado:"CANCELADO",proveedorId:null},data:{proveedor:"legacy",proveedorId:providerId,aceptadoAt:new Date()}})
+          await trace(tx,{id:"sistema:correo",role:"SISTEMA"},"ACEPTADO_TRAS_CANCELACION","PUBLICACION",publicacionId)
+        }
+      }
+    })
   } catch {
     await prisma.correoResultado.updateMany({ where: { publicacionId, bloqueoToken: token }, data: { estado: "FALLIDO", disponibleAt: new Date(Date.now() + 60000), bloqueoToken: null, bloqueoHasta: null, ultimoError: "ENVIO_NO_CONFIRMADO" } })
   }

@@ -49,3 +49,7 @@ Aplicar con `npm run db:deploy`, regenerar con `npx prisma generate` y reiniciar
 Conservar `npm run test:events`, `npm run test:http`, ESLint, validación de Prisma y TypeScript. Las suites HTTP se ejecutan por separado; TypeScript después de cerrar sus servidores temporales. La compilación de producción mantiene pendiente la comprobación en un entorno donde el proceso de estilos de Turbopack pueda abrir su puerto local, según las etapas anteriores.
 
 Verificación de esta etapa: veintitrés pruebas unitarias, recorrido integral de familias/recepción/kinesiología/presencial/ausencias/resultados, suites de eventos y acceso, ESLint, TypeScript y validación Prisma correctos. La migración se aplicó a la base configurada después del ensayo local, sin cargar pacientes ficticios, publicar evaluaciones existentes ni enviar correos reales.
+
+## Corrección o retiro posterior
+
+La autora dispone de corrección con nueva versión y retiro con motivo e historial. La familia consulta únicamente la versión vigente o el aviso de retiro. Ver [VERSIONES_RESULTADOS.md](VERSIONES_RESULTADOS.md); esta actualización reemplaza la restricción anterior de no modificar nunca una publicación mediante un flujo de versiones conservadas.

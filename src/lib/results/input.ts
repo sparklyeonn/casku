@@ -17,3 +17,12 @@ export function familyResultPath(value: unknown) {
   if (typeof value !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value)) return null
   return `/familias/resultados/${value.toLowerCase()}`
 }
+
+export function publishedChangeInput(raw: Record<string,unknown>) {
+  if(typeof raw.id!=="string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(raw.id))throw new InvalidEvaluation("Actualiza la solicitud antes de continuar.")
+  if(raw.confirmar!==true)throw new InvalidEvaluation("Confirma expresamente el cambio de la publicación.")
+  if(typeof raw.motivo!=="string" || raw.motivo.length>500)throw new InvalidEvaluation("Indica el motivo del cambio, entre 5 y 500 caracteres.")
+  const motivo=raw.motivo.trim().replace(/\s+/g," ")
+  if(motivo.length<5)throw new InvalidEvaluation("Explica el motivo del cambio, con al menos 5 caracteres.")
+  return {id:raw.id.toLowerCase(),revisionControl:resultRevision(raw.revisionControl),motivo}
+}

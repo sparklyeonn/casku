@@ -65,3 +65,5 @@ La [privacidad y las autorizaciones](docs/CONSENTIMIENTO_PRIVACIDAD.md) incorpor
 La [validación de producción](docs/VALIDACION_PRODUCCION.md) explica cómo repetir las comprobaciones, su aislamiento y los límites pendientes del protocolo clínico.
 
 La [infraestructura de correos](docs/INFRAESTRUCTURA_CORREOS.md) prepara los tres momentos de envío, reintentos y notificaciones. Permanece desactivada hasta las aprobaciones y la integración posterior de Brevo.
+
+La [corrección y el retiro de publicaciones](docs/VERSIONES_RESULTADOS.md) permite a la autora conservar versiones y motivos, actualizar la vista familiar y detener los correos de la copia anterior.

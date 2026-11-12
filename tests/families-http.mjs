@@ -1,3 +1,4 @@
+import { protocolGate } from "./pglite-protocol-gate.mjs"
 import { beforePrivacyMigration } from "./privacy-migration.mjs"
 import { privacyChecks } from "./privacy-checks.mjs"
 import { familyConsent } from "./privacy-fixtures.mjs"
@@ -32,8 +33,9 @@ import { waitlistChecks } from "./waitlist-checks.mjs"
 import { cancellationChecks } from "./cancellations-checks.mjs"
 import { seedBeforeCancellationMigration } from "./cancellations-migration.mjs"
 
+const production = process.argv.includes("--production")
 const embeddedDb = new PGlite(), socket = new PGLiteSocketServer({ db: embeddedDb, host: "127.0.0.1", port: 0, maxConnections: 20 })
-let db = embeddedDb, fixturePool
+let db = embeddedDb, fixturePool, gate, databaseHost
 const base = "http://localhost:3120", password = randomBytes(20).toString("base64url")
 const mails = [], deduped = new Map(), sentPayloads = new Map()
 let failConfirmation = false, failResults = false, failAll = false, testFailed = false, child, exited = false, log = ""
@@ -99,14 +101,16 @@ try {
   }
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await socket.start()
+  gate = production ? await protocolGate({host:"127.0.0.1",port:Number(socket.getServerConn().split(":").at(-1))}) : null
+  databaseHost = gate ? `127.0.0.1:${gate.port}` : socket.getServerConn()
   // Las comprobaciones también pasan por el multiplexor: una consulta directa a
   // PGlite podría entrar en la transacción que la aplicación aún está revirtiendo.
-  fixturePool = new Pool({ connectionString: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?sslmode=disable`, max: 1, types: { getTypeParser: (oid, format) => oid === 1114 && format !== "binary" ? value => new Date(value.replace(" ", "T") + "Z") : pgTypes.getTypeParser(oid, format) } })
+  fixturePool = new Pool({ connectionString: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable`, max: 1, types: { getTypeParser: (oid, format) => oid === 1114 && format !== "binary" ? value => new Date(value.replace(" ", "T") + "Z") : pgTypes.getTypeParser(oid, format) } })
   db = { query: (sql, values) => fixturePool.query(sql, values?.map(value => value instanceof Date ? value.toISOString() : value)), exec: sql => fixturePool.query(sql) }
   await new Promise(resolve => mailServer.listen(0, "127.0.0.1", resolve))
   const adminAccount = { id: "family-test-admin", email: "admin@example.com", name: "Admin ficticio", role: "ADMIN", active: true, passwordHash: await hashPassword(password) }
   const receptionAccounts = await Promise.all(["RECEPCION", "RECEPCION", "KINESIOLOGO", "KINESIOLOGO"].map(async (role, i) => ({ id: `reception-test-${i}`, email: `reception-${i}@example.com`, name: `Equipo ficticio ${i}`, role, active: true, passwordHash: await hashPassword(password) })))
-  child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--port", "3120"], { cwd: process.cwd(), env: { ...process.env, NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts]), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", RESEND_API_KEY: "re_local_test_only", RESEND_FROM: "Casku <test@example.com>", CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"] })
+  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", "3120"], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts]), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", RESEND_API_KEY: "re_local_test_only", RESEND_FROM: "Casku <test@example.com>", CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"] })
   child.stdout.on("data", value => { log = (log + value).slice(-15000) }); child.stderr.on("data", value => { log = (log + value).slice(-15000) }); child.on("exit", () => { exited = true })
   let ready = false
   for (const started = Date.now(); Date.now() - started < 180000;) {
@@ -154,6 +158,11 @@ try {
   const payload = registration(a, { nombreBebe: "Bebé primero", rutApoderado: "12345678-5", correo: "intruso@example.com" })
   const response = await f1.request("/api/familias/inscripciones", post(payload)); assert.equal(response.status, 201)
   const first = (await response.json()).inscripcion
+  const capacityResponse = await anonymous("/api/eventos/disponibles")
+  assert.equal(capacityResponse.status,200)
+  assert(capacityResponse.headers.get("cache-control").includes("no-store"))
+  const updatedCapacity = (await capacityResponse.json()).eventos.find(event=>event.id===a.id)
+  assert.equal(updatedCapacity.disponibles,1,"Los cupos públicos se actualizan después de reservar; no quedan fijados durante la compilación")
   assert.equal(first.numero, 1); assert.equal(first.correo.estado, "ENVIADO")
   assert(!JSON.stringify(first).includes("qrToken"))
   const confirmation = mails.filter(m => m.subject.startsWith("Inscripción")).at(-1)
@@ -240,7 +249,7 @@ try {
 } catch (error) { console.error(error); console.error(log.slice(-3000)); testFailed = true }
 finally {
   if (child && !exited) { child.kill("SIGTERM"); await Promise.race([once(child, "exit"), pause(5000)]) }
-  mailServer.closeAllConnections(); await new Promise(resolve => mailServer.close(resolve)); if (fixturePool) await fixturePool.end(); await socket.stop(); await embeddedDb.close()
+  mailServer.closeAllConnections(); await new Promise(resolve => mailServer.close(resolve)); if (fixturePool) await fixturePool.end(); if (gate) await gate.close(); await socket.stop(); await embeddedDb.close()
 }
 
 // El cierre de la base WASM puede modificar exitCode: aplicar el resultado al final.

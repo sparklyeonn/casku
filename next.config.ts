@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // El servidor temporal de pruebas no comparte caché ni bloqueo con npm run dev.
-  distDir: process.env.CASKU_TEST_MODE === "1" ? process.env.CASKU_TEST_INSTANCE === "secondary" ? ".next-tests-secondary" : ".next-tests" : ".next",
+  // Las pruebas de desarrollo y producción conservan sus propios archivos compilados.
+  distDir: process.env.CASKU_PRODUCTION_TEST === "1" ? ".next-production-tests" : process.env.CASKU_TEST_MODE === "1" ? process.env.CASKU_TEST_INSTANCE === "secondary" ? ".next-tests-secondary" : ".next-tests" : ".next",
   /* config options here */
   experimental: {
     agentFeedback: true,

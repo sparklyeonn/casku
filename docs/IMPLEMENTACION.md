@@ -71,3 +71,7 @@ Límites de ingreso compartidos, sesiones revocables con plazos absoluto y de in
 ## Consentimiento y privacidad
 
 Implementado el pendiente 2: autorizaciones expresas y versionadas, resultados y seguimiento por separado, retirada desde la cuenta familiar, evidencia documental en recepción y registro de accesos. Ver [CONSENTIMIENTO_PRIVACIDAD.md](CONSENTIMIENTO_PRIVACIDAD.md). Los registros anteriores no reciben permisos retroactivos. La programación de seguimiento sigue pendiente; no se modificaron las fórmulas clínicas.
+
+## Validación de producción de la versión actual
+
+La compilación y los recorridos del servidor compilado se comprueban con `npm run test:production`; `npm run check` reúne las verificaciones técnicas en serie. Ver [VALIDACION_PRODUCCION.md](VALIDACION_PRODUCCION.md). El pendiente 3 todavía requiere integrar y probar el protocolo clínico ampliado cuando Casku confirme sus reglas.

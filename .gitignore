@@ -17,6 +17,7 @@
 /.next/
 /.next-tests/
 /.next-tests-secondary/
+/.next-production-tests/
 /out/
 
 # production

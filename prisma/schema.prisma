@@ -152,6 +152,7 @@ model Apoderado {
 }
 
 model ResultadoPublicado {
+  ordenesCorreo OrdenCorreo[]
   id              String @id @default(uuid()) @db.Uuid
   evaluacionId    String @unique
   evaluacion      Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Restrict)
@@ -494,4 +495,67 @@ model AccesoPrivado {
   createdAt DateTime @default(now())
   @@index([createdAt, id])
   @@index([actorId, createdAt])
+}
+
+// Sin campañas retroactivas: solo las nuevas publicaciones crean órdenes bloqueadas.
+model OrdenCorreo {
+  id String @id @default(uuid()) @db.Uuid
+  publicacionId String @db.Uuid
+  publicacion ResultadoPublicado @relation(fields: [publicacionId], references: [id], onDelete: Restrict)
+  etapa String
+  estado String @default("BLOQUEADO")
+  motivo String? @default("PENDIENTE_PROTOCOLO")
+  claveIdempotencia String @unique
+  destinatario String?
+  mensaje Json?
+  politicaVersion String?
+  protocoloVersion String?
+  plantillaVersion String?
+  programadoAt DateTime?
+  disponibleAt DateTime?
+  limiteAt DateTime?
+  intentos Int @default(0)
+  primerIntentoAt DateTime?
+  bloqueoToken String? @db.Uuid
+  bloqueoHasta DateTime?
+  proveedor String?
+  proveedorId String?
+  aceptadoAt DateTime?
+  entrega String @default("SIN_CONFIRMAR")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  intentosRegistro IntentoCorreo[]
+  notificaciones NotificacionCorreo[]
+  @@unique([publicacionId, etapa])
+  @@unique([proveedor, proveedorId])
+  @@index([estado, disponibleAt])
+}
+model IntentoCorreo {
+  id String @id @default(uuid()) @db.Uuid
+  ordenId String @db.Uuid
+  orden OrdenCorreo @relation(fields: [ordenId], references: [id], onDelete: Restrict)
+  numero Int
+  resultado String @default("INICIADO")
+  createdAt DateTime @default(now())
+  terminadoAt DateTime?
+  @@unique([ordenId, numero])
+}
+model NotificacionCorreo {
+  id String @id @default(uuid()) @db.Uuid
+  proveedor String
+  eventoId String
+  mensajeId String
+  tipo String
+  ocurridoAt DateTime
+  ordenId String? @db.Uuid
+  orden OrdenCorreo? @relation(fields: [ordenId], references: [id], onDelete: Restrict)
+  aplicadaAt DateTime?
+  createdAt DateTime @default(now())
+  @@unique([proveedor, eventoId])
+  @@index([proveedor, mensajeId])
+}
+model SupresionCorreo {
+  clave String @id
+  motivo String
+  createdAt DateTime @default(now())
 }

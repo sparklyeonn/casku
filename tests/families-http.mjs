@@ -1,3 +1,4 @@
+import { beforeMailMigration } from "./mail-migration.mjs"
 import { protocolGate } from "./pglite-protocol-gate.mjs"
 import { beforePrivacyMigration } from "./privacy-migration.mjs"
 import { privacyChecks } from "./privacy-checks.mjs"
@@ -95,7 +96,7 @@ try {
     INSERT INTO "Evaluacion" (id,"pacienteId","correoPadre",anteroposterior,biparietal,"diagonalIzq","diagonalDer","indiceCraneal","indiceAsimetria",diagnostico,recomendacion,kinesiologa) VALUES ('legacy-evaluation','legacy-baby','legacy@example.com',140,120,135,138,85.7,3,'Ejemplo','Ejemplo','Profesional ficticio');`)
   const before = await clinicalSnapshot()
   for (const name of migrations.filter(name => name >= "20261109000200_inscripcion_familiar")) {
-    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : name === "20261109000700_publicacion_resultados" ? await seedBeforeResultsMigration(db) : name === "20261110000100_edicion_eventos" ? await seedBeforeEventEditMigration(db) : name === "20261110000200_correccion_datos" ? await seedBeforeDataCorrectionMigration(db) : name === "20261110000300_cancelacion_inscripciones" ? await seedBeforeCancellationMigration(db) : name === "20261110000400_lista_espera" ? await beforeWaitlistMigration(db) : name === "20261111000100_consentimiento_privacidad" ? await beforePrivacyMigration(db) : null
+    const verify = name === "20261109000600_ausencias_reincorporacion" ? await seedBeforeAbsenceMigration(db) : name === "20261109000700_publicacion_resultados" ? await seedBeforeResultsMigration(db) : name === "20261110000100_edicion_eventos" ? await seedBeforeEventEditMigration(db) : name === "20261110000200_correccion_datos" ? await seedBeforeDataCorrectionMigration(db) : name === "20261110000300_cancelacion_inscripciones" ? await seedBeforeCancellationMigration(db) : name === "20261110000400_lista_espera" ? await beforeWaitlistMigration(db) : name === "20261111000100_consentimiento_privacidad" ? await beforePrivacyMigration(db) : name === "20261112000100_infraestructura_correos" ? await beforeMailMigration(db) : null
     await db.exec(await readFile(`prisma/migrations/${name}/migration.sql`, "utf8"))
     if (verify) await verify()
   }
@@ -110,7 +111,7 @@ try {
   await new Promise(resolve => mailServer.listen(0, "127.0.0.1", resolve))
   const adminAccount = { id: "family-test-admin", email: "admin@example.com", name: "Admin ficticio", role: "ADMIN", active: true, passwordHash: await hashPassword(password) }
   const receptionAccounts = await Promise.all(["RECEPCION", "RECEPCION", "KINESIOLOGO", "KINESIOLOGO"].map(async (role, i) => ({ id: `reception-test-${i}`, email: `reception-${i}@example.com`, name: `Equipo ficticio ${i}`, role, active: true, passwordHash: await hashPassword(password) })))
-  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", "3120"], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts]), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", RESEND_API_KEY: "re_local_test_only", RESEND_FROM: "Casku <test@example.com>", CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"] })
+  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", "3120"], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_MAIL_AUTOMATION: "0", CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts]), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", RESEND_API_KEY: "re_local_test_only", RESEND_FROM: "Casku <test@example.com>", CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"] })
   child.stdout.on("data", value => { log = (log + value).slice(-15000) }); child.stderr.on("data", value => { log = (log + value).slice(-15000) }); child.on("exit", () => { exited = true })
   let ready = false
   for (const started = Date.now(); Date.now() - started < 180000;) {
@@ -125,6 +126,10 @@ try {
   assert.equal((await anonymous("/api/familias/inscripciones", post({ ...familyConsent,}))).status, 401)
   assert.equal((await anonymous("/api/familias/inscripciones")).status, 401)
   const available = await (await anonymous("/api/eventos/disponibles")).json()
+  const mailSummaryPath=`/api/administracion/correos?eventoId=${a.id}`
+  assert.equal((await anonymous(mailSummaryPath)).status,401)
+  const mailSummary=await admin(mailSummaryPath);assert.equal(mailSummary.status,200)
+  assert.deepEqual((await mailSummary.json()).estados,[])
   assert(available.eventos.some(e => e.id === a.id)); assert(!available.eventos.some(e => e.id === closed.id))
   assert.equal((await admin("/api/familias/inscripciones")).status, 401)
 

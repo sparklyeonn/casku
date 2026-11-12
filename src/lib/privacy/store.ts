@@ -28,6 +28,9 @@ export async function recordConsent(tx: Prisma.TransactionClient, context: { pac
       await tx.$executeRaw`UPDATE "CorreoResultado" m SET estado='PENDIENTE',"ultimoError"=NULL,"disponibleAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP FROM "ResultadoPublicado" p JOIN "Evaluacion" e ON e.id=p."evaluacionId" JOIN "EntradaFila" f ON f.id=e."filaId" JOIN "Inscripcion" i ON i.id=f."inscripcionId" WHERE m."publicacionId"=p.id AND i."pacienteId"=${context.pacienteId} AND i."eventoId"=${context.eventoId}::uuid AND p."apoderadoId"=${context.apoderadoId}::uuid AND m.estado='CANCELADO' AND m."ultimoError"='PRIVACIDAD' AND m."enviadoAt" IS NULL`
     }
   }
+  if (context.eventoId && context.apoderadoId && (!choice.datos || !choice.correoResultados || !choice.seguimiento)) {
+    await tx.ordenCorreo.updateMany({where:{estado:"PENDIENTE",...((choice.datos&&choice.correoResultados)?{etapa:{in:["SEMANA","MES"]}}:{}),publicacion:{apoderadoId:context.apoderadoId,evaluacion:{fila:{is:{inscripcion:{pacienteId:context.pacienteId,eventoId:context.eventoId}}}}}},data:{estado:"CANCELADO",motivo:"PRIVACIDAD"}})
+  }
   await trace(tx, actor, "CAMBIAR_AUTORIZACION", "AUTORIZACION", row.id)
   return row
 }

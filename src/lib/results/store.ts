@@ -1,3 +1,4 @@
+import { draftMailPlan } from "@/lib/mail-queue/store"
 import { requireDataConsent, trace } from "@/lib/privacy/store"
 import { randomUUID } from "node:crypto"
 import { Prisma } from "@prisma/client"
@@ -67,6 +68,7 @@ export async function publishResult(staffId: string, id: string, revision: numbe
     if (snapshot.indiceCraneal !== checked.indiceCraneal || snapshot.indiceAsimetria !== checked.indiceAsimetria || snapshot.diagnostico !== checked.diagnostico || snapshot.recomendacion !== checked.recomendacion) throw new AttentionConflict("Revisa y guarda las medidas antes de publicar este resultado.")
     const publicationId = randomUUID()
     await tx.resultadoPublicado.create({ data: { id: publicationId, evaluacionId: id, apoderadoId: family.id, publicadoPorId: staffId, revision, datos: snapshot, correo: { create: { destinatario: family.correo, portalUrl: portalUrl(publicationId), ...(authorization.correoResultados ? {} : { estado: "CANCELADO", ultimoError: "PRIVACIDAD" }) } } } })
+    await draftMailPlan(tx,publicationId)
     await trace(tx, { id: staffId, role: "KINESIOLOGO" }, "PUBLICAR", "PUBLICACION", publicationId)
     return { id: publicationId, nueva: true }
   }, { timeout: 15000 })

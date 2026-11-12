@@ -1,4 +1,5 @@
 "use client"
+import { MailQueueSummary } from "./MailQueueSummary"
 import { WaitlistPanel } from "./WaitlistPanel"
 
 import { useEffect, useRef, useState } from "react"
@@ -103,6 +104,7 @@ export function EventManager() {
       {selected && <p className="mt-3 text-sm font-medium">Inscripciones {selected.inscripcionesAbiertas ? "abiertas" : "cerradas"}</p>}
       <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">La selección se guarda para tu cuenta y no cambia el evento de otros administradores.</p>
     </section>
+    {selected && <MailQueueSummary key={`correo:${selected.id}`} eventoId={selected.id} />}
     {selected && <EventOverview key={`${selected.id}:${selected.revision}`} eventoId={selected.id} />}
     {selected && <WaitlistPanel key={selected.id} eventoId={selected.id} disabled={disabled} onStart={() => { if (inFlight.current) return false; inFlight.current = true; setBusy("waitlist"); return true }} onFinish={() => { inFlight.current = false; setBusy(null) }} />}
     {editing && <EventEditor key={editing.id} event={editing} disabled={disabled} onStart={() => { if (inFlight.current) return false; inFlight.current = true; setBusy("edit"); return true }} onFinish={() => { inFlight.current = false; setBusy(null) }} onCancel={() => setEditing(null)} onReloaded={event => setData(previous => ({ ...previous, eventos: previous.eventos.map(row => row.id === event.id ? event : row).sort((a, b) => b.fecha.localeCompare(a.fecha)) }))} onSaved={(event, changed) => { setData(previous => ({ ...previous, eventos: previous.eventos.map(row => row.id === event.id ? event : row).sort((a, b) => b.fecha.localeCompare(a.fecha)) })); setEditing(null); setError(""); setSuccess(changed ? `Cambios guardados en “${event.nombre}”. Las inscripciones existentes se conservaron.` : "El evento ya tenía estos datos. No se duplicaron cambios.") }} />}

@@ -119,3 +119,9 @@ El pendiente de corrección/retiro de resultados debe invalidar las órdenes fut
 7. Plantillas y recomendaciones aprobadas, autorización de seguimiento y permisos de cada perfil.
 
 En este análisis solo se documenta el alcance. No se modifica el motor clínico, no se aplican migraciones y no se programan ni envían mensajes.
+
+## Actualización del 12 de noviembre de 2026
+
+La responsable confirmó la regla de DPOE como el mayor de los dos valores (5 y 8 mm → 8 mm) e indicó la protuberancia occipital externa como referencia. Queda precisar en un esquema los puntos exactos de medición; no se han cambiado las fórmulas clínicas. Siguen pendientes CVAI, límites y la regla de clasificación conjunta.
+
+La infraestructura de correos está preparada y desactivada; ver [INFRAESTRUCTURA_CORREOS.md](INFRAESTRUCTURA_CORREOS.md). Casku usa Brevo e informó `contacto@casku.cl`. Por indicación de la responsable, la integración, verificación del remitente, subdominio y despliegue se abordarán después de los puntos 5, 6 y 7. Este estado actualiza los pendientes iniciales de este documento.

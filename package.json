@@ -17,7 +17,9 @@
     "prebuild": "prisma generate",
     "test:production": "node tests/production-http.mjs",
     "check": "npm run lint && npm test && npm run test:mail && npm run test:events && npm run test:security && npm run test:http && npm run test:families && npm run test:production && tsc --noEmit",
-    "test:mail": "node --experimental-strip-types tests/mail-queue.mjs"
+    "test:mail": "node --experimental-strip-types tests/mail-queue.mjs",
+    "test:postgres": "node tests/postgres-real.mjs",
+    "test:devices": "node tests/production-http.mjs --devices"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
@@ -38,6 +40,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "0.4.3",
     "@electric-sql/pglite-socket": "0.1.3",
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/qrcode": "^1.5.6",

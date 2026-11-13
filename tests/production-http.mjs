@@ -20,9 +20,11 @@ async function run(args) {
   const code = await new Promise((resolve,reject)=>{child.once("error",reject);child.once("exit",(code,signal)=>resolve(signal ? 1 : code))})
   assert.equal(code,0,`Falló la comprobación: ${args.join(" ")}`)
 }
-await run(["node_modules/prisma/build/index.js","generate"])
-await run(["node_modules/next/dist/bin/next","build"])
+if (!process.argv.includes("--skip-build")) {
+  await run(["node_modules/prisma/build/index.js","generate"])
+  await run(["node_modules/next/dist/bin/next","build"])
+}
 assert((await readFile(".next-production-tests/BUILD_ID","utf8")).trim())
 await run(["tests/http-smoke.mjs","--production"])
-await run(["tests/families-http.mjs","--production"])
+await run(["tests/families-http.mjs","--production",...(process.argv.includes("--devices")?["--devices"]:[])])
 console.log("OK producción: compilación aislada, recursos, acceso por perfil y recorridos familiares sobre next start, sin usar la base ni el correo reales.")

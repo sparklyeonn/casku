@@ -25,6 +25,8 @@ Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas d
 - `npm run test:production`: compila una copia aislada y reutiliza permisos y recorridos familiares sobre el servidor de producción, con base y correo temporales.
 - `npm run check`: ejecuta todas las comprobaciones anteriores en serie y termina verificando los tipos.
 - `npx tsc --noEmit`, `npm run lint`, `npm run build` (incluye generación del cliente Prisma).
+- `npm run test:devices`: compila y comprueba recepción, kinesiología y evaluación en Chromium/WebKit con perfiles de computador, Android e iPad, sobre PGlite y correo ficticio.
+- `npm run test:postgres`: repite el recorrido integral con una base PostgreSQL real separada, dos servidores de producción y los cuatro perfiles de navegador. Requiere permisos para crear una base temporal; ver [la guía](docs/PRUEBAS_INTEGRALES.md).
 
 Consulta [el plan de implementación](docs/IMPLEMENTACION.md) para conocer el alcance, las etapas pendientes y las condiciones antes de publicar.
 
@@ -69,3 +71,5 @@ La [infraestructura de correos](docs/INFRAESTRUCTURA_CORREOS.md) prepara los tre
 La [corrección y el retiro de publicaciones](docs/VERSIONES_RESULTADOS.md) permite a la autora conservar versiones y motivos, actualizar la vista familiar y detener los correos de la copia anterior.
 
 La [gestión de contraseñas del equipo](docs/CLAVES_EQUIPO.md) incorpora claves temporales obligatorias, cambio propio con contraseña actual y recuperación por enlaces de un uso. Los correos reales de recuperación permanecen pendientes de Brevo; administración puede reasignar una clave temporal. Reiniciar el servidor después de regenerar Prisma.
+
+Las [pruebas integrales con PostgreSQL real y navegadores](docs/PRUEBAS_INTEGRALES.md) se ejecutan con `npm run test:postgres`, sobre una base separada y con dos servidores de producción. Incluyen Chromium y WebKit con perfiles de computador, Android e iPad; la aceptación de cámaras y equipos físicos se registra por separado. No envían correos reales.

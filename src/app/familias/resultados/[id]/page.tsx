@@ -1,4 +1,5 @@
 import { Suspense } from "react"
+import { connection } from "next/server"
 import Link from "next/link"
 import { requireFamilyUser } from "@/lib/families/access"
 import { FamilyResultFrame } from "@/components/FamilyResultFrame"
@@ -7,6 +8,8 @@ import { ResultMailPanel } from "@/components/ResultMailPanel"
 import { familyPublishedResult } from "@/lib/results/store"
 import { parseEventId } from "@/lib/events/input"
 async function Result({ params }: { params: Promise<{ id: string }> }) {
+  // La sesión y los datos clínicos se resuelven solo al recibir la petición.
+  await connection()
   const { id } = await params, family = await requireFamilyUser(id)
   let result = null
   try { result = await familyPublishedResult(family.id, parseEventId(id)) } catch { /* El detalle solo se obtiene dentro del ámbito familiar. */ }

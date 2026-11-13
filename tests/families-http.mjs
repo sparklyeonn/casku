@@ -1,3 +1,6 @@
+import { realPostgresFixture } from "./real-postgres-fixture.mjs"
+import { queueConcurrencyChecks } from "./queue-concurrency-checks.mjs"
+import { browserQueueChecks } from "./browser-queue-checks.mjs"
 import { teamPasswordChecks } from "./team-password-checks.mjs"
 import { resultVersionChecks } from "./result-version-checks.mjs"
 import { beforeMailMigration } from "./mail-migration.mjs"
@@ -37,12 +40,23 @@ import { cancellationChecks } from "./cancellations-checks.mjs"
 import { seedBeforeCancellationMigration } from "./cancellations-migration.mjs"
 
 const production = process.argv.includes("--production")
-const embeddedDb = new PGlite(), socket = new PGLiteSocketServer({ db: embeddedDb, host: "127.0.0.1", port: 0, maxConnections: 20 })
-let db = embeddedDb, fixturePool, gate, databaseHost
+const realPostgres = process.argv.includes("--postgres")
+const browserTests = realPostgres || process.argv.includes("--devices")
+assert(!realPostgres || production, "PostgreSQL real se comprueba con --production")
+const embeddedDb = realPostgres ? null : new PGlite()
+const socket = embeddedDb ? new PGLiteSocketServer({ db: embeddedDb, host: "127.0.0.1", port: 0, maxConnections: 20 }) : null
+let db = embeddedDb, fixturePool, gate, databaseHost, databaseUrl, secondary, secondaryExited = false
 const authSecret=randomBytes(32).toString("base64url")
-const base = "http://localhost:3120", password = randomBytes(20).toString("base64url")
+const basePort = Number(process.env.CASKU_TEST_HTTP_PORT || (realPostgres ? process.env.CASKU_REAL_TEST_PORT : null) || 3120)
+assert(Number.isInteger(basePort) && basePort>=1024 && basePort<=65534)
+const secondaryBase = `http://localhost:${basePort+1}`
+const base = `http://localhost:${basePort}`, password = randomBytes(20).toString("base64url")
 const mails = [], deduped = new Map(), sentPayloads = new Map()
-let failConfirmation = false, failResults = false, failAll = false, testFailed = false, child, exited = false, log = ""
+let failConfirmation = false, failResults = false, failAll = false, testFailed = false, child, exited = false, log = "", renderingFailure = false
+function recordLog(value) {
+  log = (log + value).slice(-15000)
+  if (/blocking-prerender-|unhandledRejection|uncaughtException/.test(log)) renderingFailure = true
+}
 const mailServer = createServer(async (request, response) => {
   const chunks = []; for await (const chunk of request) chunks.push(chunk)
   const body = JSON.parse(Buffer.concat(chunks).toString())
@@ -53,10 +67,10 @@ const mailServer = createServer(async (request, response) => {
   const id = randomUUID(); deduped.set(key, id); sentPayloads.set(key, body); mails.push({ ...body, providerId: id, key })
   response.end(JSON.stringify({ id }))
 })
-function client() {
+function client(target = base) {
   const cookies = new Map()
   return async (path, options = {}) => {
-    const response = await fetch(base + path, { ...options, redirect: "manual", signal: AbortSignal.timeout(60000), headers: { ...options.headers, cookie: [...cookies].map(([k, v]) => `${k}=${v}`).join("; ") } })
+    const response = await fetch(target + path, { ...options, redirect: "manual", signal: AbortSignal.timeout(60000), headers: { ...options.headers, cookie: [...cookies].map(([k, v]) => `${k}=${v}`).join("; ") } })
     for (const cookie of response.headers.getSetCookie()) { const pair = cookie.split(";")[0], at = pair.indexOf("="); cookies.set(pair.slice(0, at), pair.slice(at + 1)) }
     return response
   }
@@ -92,7 +106,10 @@ async function createEvent(admin, nombre, cupos, open = true) {
 const registration = (event, changes = {}) => ({ ...familyConsent, id: randomUUID(), eventoId: event.id, nombreApoderado: "Apoderado ficticio", nombreBebe: "Bebé ficticio", fechaNacimiento: "2026-01-01", ...changes })
 const clinicalSnapshot = () => db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' - 'revisionDatos' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' - 'autorizacionId' FROM "Evaluacion" e WHERE id='legacy-evaluation'`)
 try {
-  await db.waitReady
+  if (realPostgres) {
+    const fixture = await realPostgresFixture()
+    db = fixture.db; fixturePool = fixture.pool; databaseUrl = fixture.url
+  } else await db.waitReady
   const migrations = (await readdir("prisma/migrations", { withFileTypes: true })).filter(e => e.isDirectory()).map(e => e.name).sort()
   for (const name of migrations.filter(name => name < "20261109000200_inscripcion_familiar")) await db.exec(await readFile(`prisma/migrations/${name}/migration.sql`, "utf8"))
   await db.exec(`INSERT INTO "Paciente" (id,rut,nombre,"fechaNacimiento") VALUES ('legacy-baby','11111111-1','Bebé anterior ficticio','2026-01-01');
@@ -104,19 +121,23 @@ try {
     if (verify) await verify()
   }
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
-  await socket.start()
-  // PGlite tiene un único backend también en desarrollo: serializar sus ciclos de protocolo.
-  gate = await protocolGate({host:"127.0.0.1",port:Number(socket.getServerConn().split(":").at(-1))})
-  databaseHost = gate ? `127.0.0.1:${gate.port}` : socket.getServerConn()
-  // Las comprobaciones también pasan por el multiplexor: una consulta directa a
-  // PGlite podría entrar en la transacción que la aplicación aún está revirtiendo.
-  fixturePool = new Pool({ connectionString: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable`, max: 1, types: { getTypeParser: (oid, format) => oid === 1114 && format !== "binary" ? value => new Date(value.replace(" ", "T") + "Z") : pgTypes.getTypeParser(oid, format) } })
-  db = { query: (sql, values) => fixturePool.query(sql, values?.map(value => value instanceof Date ? value.toISOString() : value)), exec: sql => fixturePool.query(sql) }
+  if (!realPostgres) {
+    await socket.start()
+    // PGlite tiene un único backend también en desarrollo: serializar sus ciclos de protocolo.
+    gate = await protocolGate({host:"127.0.0.1",port:Number(socket.getServerConn().split(":").at(-1))})
+    databaseHost = gate ? `127.0.0.1:${gate.port}` : socket.getServerConn()
+    // Las comprobaciones también pasan por el multiplexor: una consulta directa a
+    // PGlite podría entrar en la transacción que la aplicación aún está revirtiendo.
+    fixturePool = new Pool({ connectionString: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable`, max: 1, types: { getTypeParser: (oid, format) => oid === 1114 && format !== "binary" ? value => new Date(value.replace(" ", "T") + "Z") : pgTypes.getTypeParser(oid, format) } })
+    db = { query: (sql, values) => fixturePool.query(sql, values?.map(value => value instanceof Date ? value.toISOString() : value)), exec: sql => fixturePool.query(sql) }
+    databaseUrl = `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable`
+  }
   await new Promise(resolve => mailServer.listen(0, "127.0.0.1", resolve))
   const adminAccount = { id: "family-test-admin", email: "admin@example.com", name: "Admin ficticio", role: "ADMIN", active: true, passwordHash: await hashPassword(password) }
   const receptionAccounts = await Promise.all(["RECEPCION", "RECEPCION", "KINESIOLOGO", "KINESIOLOGO"].map(async (role, i) => ({ id: `reception-test-${i}`, email: `reception-${i}@example.com`, name: `Equipo ficticio ${i}`, role, active: true, passwordHash: await hashPassword(password) })))
-  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", "3120"], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_MAIL_AUTOMATION: "0", CASKU_TEAM_RECOVERY_TEST_MAIL: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts]), AUTH_SECRET: authSecret, AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", RESEND_API_KEY: "re_local_test_only", RESEND_FROM: "Casku <test@example.com>", CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"] })
-  child.stdout.on("data", value => { log = (log + value).slice(-15000) }); child.stderr.on("data", value => { log = (log + value).slice(-15000) }); child.on("exit", () => { exited = true })
+  const extraAccounts = browserTests ? await Promise.all(Array.from({length: 12}, async (_,i) => ({id:`real-pg-team-${i}`,email:`real-pg-${i}@example.com`,name:`Equipo de prueba ${i}`,role:i%2===0?"RECEPCION":"KINESIOLOGO",active:true,passwordHash:await hashPassword(password)}))) : []
+  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", String(basePort)], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_MAIL_AUTOMATION: "0", CASKU_TEAM_RECOVERY_TEST_MAIL: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts, ...extraAccounts]), AUTH_SECRET: authSecret, AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", RESEND_API_KEY: "re_local_test_only", RESEND_FROM: "Casku <test@example.com>", CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: databaseUrl }, stdio: ["ignore", "pipe", "pipe"] })
+  child.stdout.on("data", recordLog); child.stderr.on("data", recordLog); child.on("exit", () => { exited = true })
   let ready = false
   for (const started = Date.now(); Date.now() - started < 180000;) {
     if (exited) throw new Error("El servidor no inició.")
@@ -124,7 +145,23 @@ try {
     await pause(200)
   }
   assert(ready)
+  if (realPostgres) {
+    secondary = spawn(process.execPath, ["--import",new URL("./production-mail-preload.mjs",import.meta.url).href,"node_modules/next/dist/bin/next","start","--port",String(basePort+1)], {cwd:process.cwd(),env:{...process.env,NODE_ENV:"production",CASKU_PRODUCTION_TEST:"1",CASKU_TEST_MODE:"0",CASKU_MAIL_AUTOMATION:"0",CASKU_TEAM_ACCOUNTS:JSON.stringify([adminAccount,...receptionAccounts,...extraAccounts]),AUTH_SECRET:authSecret,AUTH_URL:base,NEXTAUTH_URL:base,AUTH_TRUST_HOST:"true",RESEND_API_KEY:"re_local_test_only",RESEND_FROM:"Casku <test@example.com>",CASKU_TEST_MAIL_URL:`http://127.0.0.1:${mailServer.address().port}`,DATABASE_URL:databaseUrl},stdio:["ignore","pipe","pipe"]})
+    secondary.stdout.on("data",recordLog);secondary.stderr.on("data",recordLog);secondary.on("exit",()=>{secondaryExited=true})
+    let secondaryReady=false
+    for(const started=Date.now();Date.now()-started<60000;){
+      if(secondaryExited) throw new Error("La segunda instancia no inició")
+      try{if((await fetch(secondaryBase+"/api/auth/csrf",{signal:AbortSignal.timeout(5000)})).ok){secondaryReady=true;break}}catch{}
+      await pause(200)
+    }
+    assert(secondaryReady)
+  }
   const admin = client(); assert.equal((await signIn(admin, "equipo", { email: adminAccount.email, password })).role, "ADMIN")
+  if (realPostgres && process.argv.includes("--queue-only")) {
+    await queueConcurrencyChecks({db,base,secondaryBase,client,signIn,password,accounts:extraAccounts.slice(0,4),admin,family,post,createEvent})
+    await browserQueueChecks({db,base,accounts:extraAccounts.slice(4),password,admin,family,post,createEvent})
+    console.log("OK comprobación focalizada de fila y dispositivos; no reemplaza el recorrido integral.")
+  } else {
   const a = await createEvent(admin, "Evento A", 2), b = await createEvent(admin, "Evento B", 20), closed = await createEvent(admin, "Evento cerrado", 10, false)
   const anonymous = client()
   assert.equal((await anonymous("/api/familias/inscripciones", post({ ...familyConsent,}))).status, 401)
@@ -257,15 +294,26 @@ try {
   // La batería test:security comprueba el límite global sin reiniciar esta ventana.
   const globalLoginKey=createHmac("sha256",authSecret).update("team-auth:global").digest("hex")
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[globalLoginKey])
+  if (realPostgres) {
+    await queueConcurrencyChecks({db,base,secondaryBase,client,signIn,password,accounts:extraAccounts.slice(0,4),admin,family,post,createEvent})
+    await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[globalLoginKey])
+  }
+  if (browserTests) {
+    await browserQueueChecks({db,base,accounts:extraAccounts.slice(4),password,admin,family,post,createEvent})
+    await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[globalLoginKey])
+  }
   await teamPasswordChecks({db,client,signIn,password,admin,anonymous,f1,post,mails,secret:authSecret,production,setFailure:value=>{failAll=value}})
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[globalLoginKey])
   await teamChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
-  console.log("Pruebas completas con PostgreSQL y correo locales. No se usó Neon ni se enviaron mensajes reales.")
+  console.log(realPostgres ? "OK recorrido integral con PostgreSQL real aislado y dos instancias. Sin correos reales." : "Pruebas completas con PostgreSQL y correo locales. No se usó Neon ni se enviaron mensajes reales.")
+  }
+  assert(!renderingFailure, "El servidor no debe registrar errores de prerender ni excepciones sin manejar")
 } catch (error) { console.error(error); console.error(log.slice(-3000)); testFailed = true }
 finally {
   if (child && !exited) { child.kill("SIGTERM"); await Promise.race([once(child, "exit"), pause(5000)]) }
-  mailServer.closeAllConnections(); await new Promise(resolve => mailServer.close(resolve)); if (fixturePool) await fixturePool.end(); if (gate) await gate.close(); await socket.stop(); await embeddedDb.close()
+  if (secondary && !secondaryExited) { secondary.kill("SIGTERM"); await Promise.race([once(secondary,"exit"),pause(5000)]) }
+  mailServer.closeAllConnections(); await new Promise(resolve => mailServer.close(resolve)); if (fixturePool) await fixturePool.end(); if (gate) await gate.close(); await socket?.stop(); await embeddedDb?.close()
 }
 
 // El cierre de la base WASM puede modificar exitCode: aplicar el resultado al final.

@@ -21,7 +21,7 @@ export async function teamChecks({ db, client, signIn, password, accounts, admin
   }
   async function patch(account, changes, request = admin) { return request(`${endpoint}/${encodeURIComponent(account.id)}`, { ...post({ ...account, ...changes }), method: "PATCH" }) }
   const initial = await list()
-  assert(initial.cuentas.some(account => account.id === accounts[2].id))
+  assert((await list(admin, `?buscar=${encodeURIComponent(accounts[2].email)}`)).cuentas.some(account => account.id === accounts[2].id), "Buscar la cuenta sin depender de la primera página")
   assert(!JSON.stringify(initial).match(/passwordHash|solicitudHash|scrypt:/))
   assert.equal((await db.query('SELECT "passwordHash" FROM "CuentaEquipo" WHERE id=$1', [accounts[2].id])).rows[0].passwordHash, accounts[2].passwordHash)
   for (const [request, code] of [[anonymous, 401], [f1.request, 401], [reception, 403], [kine, 403]]) {

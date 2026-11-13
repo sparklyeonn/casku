@@ -8,7 +8,9 @@ El proyecto se validó con Node 22.14.0; `.nvmrc` selecciona esa versión. `engi
 - `npm run test:production`: genera Prisma, compila en `.next-production-tests` y ejecuta las pruebas HTTP y los recorridos familiares contra `next start` con `NODE_ENV=production`.
 - `npm run check`: revisión de código, pruebas unitarias, eventos, seguridad compartida, permisos HTTP, recorridos familiares en desarrollo, compilación y recorridos en producción, y comprobación final de tipos. Las pruebas con servidores se ejecutan en serie.
 
-Las pruebas requieren poder abrir puertos locales (3117, 3120, 3130 y 3131), además de puertos temporales para base y correo. Cada proceso termina sus servidores al finalizar. No ejecutarlas simultáneamente con otra copia de las mismas pruebas. Las carpetas de prueba están separadas de `.next` y excluidas de Git y ESLint. Next añade sus tipos al archivo de TypeScript.
+El comando adicional `npm run test:devices` incorpora los cuatro perfiles de navegador al recorrido local de producción. `npm run test:postgres` valida una base real aislada y dos servidores; su preparación y aceptación física se describen en [PRUEBAS_INTEGRALES.md](PRUEBAS_INTEGRALES.md).
+
+Las pruebas requieren poder abrir puertos locales (3117, 3118, 3120, 3130 y 3131), además de puertos temporales para base y correo. Cada proceso termina sus servidores al finalizar. No ejecutarlas simultáneamente con otra copia de las mismas pruebas. Las carpetas de prueba están separadas de `.next` y excluidas de Git y ESLint. Next añade sus tipos al archivo de TypeScript.
 
 ## Aislamiento
 
@@ -24,7 +26,7 @@ El listado público de eventos espera la petición antes de consultar la fecha y
 
 Se comprueban HTML, CSS y JavaScript compilados, ingreso y cierre de sesión por perfil, permisos de las API, bloqueo de códigos sin remitente, verificación familiar por código, inscripciones y QR, cupos, recepción, fila intercalada, atención, ausencias, resultados, vinculación presencial, edición de eventos, correcciones de datos, cancelaciones, lista de espera, cuentas del equipo, consentimiento y trazabilidad. Se comprueban también errores, reintentos y conservación de datos históricos mediante las pruebas existentes reutilizadas sobre el servidor compilado.
 
-`npm run test:security` comprueba además límites y revocaciones compartidos entre dos servidores de desarrollo. La batería de producción no reemplaza una prueba de dos procesos compilados ni de carga real. Las comprobaciones de recursos HTTP no ejecutan un navegador y no equivalen a validar cámara, hidratación, accesibilidad o comportamiento en todos los dispositivos.
+`npm run test:security` comprueba además límites y revocaciones compartidos entre dos servidores de desarrollo. La batería local de producción no reemplaza una prueba de dos procesos compilados ni de carga real. El comando adicional `npm run test:postgres` comprueba dos procesos compilados y bloqueos reales; ver [PRUEBAS_INTEGRALES.md](PRUEBAS_INTEGRALES.md). Las comprobaciones de recursos HTTP no ejecutan un navegador y no equivalen a validar cámara, hidratación, accesibilidad o comportamiento en todos los dispositivos.
 
 ## Estado y límites
 
@@ -33,3 +35,5 @@ La compilación y las comprobaciones técnicas corresponden a la versión clíni
 El remitente, el dominio y las pruebas con correo real siguen separados. La programación de seguimiento pertenece al pendiente 4; corrección/retiro de resultados al 5; recuperación de contraseñas al 6; pruebas conjuntas en dispositivos y PostgreSQL real al 7. La compilación local no despliega la aplicación ni certifica que esos pendientes estén completos.
 
 Las pruebas de recorridos separan la ventana global de ingresos antes de sus grupos independientes de cuentas. `test:security` conserva y verifica los límites efectivos entre dos servidores. Las pruebas de contraseñas de producción introducen sus tokens de confirmación en la base temporal; no habilitan un transporte de recuperación real.
+
+El detalle familiar de resultados espera una petición real antes de consultar sesión y contenido clínico, dentro de su límite de Suspense. El recorrido conserva un indicador de errores de preparación de páginas y excepciones no manejadas del servidor: una respuesta HTTP 200 no basta para aprobarlo si aparece alguno de esos diagnósticos.

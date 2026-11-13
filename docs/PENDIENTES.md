@@ -8,7 +8,7 @@ El dominio y el remitente verificado se gestionan por separado. Este estado corr
 4. [ ] **Crítica — Integración real de correos y gestión de fallos.** Infraestructura de órdenes por etapa, procesamiento por lotes, reintentos, recuperación y notificaciones normalizadas implementada y desactivada. Pendientes: protocolo/calendario/plantillas aprobados y, después del punto 7, integración de Brevo, autenticación de sus webhooks, activación y pruebas reales. Ver [INFRAESTRUCTURA_CORREOS.md](INFRAESTRUCTURA_CORREOS.md).
 5. [x] **Alta — Corrección o retiro seguro de resultados publicados.** Versiones conservadas, motivo y confirmación obligatorios, control de concurrencia e idempotencia, autoría restringida, vista familiar vigente/retirada y cancelación de correos por versión. Pruebas locales de desarrollo y producción aprobadas. Ver [VERSIONES_RESULTADOS.md](VERSIONES_RESULTADOS.md).
 6. [x] **Alta — Recuperación y cambio inicial de contraseñas.** Nuevas claves temporales bloquean las funciones hasta cambiarlas; cambio propio con contraseña actual, enlaces de recuperación de un uso con vencimiento, límites compartidos, revocación de sesiones y auditoría transaccional. Probado con datos y correos ficticios; los envíos reales permanecen desactivados hasta Brevo. Ver [CLAVES_EQUIPO.md](CLAVES_EQUIPO.md).
-7. [ ] **Alta — Pruebas integrales de recepción, turnos y concurrencia.** Validación conjunta en dispositivos y PostgreSQL real, además de las pruebas automatizadas locales existentes.
+7. [ ] **Alta — Pruebas integrales de recepción, turnos y concurrencia.** Batería reproducible `npm run test:postgres`: base PostgreSQL real separada, dos procesos de producción y recorridos Chromium/WebKit con perfiles de computador, Android e iPad. La aceptación física de cámara, teclado, suspensión y red del evento conserva su estado pendiente. Ver [PRUEBAS_INTEGRALES.md](PRUEBAS_INTEGRALES.md).
 
 ## Alcance adicional acordado para integrar
 
@@ -16,4 +16,4 @@ Se recibió la ampliación a siete medidas, clasificación con CI/CVA/CVAI/DPOE 
 
 ## Orden de las siguientes entregas
 
-Continuar los puntos 5, 6 y 7; después abordar Brevo, verificación del remitente informado `contacto@casku.cl`, subdominio y despliegue. La infraestructura del punto 4 no activa los seguimientos ni cambia las decisiones clínicas pendientes.
+Completar la aceptación física del punto 7; después abordar Brevo, verificación del remitente informado `contacto@casku.cl`, subdominio y despliegue. La infraestructura del punto 4 no activa los seguimientos ni cambia las decisiones clínicas pendientes.

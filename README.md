@@ -67,3 +67,5 @@ La [validación de producción](docs/VALIDACION_PRODUCCION.md) explica cómo rep
 La [infraestructura de correos](docs/INFRAESTRUCTURA_CORREOS.md) prepara los tres momentos de envío, reintentos y notificaciones. Permanece desactivada hasta las aprobaciones y la integración posterior de Brevo.
 
 La [corrección y el retiro de publicaciones](docs/VERSIONES_RESULTADOS.md) permite a la autora conservar versiones y motivos, actualizar la vista familiar y detener los correos de la copia anterior.
+
+La [gestión de contraseñas del equipo](docs/CLAVES_EQUIPO.md) incorpora claves temporales obligatorias, cambio propio con contraseña actual y recuperación por enlaces de un uso. Los correos reales de recuperación permanecen pendientes de Brevo; administración puede reasignar una clave temporal. Reiniciar el servidor después de regenerar Prisma.

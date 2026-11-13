@@ -79,3 +79,7 @@ La compilación y los recorridos del servidor compilado se comprueban con `npm r
 ## Corrección y retiro de publicaciones
 
 Implementado el punto 5: la autora conserva versiones y motivos al corregir o retirar, la familia consulta solo la versión vigente o el aviso de retiro y se detienen las órdenes de la copia afectada. Los correos de la nueva versión permanecen en preparación. Ver [VERSIONES_RESULTADOS.md](VERSIONES_RESULTADOS.md).
+
+## Contraseñas del equipo
+
+Implementado el punto 6: claves temporales obligatorias para nuevas cuentas y reasignaciones, cambio propio con verificación de contraseña actual y recuperación con enlace de un uso. El cambio revoca las sesiones y conserva roles y trabajo guardado. La recuperación real por correo permanece pendiente de Brevo; el transporte actual solo simula pruebas de desarrollo. Ver [CLAVES_EQUIPO.md](CLAVES_EQUIPO.md).

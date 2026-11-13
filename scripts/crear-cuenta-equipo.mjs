@@ -44,7 +44,7 @@ try {
   if (!Array.isArray(accounts)) throw new Error("La configuración de cuentas no es una lista.")
   const existing = accounts.find(a => a.email?.toLowerCase() === email)
   if (existing) throw new Error("La cuenta ya existe. No se sobrescribió su contraseña ni sus permisos.")
-  accounts.push({ id: randomUUID(), name, email, role, passwordHash, active: true })
+  accounts.push({ id: randomUUID(), name, email, role, passwordHash, active: true, mustChangePassword: true })
   let output = original.replace(/^CASKU_TEAM_ACCOUNTS=.*(?:\r?\n|$)/gm, "")
   output += `\nCASKU_TEAM_ACCOUNTS='${JSON.stringify(accounts).replace(/'/g, "\\u0027")}'\n`
   if (!local.AUTH_SECRET && !base.AUTH_SECRET && !local.NEXTAUTH_SECRET && !base.NEXTAUTH_SECRET) output += `AUTH_SECRET=${randomBytes(32).toString("base64url")}\n`

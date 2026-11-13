@@ -28,7 +28,7 @@ function LoginContent() {
       if (result?.error || !result?.ok) { setError("No pudimos iniciar sesión. Revisa los datos. Si hubo varios intentos fallidos, espera quince minutos antes de reintentar."); return }
       const session = await getSession()
       if (!isRole(session?.user.role)) { setError("No hay un perfil habilitado para esta cuenta."); return }
-      setPassword(""); router.replace(roleHomes[session.user.role]); router.refresh()
+      setPassword(""); router.replace(session.user.mustChangePassword?"/equipo/cambiar-clave":roleHomes[session.user.role]); router.refresh()
     } catch { setError("No pudimos conectar. Intenta nuevamente.") }
     finally { setLoading(false) }
   }
@@ -44,6 +44,7 @@ function LoginContent() {
       <label className="block">Contraseña<input className="mt-2 w-full rounded-lg border p-3" type="password" autoComplete="current-password" value={password} maxLength={128} onChange={e => setPassword(e.target.value)} required /></label>
       {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
       <button disabled={loading} className="w-full rounded-lg bg-teal-700 p-3 font-medium text-white disabled:opacity-50">{loading ? "Ingresando…" : "Ingresar"}</button>
+      <Link href="/recuperar-clave" className="block text-center underline">Olvidé mi contraseña</Link>
     </form>}
   </main>
 }

@@ -16,7 +16,7 @@ La prueba de producción compila con una dirección de base local sin servicio y
 
 El simulador de correo de la aplicación permanece limitado a desarrollo. Para el proceso de prueba compilado se carga explícitamente `tests/production-mail-preload.mjs` con `--import`: intercepta únicamente el endpoint de envío de Resend y bloquea otras peticiones fetch externas. Este archivo no se importa desde la aplicación ni habilita un modo de correo ficticio en el despliegue oficial. No se debe usar esa opción al ejecutar el servidor oficial.
 
-La base temporal PGlite tiene un solo backend. El transporte de producción usa el control de ciclos del protocolo ya utilizado por las pruebas compartidas de autenticación, y admite conexiones de los módulos compilados del servidor. Esta adaptación de la prueba no modifica la conexión real de la aplicación ni demuestra capacidad de carga de PostgreSQL.
+La base temporal PGlite tiene un solo backend. El transporte de las pruebas HTTP de desarrollo y producción usa el control de ciclos del protocolo ya utilizado por las pruebas compartidas de autenticación, y admite conexiones de los módulos compilados del servidor. Esta adaptación de la prueba no modifica la conexión real de la aplicación ni demuestra capacidad de carga de PostgreSQL.
 
 ## Cobertura
 
@@ -31,3 +31,5 @@ Se comprueban HTML, CSS y JavaScript compilados, ingreso y cierre de sesión por
 La compilación y las comprobaciones técnicas corresponden a la versión clínica actual de cuatro medidas. No validan ni activan el nuevo protocolo de siete medidas ni las categorías del PDF. El cierre completo del pendiente 3 conserva la condición acordada: incorporar y probar ese alcance después de confirmar CVAI, intervalos con decimales, discrepancias entre indicadores e interpretación clínica de DPOE. No se inventan esas reglas.
 
 El remitente, el dominio y las pruebas con correo real siguen separados. La programación de seguimiento pertenece al pendiente 4; corrección/retiro de resultados al 5; recuperación de contraseñas al 6; pruebas conjuntas en dispositivos y PostgreSQL real al 7. La compilación local no despliega la aplicación ni certifica que esos pendientes estén completos.
+
+Las pruebas de recorridos separan la ventana global de ingresos antes de sus grupos independientes de cuentas. `test:security` conserva y verifica los límites efectivos entre dos servidores. Las pruebas de contraseñas de producción introducen sus tokens de confirmación en la base temporal; no habilitan un transporte de recuperación real.

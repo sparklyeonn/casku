@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { privateHash } from "@/lib/families/security"
 import { TEAM_GLOBAL_LOGIN_LIMIT, TEAM_LOGIN_LIMIT, TEAM_LOGIN_WINDOW_MINUTES } from "./policy"
 type Reservation = { clave: string; expiraAt: Date; cantidad: number }
-async function reserve(key: string, maximum: number, minutes: number) {
+export async function reserveAuthLimit(key: string, maximum: number, minutes: number) {
   const clave = privateHash(`team-auth:${key}`)
   // Una sentencia atómica, confirmada incluso si luego falla la contraseña.
   // El reloj y la ventana pertenecen a PostgreSQL, no al proceso que recibe el intento.
@@ -17,12 +17,12 @@ async function reserve(key: string, maximum: number, minutes: number) {
   return row.cantidad <= maximum ? row : null
 }
 export async function reserveTeamLogin(email: string) {
-  const global = await reserve("global", TEAM_GLOBAL_LOGIN_LIMIT, 1)
+  const global = await reserveAuthLimit("global", TEAM_GLOBAL_LOGIN_LIMIT, 1)
   if (!global) return null
   if (global.cantidad === 1) {
     await prisma.$executeRaw`DELETE FROM "LimiteSolicitud" WHERE "expiraAt"<CURRENT_TIMESTAMP AND clave IN (SELECT clave FROM "LimiteSolicitud" WHERE "expiraAt"<CURRENT_TIMESTAMP ORDER BY "expiraAt" LIMIT 100)`
   }
-  return reserve(`account:${email}`, TEAM_LOGIN_LIMIT, TEAM_LOGIN_WINDOW_MINUTES)
+  return reserveAuthLimit(`account:${email}`, TEAM_LOGIN_LIMIT, TEAM_LOGIN_WINDOW_MINUTES)
 }
 export async function releaseSuccessfulLogin(tx: Prisma.TransactionClient, reservation: Reservation) {
   // Libera únicamente el intento correcto en la misma ventana; nunca borra fallos simultáneos.

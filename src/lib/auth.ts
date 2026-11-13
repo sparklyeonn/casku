@@ -66,11 +66,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) token.teamSessionToken = user.teamSessionToken
       token.teamSessionId = activeSession.id
       token.teamExpiresAt = activeSession.expiraAt.toISOString()
+      token.mustChangePassword = account.mustChangePassword
       token.id = account.id; token.role = account.role; token.revision = teamRevision(account)
       token.name = account.name; token.email = account.email; token.teamVersion = account.version
       return token
     },
     async session({ session, token }) {
+      session.user.mustChangePassword = token.mustChangePassword===true
       session.user.teamSessionId = typeof token.teamSessionId === "string" ? token.teamSessionId : undefined
       if (typeof token.teamExpiresAt === "string") session.expires = new Date(Math.min(new Date(session.expires).getTime(), new Date(token.teamExpiresAt).getTime())).toISOString() as typeof session.expires
       session.user.teamVersion = typeof token.teamVersion === "number" ? token.teamVersion : undefined

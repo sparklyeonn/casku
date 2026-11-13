@@ -13,7 +13,11 @@ export async function teamChecks({ db, client, signIn, password, accounts, admin
     const response = await admin(endpoint, post(input)); assert.equal(response.status, 201)
     const result = await response.json(); assert(!JSON.stringify(result).match(/passwordHash|solicitudHash|"password"/))
     assert.equal((await admin(endpoint, post(input))).status, 200, "Reintento no duplica cuentas")
-    return { account: result.cuenta, secret, request: await fresh(email, secret), input }
+    const temporary=await fresh(email,secret),permanent=randomBytes(20).toString("base64url")
+    assert.equal((await session(temporary)).mustChangePassword,true)
+    assert.equal((await temporary("/api/equipo/clave",post({actual:secret,nueva:permanent,confirmacion:permanent}))).status,200)
+    const account=(await list(admin,`?buscar=${encodeURIComponent(email)}`)).cuentas[0]
+    return {account,secret:permanent,request:await fresh(email,permanent),input}
   }
   async function patch(account, changes, request = admin) { return request(`${endpoint}/${encodeURIComponent(account.id)}`, { ...post({ ...account, ...changes }), method: "PATCH" }) }
   const initial = await list()
@@ -44,10 +48,14 @@ export async function teamChecks({ db, client, signIn, password, accounts, admin
   response = await patch(account, { active: true }); assert.equal(response.status, 200); account = (await response.json()).cuenta
   assert(!(await session(request)), "Reactivar no restaura las sesiones anteriores")
   request = await fresh(account.email, created.secret); assert.equal((await session(request)).id, account.id)
-  const newSecret = randomBytes(20).toString("base64url")
+  let newSecret = randomBytes(20).toString("base64url")
   response = await patch(account, { password: newSecret }); assert.equal(response.status, 200); account = (await response.json()).cuenta
   assert(!(await session(request))); assert(!(await session(await fresh(account.email, created.secret))))
   request = await fresh(account.email, newSecret); assert.equal((await session(request)).id, account.id)
+  assert.equal((await session(request)).mustChangePassword,true)
+  const chosen=randomBytes(20).toString("base64url")
+  assert.equal((await request("/api/equipo/clave",post({actual:newSecret,nueva:chosen,confirmacion:chosen}))).status,200)
+  newSecret=chosen;request=await fresh(account.email,newSecret);account=(await list(admin,`?buscar=${encodeURIComponent(account.email)}`)).cuentas[0]
   assert(!JSON.stringify((await db.query('SELECT * FROM "CambioCuentaEquipo" WHERE "cuentaId"=$1', [account.id])).rows).match(/passwordHash|scrypt:|solicitudHash/))
   assert.equal((await admin("/administracion/cuentas")).status, 200)
   assert.equal((await admin(endpoint + "?pagina=0")).status, 400)

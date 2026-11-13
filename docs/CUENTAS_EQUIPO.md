@@ -39,3 +39,7 @@ Aplicar con `npm run db:deploy`, regenerar con `npx prisma generate` y reiniciar
 `npm test` verifica validación de perfiles, estados, versiones, contraseñas y campos ignorados. `npm run test:families` también verifica importación, permisos de cuentas, creación idempotente, edición, cambio de perfil, desactivación/reactivación, contraseñas, revocación de sesiones, atención activa, protección de administradores y rollback de auditoría. Todo se ejecuta en PostgreSQL temporal con correo ficticio.
 
 Las suites `test:events` y `test:http` comprueban los recorridos existentes con la autenticación persistida. La suite de acceso ahora utiliza una base local temporal porque validar las cuentas requiere consultar la base. Ejecutar las suites HTTP por separado y TypeScript al finalizar. Se conservan ESLint y validación de Prisma; la compilación de producción sigue pendiente por la restricción del proceso auxiliar de estilos de Turbopack documentada en etapas anteriores.
+
+## Contraseñas y recuperación
+
+Las nuevas cuentas y las claves asignadas desde administración son temporales. Su titular debe cambiarlas antes de utilizar las funciones del equipo. La propia contraseña se cambia desde Cambiar contraseña, indicando la actual. Ver [CLAVES_EQUIPO.md](CLAVES_EQUIPO.md); los envíos reales de recuperación siguen pendientes de Brevo. Esta política actualiza el comportamiento de contraseñas descrito en la etapa inicial de cuentas.

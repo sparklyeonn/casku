@@ -7,6 +7,8 @@ datasource db {
 }
 
 model CuentaEquipo {
+  mustChangePassword Boolean @default(false)
+  recuperaciones RecuperacionClave[]
   sesiones SesionEquipo[]
   id String @id
   email String @unique
@@ -592,4 +594,19 @@ model CambioResultado {
   enviosEnCurso Int @default(0)
   createdAt DateTime @default(now())
   @@unique([publicacionId, revisionControl])
+}
+
+model RecuperacionClave {
+  id String @id @default(uuid()) @db.Uuid
+  orden BigInt @unique @default(autoincrement())
+  cuentaId String
+  cuenta CuentaEquipo @relation(fields: [cuentaId], references: [id], onDelete: Restrict)
+  tokenHash String @unique
+  versionCuenta Int
+  estado String @default("PENDIENTE")
+  expiraAt DateTime
+  usadaAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([cuentaId, estado])
+  @@index([expiraAt])
 }

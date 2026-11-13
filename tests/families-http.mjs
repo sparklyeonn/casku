@@ -1,3 +1,4 @@
+import { teamPasswordChecks } from "./team-password-checks.mjs"
 import { resultVersionChecks } from "./result-version-checks.mjs"
 import { beforeMailMigration } from "./mail-migration.mjs"
 import { protocolGate } from "./pglite-protocol-gate.mjs"
@@ -7,7 +8,7 @@ import { familyConsent } from "./privacy-fixtures.mjs"
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
 import { once } from "node:events"
-import { randomBytes, randomUUID } from "node:crypto"
+import { randomBytes, randomUUID, createHmac } from "node:crypto"
 import { createServer } from "node:http"
 import { readFile, readdir } from "node:fs/promises"
 import { setTimeout as pause } from "node:timers/promises"
@@ -38,6 +39,7 @@ import { seedBeforeCancellationMigration } from "./cancellations-migration.mjs"
 const production = process.argv.includes("--production")
 const embeddedDb = new PGlite(), socket = new PGLiteSocketServer({ db: embeddedDb, host: "127.0.0.1", port: 0, maxConnections: 20 })
 let db = embeddedDb, fixturePool, gate, databaseHost
+const authSecret=randomBytes(32).toString("base64url")
 const base = "http://localhost:3120", password = randomBytes(20).toString("base64url")
 const mails = [], deduped = new Map(), sentPayloads = new Map()
 let failConfirmation = false, failResults = false, failAll = false, testFailed = false, child, exited = false, log = ""
@@ -103,7 +105,8 @@ try {
   }
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await socket.start()
-  gate = production ? await protocolGate({host:"127.0.0.1",port:Number(socket.getServerConn().split(":").at(-1))}) : null
+  // PGlite tiene un único backend también en desarrollo: serializar sus ciclos de protocolo.
+  gate = await protocolGate({host:"127.0.0.1",port:Number(socket.getServerConn().split(":").at(-1))})
   databaseHost = gate ? `127.0.0.1:${gate.port}` : socket.getServerConn()
   // Las comprobaciones también pasan por el multiplexor: una consulta directa a
   // PGlite podría entrar en la transacción que la aplicación aún está revirtiendo.
@@ -112,7 +115,7 @@ try {
   await new Promise(resolve => mailServer.listen(0, "127.0.0.1", resolve))
   const adminAccount = { id: "family-test-admin", email: "admin@example.com", name: "Admin ficticio", role: "ADMIN", active: true, passwordHash: await hashPassword(password) }
   const receptionAccounts = await Promise.all(["RECEPCION", "RECEPCION", "KINESIOLOGO", "KINESIOLOGO"].map(async (role, i) => ({ id: `reception-test-${i}`, email: `reception-${i}@example.com`, name: `Equipo ficticio ${i}`, role, active: true, passwordHash: await hashPassword(password) })))
-  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", "3120"], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_MAIL_AUTOMATION: "0", CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts]), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", RESEND_API_KEY: "re_local_test_only", RESEND_FROM: "Casku <test@example.com>", CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"] })
+  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", "3120"], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_MAIL_AUTOMATION: "0", CASKU_TEAM_RECOVERY_TEST_MAIL: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts]), AUTH_SECRET: authSecret, AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", RESEND_API_KEY: "re_local_test_only", RESEND_FROM: "Casku <test@example.com>", CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"] })
   child.stdout.on("data", value => { log = (log + value).slice(-15000) }); child.stderr.on("data", value => { log = (log + value).slice(-15000) }); child.on("exit", () => { exited = true })
   let ready = false
   for (const started = Date.now(); Date.now() - started < 180000;) {
@@ -250,6 +253,12 @@ try {
   await privacyChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, post, createEvent, mails, setResultFailure: value => { failResults = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await resultVersionChecks({db,client,signIn,password,accounts:receptionAccounts,admin,anonymous,f1,f2,post,createEvent,mails,setResultFailure:value=>{failResults=value}})
+  // Grupos independientes: la versión compilada ejecuta sus accesos en menos de un minuto.
+  // La batería test:security comprueba el límite global sin reiniciar esta ventana.
+  const globalLoginKey=createHmac("sha256",authSecret).update("team-auth:global").digest("hex")
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[globalLoginKey])
+  await teamPasswordChecks({db,client,signIn,password,admin,anonymous,f1,post,mails,secret:authSecret,production,setFailure:value=>{failAll=value}})
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[globalLoginKey])
   await teamChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   console.log("Pruebas completas con PostgreSQL y correo locales. No se usó Neon ni se enviaron mensajes reales.")

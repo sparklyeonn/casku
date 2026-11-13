@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { isRole, type Role } from "./roles.ts"
-export type TeamAccount = { id: string; email: string; name: string; role: Role; passwordHash: string; active: boolean }
+export type TeamAccount = { id: string; email: string; name: string; role: Role; passwordHash: string; active: boolean; mustChangePassword?:boolean }
 export function parseTeamAccounts(raw: string | undefined): TeamAccount[] {
   if (!raw) return []
   let values: unknown
@@ -14,10 +14,11 @@ export function parseTeamAccounts(raw: string | undefined): TeamAccount[] {
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a.email) || typeof a.name !== "string" || !a.name.trim() ||
       !isRole(a.role) || typeof a.passwordHash !== "string" || !/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/.test(a.passwordHash) ||
       typeof a.active !== "boolean") throw new Error("Faltan datos o permisos válidos en una cuenta del equipo.")
+    if(a.mustChangePassword!==undefined&&typeof a.mustChangePassword!=="boolean")throw new Error("Marca de contraseña temporal inválida.")
     const email = a.email.toLowerCase().trim()
     if (ids.has(a.id) || emails.has(email)) throw new Error("Hay cuentas del equipo duplicadas.")
     ids.add(a.id); emails.add(email)
-    return { id: a.id, email, name: a.name.trim(), role: a.role, passwordHash: a.passwordHash, active: a.active }
+    return { id: a.id, email, name: a.name.trim(), role: a.role, passwordHash: a.passwordHash, active: a.active,...(typeof a.mustChangePassword==="boolean"?{mustChangePassword:a.mustChangePassword}:{}) }
   })
 }
 export const getTeamAccounts = () => parseTeamAccounts(process.env.CASKU_TEAM_ACCOUNTS)

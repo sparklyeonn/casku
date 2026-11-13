@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
 import { once } from "node:events"
-import { randomBytes, createHmac, createHash } from "node:crypto"
+import { randomBytes, randomUUID, createHmac, createHash } from "node:crypto"
 import { readdir, readFile } from "node:fs/promises"
 import { setTimeout as pause } from "node:timers/promises"
 import { protocolGate } from "./pglite-protocol-gate.mjs"
@@ -59,7 +59,17 @@ try {
   for (const migration of (await readdir("prisma/migrations", { withFileTypes: true })).filter(row => row.isDirectory()).map(row => row.name).sort()) {
     if (migration === "20261110000500_seguridad_equipo") await embedded.query('INSERT INTO "CuentaEquipo" (id,email,name,role,"passwordHash",active,version,"updatedAt") VALUES (\'previous-security\',\'previous@example.com\',\'Cuenta anterior\',\'ADMIN\',$1,true,7,CURRENT_TIMESTAMP)', [accounts[0].passwordHash])
     const before = migration === "20261110000500_seguridad_equipo" ? (await embedded.query('SELECT to_jsonb(c) row FROM "CuentaEquipo" c WHERE id=\'previous-security\'')).rows : null
+    const passwordFixture=migration==="20261113000100_claves_equipo"?randomUUID():null
+    if(passwordFixture)await embedded.query(`INSERT INTO "SesionEquipo" (id,"cuentaId","secretoHash",version,"expiraAt") VALUES ($1,'previous-security',$2,7,CURRENT_TIMESTAMP+interval '8 hours')`,[passwordFixture,hash("fixture-session-before-password-migration")])
+    const passwordSnapshot=passwordFixture?{accounts:(await embedded.query('SELECT to_jsonb(c) row FROM "CuentaEquipo" c ORDER BY id')).rows,sessions:(await embedded.query('SELECT to_jsonb(s) row FROM "SesionEquipo" s ORDER BY id')).rows}:null
     await embedded.exec(await readFile(`prisma/migrations/${migration}/migration.sql`, "utf8"))
+    if(passwordSnapshot){
+      assert.deepEqual((await embedded.query(`SELECT to_jsonb(c)-'mustChangePassword' row FROM "CuentaEquipo" c ORDER BY id`)).rows,passwordSnapshot.accounts)
+      assert.deepEqual((await embedded.query('SELECT to_jsonb(s) row FROM "SesionEquipo" s ORDER BY id')).rows,passwordSnapshot.sessions)
+      assert.equal((await embedded.query('SELECT count(*)::int n FROM "RecuperacionClave"')).rows[0].n,0)
+      await embedded.query('DELETE FROM "SesionEquipo" WHERE id=$1',[passwordFixture])
+      console.log("OK migración de claves: conserva hashes, perfiles, versiones y sesiones existentes; no crea enlaces ni fuerza claves anteriores.")
+    }
     if (before) { assert.deepEqual((await embedded.query('SELECT to_jsonb(c) row FROM "CuentaEquipo" c WHERE id=\'previous-security\'')).rows, before); assert.equal((await embedded.query('SELECT count(*)::int n FROM "SesionEquipo"')).rows[0].n, 0) }
   }
   await socket.start(); gate = await protocolGate({ host: "127.0.0.1", port: Number(socket.getServerConn().split(":").at(-1)) }); db = new Pool({ host: "127.0.0.1", port: gate.port, user: "postgres", password: "postgres", database: "postgres", max: 1 })
@@ -166,6 +176,38 @@ try {
   assert((await login(client(), accounts[1])).includes("error="))
   await db.query('ALTER TABLE "TestUnavailableLimit" RENAME TO "LimiteSolicitud"')
   assert.equal((await db.query('SELECT count(*)::int n FROM "SesionEquipo"')).rows[0].n, beforeCount)
+
+  // El bloqueo temporal y los cambios de contraseña se comparten entre ambos procesos.
+  await expireLimit(accounts[3].email)
+  const pending=await signed(accounts[3]),pendingCopy=pending.copy()
+  await db.query('UPDATE "CuentaEquipo" SET "mustChangePassword"=true WHERE id=$1',[accounts[3].id])
+  for(const index of [0,1]){
+    assert.equal((await pending("/api/recepcion/eventos",{},index)).status,401)
+    assert.equal((await session(pending,index)).user.mustChangePassword,true)
+  }
+  const {csrfToken:pendingCsrf}=await (await pending("/api/auth/csrf")).json()
+  await pending("/api/auth/session",post({csrfToken:pendingCsrf,data:{mustChangePassword:false}}))
+  assert.equal((await pending("/api/recepcion/eventos",{},1)).status,401)
+  for(let attempt=0;attempt<5;attempt++)assert.equal((await pending("/api/equipo/clave",post({actual:"incorrecta",nueva:"Una-clave-nueva-de-prueba",confirmacion:"Una-clave-nueva-de-prueba"}),attempt%2)).status,400)
+  assert.equal((await pending("/api/equipo/clave",post({actual:password,nueva:"Una-clave-nueva-de-prueba",confirmacion:"Una-clave-nueva-de-prueba"}),1)).status,409)
+  const ownLimit=hash(`team-auth:password:own:key:${accounts[3].id}`)
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=now()-interval '1 second' WHERE clave=$1`,[ownLimit])
+  const candidates=[randomBytes(24).toString("base64url"),randomBytes(24).toString("base64url")]
+  const changed=await Promise.all(candidates.map((key,index)=>pending("/api/equipo/clave",post({actual:password,nueva:key,confirmacion:key}),index)))
+  assert.equal(changed.filter(row=>row.status===200).length,1);assert(changed.every(row=>[200,401,403,409].includes(row.status)))
+  assert(!(await session(pendingCopy,1))?.user)
+  const key=candidates[changed[0].status===200?0:1],changedClient=client()
+  await login(changedClient,accounts[3],key,1)
+  assert.equal((await session(changedClient,0)).user.mustChangePassword,false)
+  for(let index=0;index<4;index++)assert.equal((await changedClient("/api/equipo/recuperacion/solicitar",post({email:accounts[3].email}),index%2)).status,202)
+  assert.equal((await db.query('SELECT cantidad FROM "LimiteSolicitud" WHERE clave=$1',[hash(`team-auth:password:request:key:${accounts[3].email}`)])).rows[0].cantidad,4)
+  const resetToken=randomBytes(32).toString("base64url"),resetId=randomUUID(),accountVersion=(await db.query('SELECT version FROM "CuentaEquipo" WHERE id=$1',[accounts[3].id])).rows[0].version
+  await db.query(`INSERT INTO "RecuperacionClave" (id,"cuentaId","tokenHash","versionCuenta",estado,"expiraAt") VALUES ($1,$2,$3,$4,'ACTIVA',CURRENT_TIMESTAMP+interval '30 minutes')`,[resetId,accounts[3].id,hash(`team-recovery:${resetToken}`),accountVersion])
+  const resetKeys=[randomBytes(24).toString("base64url"),randomBytes(24).toString("base64url")]
+  const resetRace=await Promise.all(resetKeys.map((value,index)=>client()("/api/equipo/recuperacion/confirmar",post({token:resetToken,nueva:value,confirmacion:value}),index)))
+  assert.deepEqual(resetRace.map(row=>row.status).sort(),[200,400]);assert(!(await session(changedClient,1))?.user)
+  console.log("OK contraseñas compartidas: bloqueo temporal no manipulable, límites entre procesos, cambio único concurrente, recuperación de un solo uso y sesiones revocadas en ambos servidores.")
+
   // Shared global cap bounds requests with invented addresses.
   await db.query('INSERT INTO "LimiteSolicitud" (clave,cantidad,"expiraAt") VALUES ($1,60,now()+interval \'1 minute\') ON CONFLICT(clave) DO UPDATE SET cantidad=60,"expiraAt"=now()+interval \'1 minute\'', [globalKey])
   assert((await login(client(), accounts[1])).includes("error="))

@@ -28,7 +28,7 @@ export async function teamAccount(where: { id: string } | { email: string }) {
   return row && isRole(row.role) ? { ...row, role: row.role } : null
 }
 export const teamRevision = (row: NonNullable<Awaited<ReturnType<typeof teamAccount>>>) => `${accountRevision(row)}:${row.version}`
-export const safeAccount = (row: CuentaEquipo) => ({ id: row.id, email: row.email, name: row.name, role: row.role, active: row.active, version: row.version })
+export const safeAccount = (row: CuentaEquipo) => ({ id: row.id, email: row.email, name: row.name, role: row.role, active: row.active, version: row.version, mustChangePassword: row.mustChangePassword })
 export async function listTeam(page: number, query: string) {
   const where = query ? { OR: [{ name: { contains: query, mode: "insensitive" as const } }, { email: { contains: query, mode: "insensitive" as const } }] } : {}
   const [rows, total] = await prisma.$transaction([prisma.cuentaEquipo.findMany({ where, orderBy: [{ name: "asc" }, { id: "asc" }], skip: (page - 1) * 20, take: 20 }), prisma.cuentaEquipo.count({ where })])
@@ -47,7 +47,7 @@ export async function saveAccount(actor: { id: string; version: number }, id: st
         if (existing.creadoPorId !== actor.id || existing.solicitudHash !== solicitudHash) throw new TeamConflict("Este envío ya corresponde a otra cuenta. Actualiza la lista.")
         return { cuenta: safeAccount(existing), creada: false }
       }
-      const row = await tx.cuentaEquipo.create({ data: { id: input.id!, email: input.email, name: input.name, role: input.role, active: true, passwordHash: passwordHash!, creadoPorId: actor.id, solicitudHash } })
+      const row = await tx.cuentaEquipo.create({ data: { id: input.id!, email: input.email, name: input.name, role: input.role, active: true, mustChangePassword: true, passwordHash: passwordHash!, creadoPorId: actor.id, solicitudHash } })
       await tx.cambioCuentaEquipo.create({ data: { cuentaId: row.id, actorId: actor.id, accion: "CREAR", nueva: safeAccount(row) } })
       return { cuenta: safeAccount(row), creada: true }
     }
@@ -56,12 +56,14 @@ export async function saveAccount(actor: { id: string; version: number }, id: st
     if (!previous) return null
     if (previous.version !== input.version) throw new TeamConflict("La cuenta cambió en otra pantalla. Actualiza la lista antes de guardar.")
     if (id === actor.id && (!input.active || input.role !== "ADMIN")) throw new TeamConflict("No puedes desactivar tu propia cuenta ni quitarte el perfil de administración.")
+    if(id===actor.id&&passwordHash)throw new TeamConflict("Cambia tu propia contraseña desde Seguridad y sesiones, indicando la actual.")
     const losesRole = previous.role !== input.role || !input.active
     if (previous.active && previous.role === "ADMIN" && losesRole && await tx.cuentaEquipo.count({ where: { active: true, role: "ADMIN" } }) <= 1) throw new TeamConflict("Debe quedar al menos una cuenta administradora activa.")
     if (losesRole && await tx.entradaFila.findFirst({ where: { profesionalId: id, estado: "EN_ATENCION" }, select: { id: true } })) throw new TeamConflict("Esta profesional tiene una atención activa. Debe finalizarla o devolverla a la fila antes de cambiar su perfil o desactivarla.")
     if (previous.email === input.email && previous.name === input.name && previous.role === input.role && previous.active === input.active && !passwordHash) return { cuenta: safeAccount(previous), creada: false }
-    const row = await tx.cuentaEquipo.update({ where: { id }, data: { email: input.email, name: input.name, role: input.role, active: input.active, ...(passwordHash && { passwordHash }), version: { increment: 1 } } })
+    const row = await tx.cuentaEquipo.update({ where: { id }, data: { email: input.email, name: input.name, role: input.role, active: input.active, ...(passwordHash && { passwordHash, mustChangePassword: true }), version: { increment: 1 } } })
     await tx.sesionEquipo.updateMany({ where: { cuentaId: id, revocadaAt: null }, data: { revocadaAt: new Date(), motivo: "CAMBIO_CUENTA" } })
+    await tx.recuperacionClave.updateMany({where:{cuentaId:id,estado:{in:["PENDIENTE","ACTIVA"]}},data:{estado:"ANULADA"}})
     await tx.cambioCuentaEquipo.create({ data: { cuentaId: id, actorId: actor.id, accion: "EDITAR", anterior: safeAccount(previous), nueva: { ...safeAccount(row), cambioContrasena: !!passwordHash } } })
     return { cuenta: safeAccount(row), creada: false }
   }, { timeout: 15000 })

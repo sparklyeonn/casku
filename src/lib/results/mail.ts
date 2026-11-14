@@ -26,7 +26,7 @@ export async function deliverResult(publicacionId: string) {
     const { publicacion: published } = mail, family = published.apoderado
     if (!family.activo || family.correo !== mail.destinatario || published.evaluacion.paciente.apoderadoId !== family.id || published.evaluacion.fila?.inscripcion.apoderadoId !== family.id || published.evaluacion.fila.estado !== "ATENDIDO") throw new Error("Vinculación no disponible")
     if (!await emailPermission(prisma, publicacionId, "RESULTADO")) throw new Error("Autorización retirada")
-    const providerId = await sendMail({ to: mail.destinatario, ...resultMessage(parseSnapshot(published.datos), mail.portalUrl) }, `result-${mail.id}`)
+    const providerId = await sendMail({ to: mail.destinatario, ...resultMessage(parseSnapshot(published.datos), mail.portalUrl) }, `result-${mail.id}`, "RESULTADO")
     await prisma.$transaction(async tx=>{
       const accepted=await tx.correoResultado.updateMany({where:{publicacionId,bloqueoToken:token},data:{estado:"ENVIADO",enviadoAt:new Date(),proveedorId:providerId,bloqueoToken:null,bloqueoHasta:null,ultimoError:null}})
       if(accepted.count)await tx.ordenCorreo.updateMany({where:{publicacionId,version:1,etapa:"INICIAL",estado:"BLOQUEADO"},data:{estado:"ACEPTADO",motivo:"ENVIO_INICIAL_EXISTENTE",proveedor:"legacy",proveedorId:providerId,aceptadoAt:new Date()}})

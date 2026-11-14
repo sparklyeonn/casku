@@ -26,11 +26,11 @@ Los cambios administrativos, desactivaciones, versiones de cuenta nuevas y cambi
 
 ## Estado de los envíos reales
 
-**La recuperación por correo real permanece desactivada hasta integrar Brevo después del punto 7.** En una instalación real, la solicitud muestra el mensaje genérico y no crea enlaces de recuperación ni usa Resend como sustituto. Mientras tanto, otro administrador habilitado puede reasignar una contraseña temporal a quien lo necesite.
+**La recuperación está conectada a Brevo, con envíos reales desactivados hasta disponer de clave de API y remitente verificado.** En una instalación real, la solicitud muestra el mensaje genérico y no crea enlaces de recuperación ni usa Resend como sustituto. Mientras tanto, otro administrador habilitado puede reasignar una contraseña temporal a quien lo necesite.
 
-El transporte está separado en `src/lib/team-passwords/delivery.ts`. Hoy solo admite el proveedor local de las pruebas de desarrollo, con variables privadas de prueba, dirección de loopback y clave ficticia. En producción esa simulación está deshabilitada. Las pruebas de confirmación de producción introducen tokens válidos únicamente en su base temporal, sin proporcionar una API de creación o acceso alternativo al usuario.
+El transporte está separado en `src/lib/team-passwords/delivery.ts` y utiliza el adaptador compartido de Brevo. Ver [BREVO_TRANSACCIONAL.md](BREVO_TRANSACCIONAL.md). La simulación integrada se limita a desarrollo, dirección de loopback y clave ficticia. Las pruebas del servidor compilado interceptan explícitamente el proveedor con un archivo exclusivo de pruebas y ejercitan la solicitud y el enlace recibidos; no insertan tokens para sustituir este recorrido ni habilitan un acceso alternativo en producción.
 
-La integración posterior de Brevo debe aportar entrega real y comprobar la respuesta pública y su comportamiento temporal. La solicitud actual espera al transporte simulado; antes de habilitar envíos reales debe evaluarse el procesamiento desacoplado para evitar diferencias de tiempo que permitan inferir cuentas. No se declara un tiempo de respuesta constante para un proveedor aún no integrado.
+La solicitud actual espera al transporte; antes de habilitar envíos reales debe evaluarse el procesamiento desacoplado para evitar diferencias de tiempo que permitan inferir cuentas. La respuesta pública es genérica, pero no se declara un tiempo de respuesta constante. Las pruebas de esta etapa usan únicamente el proveedor simulado; la validación de entrega real sigue pendiente.
 
 ## Límites y sesiones
 

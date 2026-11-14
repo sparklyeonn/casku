@@ -42,7 +42,7 @@ try {
   await socket.start()
   const accounts = await Promise.all(["ADMIN", "ADMIN", "RECEPCION", "KINESIOLOGO"].map(async (role, i) => ({ id: `events-${i}`, email: `events-${i}@example.com`, name: `Prueba ${i}`, role, active: true, passwordHash: await hashPassword(password) })))
   child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--port", "3118"], {
-    cwd: process.cwd(), env: { ...process.env, CASKU_TEST_MODE: "1", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify(accounts), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", DATABASE_URL: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"],
+    cwd: process.cwd(), env: { ...process.env, CASKU_MAIL_ENABLED:"0", BREVO_API_KEY:"", BREVO_SENDER_VERIFIED:"0", CASKU_TEST_MODE: "1", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify(accounts), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", DATABASE_URL: `postgresql://postgres:postgres@${socket.getServerConn()}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"],
   })
   child.stdout.on("data", value => { log = (log + value).slice(-12000) }); child.stderr.on("data", value => { log = (log + value).slice(-12000) }); child.on("exit", () => { exited = true })
   let ready = false

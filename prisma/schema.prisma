@@ -610,3 +610,21 @@ model RecuperacionClave {
   @@index([cuentaId, estado])
   @@index([expiraAt])
 }
+
+// Registro técnico del proveedor. No contiene destinatarios, cuerpos ni enlaces.
+model EnvioTransaccional {
+  clave String @id
+  finalidad String
+  hashMensaje String?
+  estado String @default("PENDIENTE")
+  motivo String?
+  intentos Int @default(0)
+  disponibleAt DateTime @db.Timestamptz(3) @default(now())
+  bloqueoToken String? @db.Uuid
+  bloqueoHasta DateTime? @db.Timestamptz(3)
+  proveedorId String?
+  aceptadoAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @db.Timestamptz(3) @default(now())
+  updatedAt DateTime @db.Timestamptz(3) @default(now()) @updatedAt
+  @@index([estado, disponibleAt])
+}

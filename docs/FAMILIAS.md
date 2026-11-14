@@ -11,7 +11,7 @@
 
 ## Correo pendiente de habilitar
 
-Casku debe entregar un remitente de dominio verificado para configurar `RESEND_FROM` junto con `RESEND_API_KEY`. `AUTH_URL` debe apuntar al portal correcto (HTTPS al publicar). **El remitente sigue pendiente; no se enviaron mensajes reales durante la implementación.**
+Brevo está conectado para códigos y confirmaciones con número y QR PNG adjunto. Ver [BREVO_TRANSACCIONAL.md](BREVO_TRANSACCIONAL.md) para las variables privadas y la migración requerida. `AUTH_URL` debe apuntar al portal correcto (HTTPS al publicar). **La clave de API y la verificación de `contacto@casku.cl` siguen pendientes; los envíos reales permanecen desactivados.**
 
 Sin remitente no se envían códigos ni se omite la verificación. No hay códigos públicos, sesiones de demostración ni remitente de prueba automático. `npm run test:families` usa un proveedor HTTP local ficticio, permitido solo en desarrollo con el modo de pruebas explícito; sobrescribe las credenciales y la conexión a la base.
 

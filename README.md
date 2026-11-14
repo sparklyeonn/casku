@@ -9,7 +9,7 @@ Administración permite crear eventos con nombre, fecha, lugar y cupos, y selecc
 1. Usar la versión de Node indicada en `.nvmrc` (`nvm use`, si se utiliza nvm). Instalar dependencias con `npm ci` si no existen.
 2. Configurar `DATABASE_URL` con la conexión existente y comprobar el destino. Para habilitar las tablas de eventos e inscripciones ejecutar `npm run db:deploy` y `npx prisma generate`. La nueva migración conserva los registros anteriores, añade relaciones opcionales al paciente y permite bebés sin RUT.
 3. En una instalación nueva, ejecutar `npm run account:create` para preparar al menos una cuenta administradora. Tras el primer ingreso, gestionar el equipo desde **Administración → Cuentas del equipo**. Ver [CUENTAS_EQUIPO.md](docs/CUENTAS_EQUIPO.md).
-4. Configurar `AUTH_SECRET`, `AUTH_URL`, `RESEND_API_KEY` y `RESEND_FROM` en la configuración privada. Casku informó `contacto@casku.cl` y utiliza Brevo; la integración y verificación se realizarán después del punto 7. El transporte anterior sigue en código. Sin un transporte y remitente configurados no se envían códigos ni se permite omitir la verificación.
+4. Configurar `AUTH_SECRET` y `AUTH_URL`. La [integración transaccional de Brevo](docs/BREVO_TRANSACCIONAL.md) conecta acceso familiar, confirmación con número/QR y recuperación de claves. Mantener `CASKU_MAIL_ENABLED=0` y `BREVO_SENDER_VERIFIED=0` hasta disponer de clave de API y verificar `contacto@casku.cl`. No hay transporte alternativo ni omisión de la verificación familiar.
 5. Ejecutar `npm run dev`. Administración abre inscripciones desde `/administracion`; las familias comienzan en `/inscripcion` y consultan sus comprobantes en `/familias`.
 
 Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas de demostración. Las cuentas se guardan en la base. La lista privada de `.env.local` se usa solo para la importación inicial.
@@ -21,6 +21,7 @@ Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas d
 - `npm run test:http`: inicio/cierre de sesión y permisos mediante servidor temporal en el puerto 3117, con cuentas efímeras y PostgreSQL local temporal. No utiliza la base configurada ni envía correos.
 - `npm run test:events`: migración y gestión de eventos con PostgreSQL temporal aislado. No utiliza la base real de Casku.
 - `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR, correo, recepción y kinesiología (llegadas, reservas, formularios, guardado y permisos), publicación de resultados, vinculación presencial, gestión de cuentas del equipo, resumen y edición de eventos y corrección de datos familiares, cancelaciones y lista de espera FIFO, con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
+- `npm run test:brevo`: contrato de entrega, concurrencia, reintentos e interrupciones con base temporal y proveedor simulado.
 - `npm run test:mail`: planificación, reintentos, recuperación y eventos de correo con base y transporte ficticios.
 - `npm run test:production`: compila una copia aislada y reutiliza permisos y recorridos familiares sobre el servidor de producción, con base y correo temporales.
 - `npm run check`: ejecuta todas las comprobaciones anteriores en serie y termina verificando los tipos.
@@ -66,10 +67,10 @@ La [privacidad y las autorizaciones](docs/CONSENTIMIENTO_PRIVACIDAD.md) incorpor
 
 La [validación de producción](docs/VALIDACION_PRODUCCION.md) explica cómo repetir las comprobaciones, su aislamiento y los límites pendientes del protocolo clínico.
 
-La [infraestructura de correos](docs/INFRAESTRUCTURA_CORREOS.md) prepara los tres momentos de envío, reintentos y notificaciones. Permanece desactivada hasta las aprobaciones y la integración posterior de Brevo.
+La [infraestructura de correos](docs/INFRAESTRUCTURA_CORREOS.md) prepara los tres momentos de envío, reintentos y notificaciones. La automatización clínica permanece desactivada hasta las aprobaciones y su integración específica con Brevo; es independiente de los tres correos transaccionales preparados.
 
 La [corrección y el retiro de publicaciones](docs/VERSIONES_RESULTADOS.md) permite a la autora conservar versiones y motivos, actualizar la vista familiar y detener los correos de la copia anterior.
 
-La [gestión de contraseñas del equipo](docs/CLAVES_EQUIPO.md) incorpora claves temporales obligatorias, cambio propio con contraseña actual y recuperación por enlaces de un uso. Los correos reales de recuperación permanecen pendientes de Brevo; administración puede reasignar una clave temporal. Reiniciar el servidor después de regenerar Prisma.
+La [gestión de contraseñas del equipo](docs/CLAVES_EQUIPO.md) incorpora claves temporales obligatorias, cambio propio con contraseña actual y recuperación por enlaces de un uso. Los correos reales de recuperación permanecen desactivados hasta configurar y verificar Brevo; administración puede reasignar una clave temporal. Reiniciar el servidor después de regenerar Prisma.
 
 Las [pruebas integrales con PostgreSQL real y navegadores](docs/PRUEBAS_INTEGRALES.md) se ejecutan con `npm run test:postgres`, sobre una base separada y con dos servidores de producción. Incluyen Chromium y WebKit con perfiles de computador, Android e iPad; la aceptación de cámaras y equipos físicos se registra por separado. No envían correos reales.

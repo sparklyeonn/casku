@@ -16,10 +16,11 @@
     "test:families": "node tests/families-http.mjs",
     "prebuild": "prisma generate",
     "test:production": "node tests/production-http.mjs",
-    "check": "npm run lint && npm test && npm run test:mail && npm run test:events && npm run test:security && npm run test:http && npm run test:families && npm run test:production && tsc --noEmit",
+    "check": "npm run lint && npm test && npm run test:mail && npm run test:brevo && npm run test:events && npm run test:security && npm run test:http && npm run test:families && npm run test:production && tsc --noEmit",
     "test:mail": "node --experimental-strip-types tests/mail-queue.mjs",
     "test:postgres": "node tests/postgres-real.mjs",
-    "test:devices": "node tests/production-http.mjs --devices"
+    "test:devices": "node tests/production-http.mjs --devices",
+    "test:brevo": "node --experimental-strip-types tests/brevo-delivery.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
@@ -34,8 +35,7 @@
     "pg": "^8.23.1",
     "qrcode": "1.5.4",
     "react": "19.3.0",
-    "react-dom": "19.3.0",
-    "resend": "^6.34.1"
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.4.3",

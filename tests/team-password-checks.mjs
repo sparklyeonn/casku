@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import {randomBytes,randomUUID,createHmac} from "node:crypto"
-export async function teamPasswordChecks({db,client,signIn,admin,anonymous,f1,post,mails,secret,production,setFailure}) {
+export async function teamPasswordChecks({db,client,signIn,admin,anonymous,f1,post,mails,secret,setFailure}) {
  const own="/api/equipo/clave",requestPath="/api/equipo/recuperacion/solicitar",consume="/api/equipo/recuperacion/confirmar",accountsPath="/api/administracion/cuentas"
  const hash=value=>createHmac("sha256",secret).update(value).digest("hex")
  const session=async request=>(await (await request("/api/auth/session")).json())?.user
@@ -46,15 +46,8 @@ export async function teamPasswordChecks({db,client,signIn,admin,anonymous,f1,po
  const known=await json(anonymous,requestPath,post({email:reception.account.email}),202),unknown=await json(anonymous,requestPath,post({email:"sin-cuenta-equipo@example.com"}),202),familyOnly=await json(anonymous,requestPath,post({email:f1.user.email}),202)
  assert.deepEqual(known,unknown);assert.deepEqual(known,familyOnly)
  assert(!JSON.stringify(known).match(/token|cuentaId|desafio|navegador|passwordHash/))
- if(production){assert.equal(recoveryMails().length,countBefore);assert.equal((await db.query('SELECT count(*)::int n FROM "RecuperacionClave"')).rows[0].n,0,"Producción no genera enlaces ni correos sin Brevo")}
- else assert.equal(recoveryMails().length,countBefore+1)
+ assert.equal(recoveryMails().length,countBefore+1)
  async function issue(account) {
-  if(production) {
-   const token=randomBytes(32).toString("base64url"),row=await current(account.id)
-   await db.query(`UPDATE "RecuperacionClave" SET estado='ANULADA' WHERE "cuentaId"=$1 AND estado IN ('ACTIVA','PENDIENTE')`,[row.id])
-   await db.query(`INSERT INTO "RecuperacionClave" (id,"cuentaId","tokenHash","versionCuenta",estado,"expiraAt") VALUES ($1,$2,$3,$4,'ACTIVA',CURRENT_TIMESTAMP+interval '30 minutes')`,[randomUUID(),row.id,hash(`team-recovery:${token}`),row.version])
-   return token
-  }
   await json(anonymous,requestPath,post({email:account.email}),202)
   const mail=recoveryMails().filter(row=>[].concat(row.to).includes(account.email)).at(-1)
   assert(mail)
@@ -66,7 +59,7 @@ export async function teamPasswordChecks({db,client,signIn,admin,anonymous,f1,po
  // Un fallo de envío no sustituye un enlace válido ni cambia credenciales/sesiones.
  await expireRequestLimit(reception.account)
  const token1=await issue(reception.account)
- if(!production) {
+ {
   setFailure(true);await json(anonymous,requestPath,post({email:reception.account.email}),202);setFailure(false)
   assert.equal((await db.query('SELECT estado FROM "RecuperacionClave" WHERE "tokenHash"=$1',[hash(`team-recovery:${token1}`)])).rows[0].estado,"ACTIVA")
  }

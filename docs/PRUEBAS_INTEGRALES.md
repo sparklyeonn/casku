@@ -26,7 +26,7 @@ Se comprueban cuatro backends PostgreSQL independientes; no se utiliza el multip
 
 Al terminar, incluso si una aserción falla, se cierran servidores y conexiones y se elimina exclusivamente la base creada en esa ejecución, tras verificar su marca. Si la limpieza falla, el comando termina con error y muestra el nombre de la base temporal para revisión. Un cierre forzado del equipo o del proceso puede requerir esa limpieza manual; nunca borrar otra base por similitud de nombre.
 
-Todos los nombres, cuentas, bebés, autorizaciones y resultados son ficticios. Los procesos compilados usan el transporte de correo local interceptado expresamente mediante `production-mail-preload.mjs`, una clave ficticia y `CASKU_MAIL_AUTOMATION=0`. No se integra ni activa Brevo; la recuperación real de claves y el seguimiento siguen pendientes.
+Todos los nombres, cuentas, bebés, autorizaciones y resultados son ficticios. Los procesos compilados usan el transporte de correo local interceptado expresamente mediante `production-mail-preload.mjs`, una clave ficticia y `CASKU_MAIL_AUTOMATION=0`. El recorrido transaccional usa el contrato de Brevo con un proveedor ficticio; los envíos reales y el seguimiento clínico siguen pendientes.
 
 ## Escenarios cubiertos
 

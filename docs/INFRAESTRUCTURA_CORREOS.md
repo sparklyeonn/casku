@@ -2,11 +2,11 @@
 
 ## Alcance de esta etapa
 
-La infraestructura queda desactivada. Brevo, la verificación de `contacto@casku.cl`, el subdominio y el despliegue se realizarán después del punto 7, por indicación de la responsable. No se han configurado credenciales de Brevo, un webhook público ni un servicio de ejecución periódica externo.
+La infraestructura clínica queda desactivada. El [adaptador transaccional de Brevo](BREVO_TRANSACCIONAL.md) está preparado para acceso, confirmaciones y recuperación, sin activar envíos reales. No se han configurado credenciales de Brevo, un webhook público ni un servicio de ejecución periódica externo. La verificación de `contacto@casku.cl`, el subdominio y el despliegue siguen pendientes.
 
 Cada nueva publicación crea, en la misma transacción, tres órdenes: INICIAL, SEMANA y MES. Se crean **bloqueadas**, sin fecha, destinatario ni mensaje operativo. Una migración no genera campañas históricas ni presupone consentimiento o clasificación clínica. Las publicaciones anteriores no se incorporan de oficio.
 
-El correo inicial y sus reintentos manuales existentes conservan su funcionamiento con el transporte anterior mientras la automatización está desactivada. Cuando ese flujo confirma aceptación, la nueva orden inicial se marca como aceptada para evitar contarlo como pendiente. Los recordatorios no se envían. No se ha sustituido Resend por Brevo en esta etapa.
+El transporte anterior fue retirado. El adaptador de Brevo bloquea los resultados clínicos reales, incluso si se habilitan los correos transaccionales; los recordatorios tampoco se envían. Las pruebas conservan el recorrido clínico con un proveedor ficticio. Cuando un flujo confirma aceptación, la orden inicial se reconcilia para evitar contarla como pendiente. La publicación y consulta familiar siguen disponibles, según sus permisos.
 
 ## Aprobación clínica y calendario
 
@@ -32,7 +32,7 @@ Se mantienen destinatario, mensaje congelado y clave de idempotencia. El inicial
 
 Solo un rechazo **conocido como temporal y no aceptado** permite reintento automático: uno, dos, cuatro y ocho minutos, hasta el límite. Los fallos permanentes se detienen. Un error desconocido, una respuesta incierta o una interrupción sin garantía vigente de idempotencia quedan en REVISION; no se reenvían a ciegas. La recuperación tras caída reutiliza la misma clave solo dentro de la garantía declarada por el adaptador. No se promete entrega exactamente una vez.
 
-El adaptador de compatibilidad actual no declara una garantía de recuperación de respuestas inciertas; esos casos requieren revisión. El adaptador definitivo de Brevo deberá clasificar errores y acreditar su comportamiento de idempotencia antes de activarse. No basta con cambiar el nombre del proveedor.
+El adaptador de Brevo clasifica rechazos temporales, permanentes y respuestas inciertas. El registro transaccional evita repetir solicitudes aceptadas y envía a revisión las respuestas perdidas o interrupciones tras una posible aceptación. La integración clínica permanece bloqueada y no declara una ventana de recuperación automática de respuestas inciertas; requiere aprobación y pruebas específicas antes de activarse.
 
 ## Notificaciones y supresión
 

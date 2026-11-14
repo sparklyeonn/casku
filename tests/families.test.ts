@@ -31,6 +31,6 @@ test("familias: los códigos se comparan con HMAC y secreto, sin almacenar el c�
 })
 test("familias: escapa HTML y no simula correo enviado cuando falta remitente", () => {
   assert.equal(escapeHtml('<b>"hola" & adiós</b>'), "&lt;b&gt;&quot;hola&quot; &amp; adiós&lt;/b&gt;")
-  const previous = process.env.RESEND_FROM; delete process.env.RESEND_FROM
-  try { assert.throws(mailConfig, MailUnavailable) } finally { if (previous !== undefined) process.env.RESEND_FROM = previous }
+  const previous = process.env.BREVO_SENDER_EMAIL; delete process.env.BREVO_SENDER_EMAIL
+  try { assert.throws(mailConfig, MailUnavailable) } finally { if (previous !== undefined) process.env.BREVO_SENDER_EMAIL = previous }
 })

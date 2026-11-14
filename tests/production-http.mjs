@@ -11,8 +11,12 @@ const env = {
   AUTH_SECRET: randomBytes(32).toString("base64url"),
   AUTH_URL: "http://localhost:3120",
   NEXTAUTH_URL: "http://localhost:3120",
-  RESEND_API_KEY: "re_local_test_only",
-  RESEND_FROM: "Casku <test@example.com>",
+  BREVO_API_KEY: "brevo_local_test_only",
+  BREVO_SENDER_EMAIL: "test@example.com",
+  BREVO_SENDER_NAME: "Casku",
+  BREVO_SENDER_VERIFIED: "1",
+  CASKU_MAIL_ENABLED: "1",
+  CASKU_MAIL_DELIVERY_SECRET: randomBytes(32).toString("base64url"),
   CASKU_TEAM_ACCOUNTS: "[]",
 }
 async function run(args) {

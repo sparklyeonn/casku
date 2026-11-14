@@ -17,7 +17,7 @@ export async function requestFamilyCode(emailValue: unknown, clientAddress: stri
     await tx.codigoAccesoFamilia.upsert({ where: { correo }, create: { correo, ...values }, update: values })
   })
   try {
-    await sendMail({ to: correo, subject: "Tu código de acceso a Casku", text: `Tu código de acceso a Casku es ${code}. Vence en 10 minutos y se utiliza una sola vez. Si no lo solicitaste, ignora este correo.`, html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px"><h1>Ingresa a Casku</h1><p>Tu código de acceso es:</p><p style="font-size:32px;letter-spacing:6px">${escapeHtml(code)}</p><p>Vence en 10 minutos y se utiliza una sola vez. Si no lo solicitaste, ignora este mensaje.</p></div>` }, `access-${desafioId}`)
+    await sendMail({ to: correo, subject: "Tu código de acceso a Casku", text: `Tu código de acceso a Casku es ${code}. Vence en 10 minutos y se utiliza una sola vez. Si no lo solicitaste, ignora este correo.`, html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:24px"><h1>Ingresa a Casku</h1><p>Tu código de acceso es:</p><p style="font-size:32px;letter-spacing:6px">${escapeHtml(code)}</p><p>Vence en 10 minutos y se utiliza una sola vez. Si no lo solicitaste, ignora este mensaje.</p></div>` }, `access-${desafioId}`, "ACCESO")
   } catch (error) {
     await prisma.codigoAccesoFamilia.updateMany({ where: { correo, desafioId }, data: { consumidoAt: new Date() } })
     throw error

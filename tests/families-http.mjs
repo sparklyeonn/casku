@@ -59,13 +59,23 @@ function recordLog(value) {
 }
 const mailServer = createServer(async (request, response) => {
   const chunks = []; for await (const chunk of request) chunks.push(chunk)
-  const body = JSON.parse(Buffer.concat(chunks).toString())
+  const raw = JSON.parse(Buffer.concat(chunks).toString())
+  assert.equal(request.url,"/v3/smtp/email")
+  assert.equal(request.headers["api-key"],"brevo_local_test_only")
+  assert.deepEqual(raw.sender,{email:"test@example.com",name:"Casku"})
+  assert.equal(raw.to.length,1);assert.equal(typeof raw.to[0].email,"string")
+  assert.equal(raw.to[0].contactPixelTrackingConsent,false)
+  assert.equal(typeof raw.htmlContent,"string");assert.equal(typeof raw.textContent,"string")
+  assert(/^[a-f0-9-]{14}5[a-f0-9-]{21}$/i.test(raw.headers.idempotencyKey))
+  assert(Object.keys(raw).every(key=>["sender","to","subject","htmlContent","textContent","headers","attachment"].includes(key)))
+  assert((raw.attachment||[]).every(file=>Object.keys(file).sort().join(",")==="content,name"))
+  const body={to:raw.to.map(value=>value.email),subject:raw.subject,html:raw.htmlContent,text:raw.textContent,attachments:(raw.attachment||[]).map(file=>({filename:file.name,content:file.content}))}
   response.setHeader("Content-Type", "application/json")
-  if (failAll || (failResults && body.subject === "Tu resultado de craneometría en Casku") || (failConfirmation && body.subject?.startsWith("Inscripción"))) { response.writeHead(503); response.end(JSON.stringify({ name: "test_failure", message: "Temporary failure" })); return }
-  const key = request.headers["idempotency-key"]
-  if (deduped.has(key)) { if (JSON.stringify(body) !== JSON.stringify(sentPayloads.get(key))) { response.writeHead(409); response.end(JSON.stringify({ name: "validation_error", message: "Idempotency payload changed" })); return }; response.end(JSON.stringify({ id: deduped.get(key) })); return }
-  const id = randomUUID(); deduped.set(key, id); sentPayloads.set(key, body); mails.push({ ...body, providerId: id, key })
-  response.end(JSON.stringify({ id }))
+  if (failAll || (failResults && body.subject === "Tu resultado de craneometría en Casku") || (failConfirmation && body.subject?.startsWith("Inscripción"))) { response.setHeader("Retry-After","0"); response.writeHead(429); response.end(JSON.stringify({ code: "too_many_requests", message: "Fallo ficticio recuperable" })); return }
+  const key = raw.headers.idempotencyKey
+  if (deduped.has(key)) { if (JSON.stringify(raw) !== JSON.stringify(sentPayloads.get(key))) { response.writeHead(409); response.end(JSON.stringify({ code: "invalid_parameter", message: "Idempotency payload changed" })); return }; response.end(JSON.stringify({ code: "duplicate_parameter", message: "Clave ya aceptada" })); return }
+  const id = `<${randomUUID()}@brevo.test>`; deduped.set(key, id); sentPayloads.set(key, raw); mails.push({ ...body, providerId: id, key })
+  response.writeHead(201); response.end(JSON.stringify({ messageId: id }))
 })
 function client(target = base) {
   const cookies = new Map()
@@ -136,7 +146,7 @@ try {
   const adminAccount = { id: "family-test-admin", email: "admin@example.com", name: "Admin ficticio", role: "ADMIN", active: true, passwordHash: await hashPassword(password) }
   const receptionAccounts = await Promise.all(["RECEPCION", "RECEPCION", "KINESIOLOGO", "KINESIOLOGO"].map(async (role, i) => ({ id: `reception-test-${i}`, email: `reception-${i}@example.com`, name: `Equipo ficticio ${i}`, role, active: true, passwordHash: await hashPassword(password) })))
   const extraAccounts = browserTests ? await Promise.all(Array.from({length: 12}, async (_,i) => ({id:`real-pg-team-${i}`,email:`real-pg-${i}@example.com`,name:`Equipo de prueba ${i}`,role:i%2===0?"RECEPCION":"KINESIOLOGO",active:true,passwordHash:await hashPassword(password)}))) : []
-  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", String(basePort)], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_MAIL_AUTOMATION: "0", CASKU_TEAM_RECOVERY_TEST_MAIL: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts, ...extraAccounts]), AUTH_SECRET: authSecret, AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", RESEND_API_KEY: "re_local_test_only", RESEND_FROM: "Casku <test@example.com>", CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: databaseUrl }, stdio: ["ignore", "pipe", "pipe"] })
+  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", String(basePort)], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_MAIL_AUTOMATION: "0",  CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts, ...extraAccounts]), AUTH_SECRET: authSecret, AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", BREVO_API_KEY: "brevo_local_test_only", BREVO_SENDER_EMAIL: "test@example.com", BREVO_SENDER_NAME: "Casku", BREVO_SENDER_VERIFIED: "1", CASKU_MAIL_ENABLED: "1", CASKU_MAIL_DELIVERY_SECRET: authSecret, CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: databaseUrl }, stdio: ["ignore", "pipe", "pipe"] })
   child.stdout.on("data", recordLog); child.stderr.on("data", recordLog); child.on("exit", () => { exited = true })
   let ready = false
   for (const started = Date.now(); Date.now() - started < 180000;) {
@@ -146,7 +156,7 @@ try {
   }
   assert(ready)
   if (realPostgres) {
-    secondary = spawn(process.execPath, ["--import",new URL("./production-mail-preload.mjs",import.meta.url).href,"node_modules/next/dist/bin/next","start","--port",String(basePort+1)], {cwd:process.cwd(),env:{...process.env,NODE_ENV:"production",CASKU_PRODUCTION_TEST:"1",CASKU_TEST_MODE:"0",CASKU_MAIL_AUTOMATION:"0",CASKU_TEAM_ACCOUNTS:JSON.stringify([adminAccount,...receptionAccounts,...extraAccounts]),AUTH_SECRET:authSecret,AUTH_URL:base,NEXTAUTH_URL:base,AUTH_TRUST_HOST:"true",RESEND_API_KEY:"re_local_test_only",RESEND_FROM:"Casku <test@example.com>",CASKU_TEST_MAIL_URL:`http://127.0.0.1:${mailServer.address().port}`,DATABASE_URL:databaseUrl},stdio:["ignore","pipe","pipe"]})
+    secondary = spawn(process.execPath, ["--import",new URL("./production-mail-preload.mjs",import.meta.url).href,"node_modules/next/dist/bin/next","start","--port",String(basePort+1)], {cwd:process.cwd(),env:{...process.env,NODE_ENV:"production",CASKU_PRODUCTION_TEST:"1",CASKU_TEST_MODE:"0",CASKU_MAIL_AUTOMATION:"0",CASKU_TEAM_ACCOUNTS:JSON.stringify([adminAccount,...receptionAccounts,...extraAccounts]),AUTH_SECRET:authSecret,AUTH_URL:base,NEXTAUTH_URL:base,AUTH_TRUST_HOST:"true",BREVO_API_KEY:"brevo_local_test_only",BREVO_SENDER_EMAIL:"test@example.com",BREVO_SENDER_NAME:"Casku",BREVO_SENDER_VERIFIED:"1",CASKU_MAIL_ENABLED:"1",CASKU_MAIL_DELIVERY_SECRET:authSecret,CASKU_TEST_MAIL_URL:`http://127.0.0.1:${mailServer.address().port}`,DATABASE_URL:databaseUrl},stdio:["ignore","pipe","pipe"]})
     secondary.stdout.on("data",recordLog);secondary.stderr.on("data",recordLog);secondary.on("exit",()=>{secondaryExited=true})
     let secondaryReady=false
     for(const started=Date.now();Date.now()-started<60000;){
@@ -213,7 +223,7 @@ try {
   assert(!JSON.stringify(first).includes("qrToken"))
   const confirmation = mails.filter(m => m.subject.startsWith("Inscripción")).at(-1)
   assert([].concat(confirmation.to).includes("family1@example.com")); assert(![].concat(confirmation.to).includes("intruso@example.com"))
-  assert.equal(confirmation.attachments[0].content_id, "inscripcion-qr")
+  assert.equal(confirmation.attachments[0].filename, "casku-001.png"); assert(!confirmation.html.includes("cid:"))
   const png = Buffer.from(confirmation.attachments[0].content, "base64")
   assert.equal(png.subarray(0, 8).toString("hex"), "89504e470d0a1a0a")
   const qr = await f1.request(`/api/familias/inscripciones/${first.id}/qr`)

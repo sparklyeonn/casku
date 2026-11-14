@@ -553,6 +553,9 @@ model NotificacionCorreo {
   proveedor String
   eventoId String
   mensajeId String
+  destinatarioClave String?
+  envioClave String?
+  aplicadaEnvioAt DateTime? @db.Timestamptz(3)
   tipo String
   ocurridoAt DateTime
   ordenId String? @db.Uuid
@@ -623,8 +626,11 @@ model EnvioTransaccional {
   bloqueoToken String? @db.Uuid
   bloqueoHasta DateTime? @db.Timestamptz(3)
   proveedorId String?
+  destinatarioClave String?
+  entrega String @default("SIN_CONFIRMAR")
   aceptadoAt DateTime? @db.Timestamptz(3)
   createdAt DateTime @db.Timestamptz(3) @default(now())
   updatedAt DateTime @db.Timestamptz(3) @default(now()) @updatedAt
   @@index([estado, disponibleAt])
+  @@index([proveedorId])
 }

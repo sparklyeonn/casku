@@ -1,5 +1,6 @@
 import { randomUUID, createHmac } from "node:crypto"
 import { Prisma, type PrismaClient, type OrdenCorreo } from "@prisma/client"
+import { deliveryRanks, canonicalMessageId, recipientKey } from "../mail/webhook-policy.ts"
 import { PRIVACY_VERSION } from "../privacy/policy.ts"
 import { parseSnapshot } from "../results/snapshot.ts"
 import { calendar, eligible, STAGES, MAX_ATTEMPTS, LEASE_MS, stageMessage, DeliveryFailure, retryDelay, type CalendarPolicy, type Eligibility, type MailTransport, type Message } from "./policy.ts"
@@ -94,6 +95,7 @@ async function processOne(db: Db, transport: MailTransport, options: {policyVers
       state=reason==="TRANSITORIO" && job.intentos<MAX_ATTEMPTS && now.getTime()+retryDelay(job.intentos)<job.limiteAt!.getTime()?"PENDIENTE":reason==="INCIERTO"?"REVISION":"AGOTADO"
     }
     const finalized=await db.$transaction(async tx=>{
+      if(usedProvider==="brevo" && providerId)await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${`brevo:${canonicalMessageId(providerId)}`}))`
       const result=await tx.ordenCorreo.updateMany({where:{id:job.id,bloqueoToken:job.bloqueoToken,estado:"ENVIANDO"},data:{estado:state,motivo:reason,proveedor:usedProvider,proveedorId:providerId,aceptadoAt:state==="ACEPTADO"?now:null,disponibleAt:state==="PENDIENTE"?new Date(now.getTime()+retryDelay(job.intentos)):job.disponibleAt,bloqueoToken:null,bloqueoHasta:null}})
       if(!result.count){
         if(state==="ACEPTADO" && providerId){
@@ -124,12 +126,13 @@ export async function recordDeliveryEvent(db: Db, event: DeliveryEvent, secret: 
     if(order)await applyNotifications(tx,order.id,secret)
   })
 }
-async function applyNotifications(tx:Tx,id:string,secret:string) {
+export async function applyNotifications(tx:Tx,id:string,secret:string) {
   await tx.$queryRaw`SELECT id FROM "OrdenCorreo" WHERE id=${id}::uuid FOR UPDATE`
   const order=await tx.ordenCorreo.findUniqueOrThrow({where:{id}})
   if(!order.proveedor || !order.proveedorId)return
-  const events=await tx.notificacionCorreo.findMany({where:{proveedor:order.proveedor,mensajeId:order.proveedorId,aplicadaAt:null},orderBy:{createdAt:"asc"}})
-  const ranks:Record<string,number>={SIN_CONFIRMAR:0,ENTREGADO:1,REBOTE:2,QUEJA:3}
+  const messageId=order.proveedor==="brevo"?canonicalMessageId(order.proveedorId):order.proveedorId
+  const events=await tx.notificacionCorreo.findMany({where:{proveedor:order.proveedor,mensajeId:{in:order.proveedor==="brevo"?[messageId,`<${messageId}>`]:[messageId]},...(order.proveedor==="brevo"?{destinatarioClave:order.destinatario?recipientKey(order.destinatario,secret):""}:{}),aplicadaAt:null},orderBy:{createdAt:"asc"}})
+  const ranks=deliveryRanks
   let delivery=order.entrega
   for(const event of events) {
     if(ranks[event.tipo]>ranks[delivery])delivery=event.tipo
@@ -138,13 +141,13 @@ async function applyNotifications(tx:Tx,id:string,secret:string) {
   await tx.ordenCorreo.update({where:{id},data:{entrega:delivery}})
   if(order.destinatario && ["REBOTE","QUEJA"].includes(delivery)) {
     const key=suppressionKey(order.destinatario,secret)
-    await tx.supresionCorreo.upsert({where:{clave:key},create:{clave:key,motivo:delivery},update:{motivo:delivery}})
+    await tx.$executeRaw`INSERT INTO "SupresionCorreo" (clave,motivo) VALUES (${key},${delivery}) ON CONFLICT (clave) DO UPDATE SET motivo=CASE WHEN "SupresionCorreo".motivo='QUEJA' THEN 'QUEJA' ELSE EXCLUDED.motivo END`
     await tx.ordenCorreo.updateMany({where:{destinatario:order.destinatario,estado:"PENDIENTE"},data:{estado:"CANCELADO",motivo:"DESTINATARIO_SUPRIMIDO"}})
   }
 }
 
 export async function reconcileDeliveryEvents(db: Db, secret: string) {
-  const matches=await db.$queryRaw<Array<{id:string}>>`SELECT DISTINCT o.id FROM "OrdenCorreo" o JOIN "NotificacionCorreo" n ON n.proveedor=o.proveedor AND n."mensajeId"=o."proveedorId" WHERE n."aplicadaAt" IS NULL ORDER BY o.id LIMIT 100`
+  const matches=await db.$queryRaw<Array<{id:string}>>`SELECT DISTINCT o.id FROM "OrdenCorreo" o JOIN "NotificacionCorreo" n ON n.proveedor=o.proveedor AND (n."mensajeId"=o."proveedorId" OR (o.proveedor='brevo' AND n."mensajeId"=trim(both '<>' from o."proveedorId"))) WHERE n."aplicadaAt" IS NULL ORDER BY o.id LIMIT 100`
   for(const order of matches)await db.$transaction(tx=>applyNotifications(tx,order.id,secret))
 }
 export async function processMailBatch(db: Db, transport: MailTransport, options: {policyVersion:string;secret:string;limit?:number;now?:Date}) {

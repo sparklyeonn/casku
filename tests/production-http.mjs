@@ -16,7 +16,7 @@ const env = {
   BREVO_SENDER_NAME: "Casku",
   BREVO_SENDER_VERIFIED: "1",
   CASKU_MAIL_ENABLED: "1",
-  CASKU_MAIL_DELIVERY_SECRET: randomBytes(32).toString("base64url"),
+  CASKU_MAIL_DELIVERY_SECRET: randomBytes(32).toString("base64url"), CASKU_MAIL_SUPPRESSION_SECRET: randomBytes(32).toString("base64url"),
   CASKU_TEAM_ACCOUNTS: "[]",
 }
 async function run(args) {

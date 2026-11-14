@@ -10,8 +10,8 @@ export class MailUnavailable extends Error {
 const emailPattern = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/
 const validEmail = (value: string) => value.length <= 254 && emailPattern.test(value) && !/[\r\n\0]/.test(value)
 export function mailConfig(purpose: MailPurpose = "ACCESO") {
-  const key = process.env.BREVO_API_KEY?.trim(), email = process.env.BREVO_SENDER_EMAIL?.trim().toLowerCase(), name = process.env.BREVO_SENDER_NAME?.trim() || "Casku", secret = process.env.CASKU_MAIL_DELIVERY_SECRET
-  if (process.env.CASKU_MAIL_ENABLED !== "1" || process.env.BREVO_SENDER_VERIFIED !== "1" || !key || /[\r\n\0]/.test(key) || !email || !validEmail(email) || name.length > 70 || /[\r\n\0]/.test(name) || !secret || secret.length < 32) throw new MailUnavailable()
+  const key = process.env.BREVO_API_KEY?.trim(), email = process.env.BREVO_SENDER_EMAIL?.trim().toLowerCase(), name = process.env.BREVO_SENDER_NAME?.trim() || "Casku", secret = process.env.CASKU_MAIL_DELIVERY_SECRET, suppressionSecret = process.env.CASKU_MAIL_SUPPRESSION_SECRET
+  if (process.env.CASKU_MAIL_ENABLED !== "1" || process.env.BREVO_SENDER_VERIFIED !== "1" || !key || /[\r\n\0]/.test(key) || !email || !validEmail(email) || name.length > 70 || /[\r\n\0]/.test(name) || !secret || secret.length < 32 || !suppressionSecret || suppressionSecret.length < 32) throw new MailUnavailable()
   let baseUrl = "https://api.brevo.com"
   const simulated = key === "brevo_local_test_only" && email === "test@example.com" && ((process.env.NODE_ENV === "development" && process.env.CASKU_TEST_MODE === "1") || (process.env.NODE_ENV === "production" && process.env.CASKU_PRODUCTION_TEST === "1"))
   if (process.env.NODE_ENV === "development" && process.env.CASKU_TEST_MODE === "1") {
@@ -24,7 +24,7 @@ export function mailConfig(purpose: MailPurpose = "ACCESO") {
   }
   // La integración clínica real conserva su aprobación y activación pendientes.
   if (purpose === "RESULTADO" && !simulated) throw new MailUnavailable()
-  return { key, sender: { email, name }, secret, baseUrl }
+  return { key, sender: { email, name }, secret, suppressionSecret, baseUrl }
 }
 export type BrevoConfig = ReturnType<typeof mailConfig>
 export function providerKey(key: string) {

@@ -1,3 +1,4 @@
+import { brevoWebhookChecks } from "./brevo-webhook-checks.mjs"
 import { protocolGate } from "./pglite-protocol-gate.mjs"
 import assert from "node:assert/strict"
 import { spawn } from "node:child_process"
@@ -8,6 +9,7 @@ import { PGLiteSocketServer } from "@electric-sql/pglite-socket"
 import { once } from "node:events"
 import { setTimeout as pause } from "node:timers/promises"
 import { hashPassword } from "../src/lib/passwords.mjs"
+const webhookSecret=randomBytes(32).toString("base64url"),suppressionSecret=randomBytes(32).toString("base64url")
 const production = process.argv.includes("--production")
 const base = "http://localhost:3117", password = randomBytes(20).toString("base64url")
 const accounts = await Promise.all(["KINESIOLOGO", "RECEPCION", "ADMIN"].map(async role => ({ id: `smoke-${role}`, email: `${role.toLowerCase()}@example.com`, name: `Prueba ${role}`, role, active: true, passwordHash: await hashPassword(password) })))
@@ -18,7 +20,7 @@ await socket.start()
 const gate = production ? await protocolGate({host:"127.0.0.1",port:Number(socket.getServerConn().split(":").at(-1))}) : null
 const databaseHost = gate ? `127.0.0.1:${gate.port}` : socket.getServerConn()
 const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", "3117"], {
-  cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", CASKU_TEST_MODE: production ? "0" : "1", CASKU_MAIL_AUTOMATION: "0", CASKU_MAIL_WORKER_SECRET: "x".repeat(43), BREVO_API_KEY: "", BREVO_SENDER_EMAIL: "", BREVO_SENDER_VERIFIED: "0", CASKU_MAIL_ENABLED: "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify(accounts), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", DATABASE_URL: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"],
+  cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", CASKU_TEST_MODE: production ? "0" : "1", CASKU_MAIL_AUTOMATION: "0", CASKU_MAIL_WORKER_SECRET: "x".repeat(43), BREVO_API_KEY: "", BREVO_SENDER_EMAIL: "", BREVO_SENDER_VERIFIED: "0", CASKU_MAIL_ENABLED: "0", BREVO_WEBHOOK_ENABLED:"1", BREVO_WEBHOOK_SECRET:webhookSecret, CASKU_MAIL_SUPPRESSION_SECRET:suppressionSecret, NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify(accounts), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", DATABASE_URL: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"],
 })
 let log = "", exited = false, testFailed = false
 child.stdout.on("data", b => { log = (log + b).slice(-10000) }); child.stderr.on("data", b => { log = (log + b).slice(-10000) }); child.on("exit", () => { exited = true })
@@ -63,6 +65,7 @@ try {
   assert.equal((await anonymous("/api/interno/correos/procesar",{method:"POST",headers:{authorization:"Bearer "+"ñ".repeat(43)}})).status,401)
   const disabledWorker=await anonymous("/api/interno/correos/procesar",{method:"POST",headers:{authorization:"Bearer "+"x".repeat(43)}})
   assert.equal(disabledWorker.status,200);assert.equal((await disabledWorker.json()).estado,"DESACTIVADO")
+  await brevoWebhookChecks({request:anonymous,db,secret:webhookSecret,suppressionSecret})
   for (const account of accounts) {
     const request = client()
     const { csrfToken } = await (await request("/api/auth/csrf")).json()

@@ -36,7 +36,7 @@ El adaptador de Brevo clasifica rechazos temporales, permanentes y respuestas in
 
 ## Notificaciones y supresión
 
-`recordDeliveryEvent` recibe eventos normalizados de un futuro adaptador **después de autenticar su webhook**. Es una función interna, no un endpoint público de recepción. La firma/autenticación específica de Brevo, su configuración y las pruebas de entrega real están pendientes de esa integración posterior.
+`recordDeliveryEvent` conserva la interfaz interna para eventos normalizados. El adaptador de Brevo registra sus notificaciones **después de autenticar el webhook** y las aplica al registro transaccional y a las órdenes clínicas conocidas. Es una función interna; el receptor público utiliza su adaptador específico de Brevo. El [receptor de Brevo](WEBHOOKS_BREVO.md) ya autentica mediante Bearer y normaliza los eventos; la configuración en Brevo y las pruebas de notificaciones reales permanecen pendientes.
 
 Se registra proveedor, identificador único del evento, identificador de mensaje, tipo y fecha, sin guardar cuerpo clínico, dirección ni el webhook completo. Repetir un evento es idempotente; repetir su identificador con contenido diferente se rechaza. Los avisos que llegan antes de guardar la aceptación quedan pendientes de correlación y se reconcilian después.
 

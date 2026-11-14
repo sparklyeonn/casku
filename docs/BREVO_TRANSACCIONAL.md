@@ -6,7 +6,7 @@ El adaptador conecta códigos de acceso familiar, confirmaciones de inscripción
 
 **Los envíos reales permanecen desactivados.** No se modificó la configuración privada ni se enviaron mensajes reales. La clave de API y la verificación del remitente `contacto@casku.cl` están pendientes. Una confirmación aceptada por el proveedor no demuestra entrega en el buzón.
 
-Los correos de resultados y seguimiento clínico permanecen bloqueados para proveedores reales, incluso al habilitar los transaccionales. La automatización clínica, sus plantillas, protocolo, webhooks y calendario requieren una etapa separada; `CASKU_MAIL_AUTOMATION=0` debe conservarse.
+Los correos de resultados y seguimiento clínico permanecen bloqueados para proveedores reales, incluso al habilitar los transaccionales. Los [webhooks](WEBHOOKS_BREVO.md) ya están preparados con pruebas simuladas. La automatización clínica, sus plantillas, protocolo y calendario requieren una etapa separada; `CASKU_MAIL_AUTOMATION=0` debe conservarse.
 
 ## Configuración y activación futura
 
@@ -17,6 +17,7 @@ Las variables privadas están documentadas en `.env.example`:
 - `BREVO_SENDER_VERIFIED=0`: cambiar solo tras comprobar la verificación real en Brevo; esta bandera no verifica el remitente por sí misma.
 - `CASKU_MAIL_ENABLED=0`: control explícito de activación, independiente de disponer de credenciales.
 - `CASKU_MAIL_DELIVERY_SECRET`: secreto aleatorio estable de al menos 32 caracteres, distinto de `AUTH_SECRET`. No rotar sin revisar las entregas existentes.
+- `CASKU_MAIL_SUPPRESSION_SECRET`: secreto aleatorio estable de al menos 32 caracteres, obligatorio para consultar bloqueos por rebote definitivo o queja.
 - `AUTH_URL`: URL correcta del portal, HTTPS en producción, utilizada en comprobantes y enlaces.
 
 Antes de habilitar envíos, aplicar las migraciones con `npm run db:deploy` y regenerar Prisma con `npx prisma generate`. La migración `20261114000100_brevo_transaccional` está preparada y probada en bases temporales; no se aplicó a la base configurada del sistema durante esta integración. Después de configurar los valores reales, reiniciar el servidor. La activación y las pruebas reales quedan para una entrega posterior con destinatarios acordados.

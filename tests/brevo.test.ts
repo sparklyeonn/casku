@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { mailConfig, brevoPayload, providerKey, postBrevo, MailUnavailable } from "../src/lib/mail/brevo.ts"
-const settings={NODE_ENV:"production",CASKU_TEST_MODE:"0",CASKU_PRODUCTION_TEST:"0",CASKU_MAIL_ENABLED:"1",BREVO_SENDER_VERIFIED:"1",BREVO_API_KEY:"clave-ficticia-no-utilizable",BREVO_SENDER_EMAIL:"contacto@example.com",BREVO_SENDER_NAME:"Casku",CASKU_MAIL_DELIVERY_SECRET:"secreto-estable-ficticio-de-32-caracteres",CASKU_TEST_MAIL_URL:"http://127.0.0.1:9999"}
+const settings={NODE_ENV:"production",CASKU_TEST_MODE:"0",CASKU_PRODUCTION_TEST:"0",CASKU_MAIL_ENABLED:"1",BREVO_SENDER_VERIFIED:"1",BREVO_API_KEY:"clave-ficticia-no-utilizable",BREVO_SENDER_EMAIL:"contacto@example.com",BREVO_SENDER_NAME:"Casku",CASKU_MAIL_DELIVERY_SECRET:"secreto-estable-ficticio-de-32-caracteres",CASKU_MAIL_SUPPRESSION_SECRET:"supresion-estable-ficticia-de-32-caracteres",CASKU_TEST_MAIL_URL:"http://127.0.0.1:9999"}
 function environment<T>(values:Record<string,string>,run:()=>T) {
   const saved=Object.fromEntries(Object.keys(values).map(key=>[key,process.env[key]]))
   Object.assign(process.env,values)
@@ -10,7 +10,7 @@ function environment<T>(values:Record<string,string>,run:()=>T) {
 const message={to:"familia@example.com",subject:"Confirmación ficticia",text:"Tu número es 001.",html:"<p>Tu número es 001.</p>"}
 const configured=()=>environment(settings,()=>mailConfig("CONFIRMACION"))
 test("Brevo: exige activación, clave, remitente verificado y secreto; ignora el proveedor anterior",()=>{
-  for(const change of [{CASKU_MAIL_ENABLED:"0"},{BREVO_API_KEY:""},{BREVO_SENDER_VERIFIED:"0"},{BREVO_SENDER_EMAIL:""},{CASKU_MAIL_DELIVERY_SECRET:"corto"},{BREVO_SENDER_EMAIL:"correo\r\n@example.com"}])environment({...settings,...change},()=>assert.throws(()=>mailConfig(),MailUnavailable))
+  for(const change of [{CASKU_MAIL_ENABLED:"0"},{BREVO_API_KEY:""},{BREVO_SENDER_VERIFIED:"0"},{BREVO_SENDER_EMAIL:""},{CASKU_MAIL_DELIVERY_SECRET:"corto"},{CASKU_MAIL_SUPPRESSION_SECRET:""},{BREVO_SENDER_EMAIL:"correo\r\n@example.com"}])environment({...settings,...change},()=>assert.throws(()=>mailConfig(),MailUnavailable))
   environment({...settings,BREVO_API_KEY:"",RESEND_API_KEY:"clave-anterior",RESEND_FROM:"anterior@example.com"},()=>assert.throws(()=>mailConfig(),MailUnavailable))
 })
 test("Brevo: URL oficial fija en producción, simulación solo de desarrollo y clínica real bloqueada",()=>{

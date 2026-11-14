@@ -10,6 +10,8 @@ import { PrismaPg } from "@prisma/adapter-pg"
 import { protocolGate } from "./pglite-protocol-gate.mjs"
 import { realPostgresFixture } from "./real-postgres-fixture.mjs"
 import { deliverOnce } from "../src/lib/mail/delivery-store.ts"
+import { recordBrevoEvents } from "../src/lib/mail/webhook-store.ts"
+import { parseBrevoEvents, recipientKey } from "../src/lib/mail/webhook-policy.ts"
 import { MailUnavailable } from "../src/lib/mail/brevo.ts"
 const real=process.argv.includes("--postgres"), embedded=real?null:new PGlite()
 let raw=embedded,fixturePool,socket,gate,db,second,url,failed=false,behavior="accept",release
@@ -31,6 +33,7 @@ const message={to:"familia@example.com",subject:"Prueba de entrega",text:"Códig
 const send=(key,client=db,changes={})=>deliverOnce(client,{...message,...changes},key,"CONFIRMACION",configuration)
 const rejectKind=kind=>error=>error instanceof MailUnavailable&&error.kind===kind
 let configuration
+const webhook = (id,event="delivered",email=message.to) => parseBrevoEvents({event,id:7,email,"message-id":id,ts_event:1794614400},configuration.suppressionSecret)
 try {
   if(real){const fixture=await realPostgresFixture();raw=fixture.db;fixturePool=fixture.pool;url=fixture.url}else await embedded.waitReady
   const legacyId=randomUUID(),eventId=randomUUID(),parentId=randomUUID(),inscriptionId=randomUUID()
@@ -50,7 +53,7 @@ try {
   if(!real){socket=new PGLiteSocketServer({db:embedded,host:"127.0.0.1",port:0,maxConnections:20});await socket.start();gate=await protocolGate({host:"127.0.0.1",port:Number(socket.getServerConn().split(":").at(-1))});url=`postgresql://postgres:postgres@127.0.0.1:${gate.port}/postgres?sslmode=disable`}
   db=new PrismaClient({adapter:new PrismaPg({connectionString:url})});second=new PrismaClient({adapter:new PrismaPg({connectionString:url})})
   await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve))
-  configuration={key:"brevo_local_test_only",sender:{email:"test@example.com",name:"Casku"},secret:randomBytes(32).toString("base64url"),baseUrl:`http://127.0.0.1:${server.address().port}`}
+  configuration={key:"brevo_local_test_only",sender:{email:"test@example.com",name:"Casku"},secret:randomBytes(32).toString("base64url"),suppressionSecret:randomBytes(32).toString("base64url"),baseUrl:`http://127.0.0.1:${server.address().port}`}
   await assert.rejects(send(`registration-${legacyId}-revision-2`),rejectKind("INCIERTO"));assert.equal(calls.length,0)
   assert.equal((await db.envioTransaccional.findUniqueOrThrow({where:{clave:`registration-${legacyId}-revision-2`}})).motivo,"PROVEEDOR_ANTERIOR")
   console.log("OK migración Brevo: conserva el correo anterior y bloquea reintentos inciertos del proveedor anterior.")
@@ -76,7 +79,46 @@ try {
   await raw.exec('DROP TRIGGER brevo_accept_fail_trigger ON "EnvioTransaccional"; DROP FUNCTION brevo_accept_fail();')
   await db.$executeRaw`UPDATE "EnvioTransaccional" SET "bloqueoHasta"=CURRENT_TIMESTAMP-interval '3 days' WHERE clave='lost-save'`
   await assert.rejects(send("lost-save"),rejectKind("INCIERTO"));assert.equal(calls.length,previous+1)
-  const technical=JSON.stringify(await db.envioTransaccional.findMany())
+  // Guardar una notificación antes de la aceptación y probar ambos clientes a la vez.
+  const earlyId=`ficticio-${calls.length+1}@brevo.test`
+  await recordBrevoEvents(db,webhook(earlyId),configuration.suppressionSecret)
+  assert.equal((await db.notificacionCorreo.findFirstOrThrow({where:{mensajeId:earlyId}})).aplicadaEnvioAt,null)
+  const earlyAccepted=await send("early")
+  assert.equal(earlyAccepted,`<${earlyId}>`)
+  assert.equal((await db.envioTransaccional.findUniqueOrThrow({where:{clave:"early"}})).entrega,"ENTREGADO")
+  const n=await db.notificacionCorreo.count()
+  await Promise.all([recordBrevoEvents(db,webhook(earlyId),configuration.suppressionSecret),recordBrevoEvents(second,webhook(`<${earlyId}>`),configuration.suppressionSecret)])
+  assert.equal(await db.notificacionCorreo.count(),n)
+  await recordBrevoEvents(db,webhook(earlyId,"soft_bounce"),configuration.suppressionSecret)
+  assert.equal((await db.envioTransaccional.findUniqueOrThrow({where:{clave:"early"}})).entrega,"ENTREGADO")
+  assert.equal(await db.supresionCorreo.count(),0)
+  await recordBrevoEvents(db,webhook(earlyId,"spam","otra@example.com"),configuration.suppressionSecret)
+  assert.equal(await db.supresionCorreo.count(),0)
+  await recordBrevoEvents(db,webhook("externo@brevo.test","spam"),configuration.suppressionSecret)
+  assert.equal(await db.supresionCorreo.count(),0)
+  await recordBrevoEvents(db,webhook(earlyId,"hard_bounce"),configuration.suppressionSecret)
+  await recordBrevoEvents(db,[...webhook(earlyId,"spam"),...webhook(earlyId)],configuration.suppressionSecret)
+  assert.equal((await db.envioTransaccional.findUniqueOrThrow({where:{clave:"early"}})).entrega,"QUEJA")
+  assert.equal((await db.envioTransaccional.findUniqueOrThrow({where:{clave:"early"}})).estado,"ACEPTADO")
+  await recordBrevoEvents(db,webhook(accepted,"hard_bounce"),configuration.suppressionSecret)
+  const suppression=await db.supresionCorreo.findUniqueOrThrow({where:{clave:recipientKey(message.to,configuration.suppressionSecret)}})
+  assert.equal(suppression.motivo,"QUEJA")
+  const beforeBlocked=calls.length
+  for(const purpose of ["ACCESO","CONFIRMACION","RECUPERACION"])await assert.rejects(deliverOnce(db,message,`suppressed-${purpose}`,purpose,configuration),rejectKind("PERMANENTE"))
+  assert.equal(calls.length,beforeBlocked)
+  assert.equal(await send("early"),earlyAccepted);assert.equal(calls.length,beforeBlocked)
+  console.log("OK webhooks: evento temprano, deduplicación concurrente, IDs con/sin corchetes, destinatario protegido, rebote temporal sin supresión y queja definitiva sin reenviar.")
+  // La persistencia de eventos y su aplicación es atómica ante fallos.
+  if(real)await raw.exec(`CREATE FUNCTION webhook_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.entrega='QUEJA' THEN RAISE EXCEPTION 'fallo ficticio'; END IF; RETURN NEW; END $$; CREATE TRIGGER webhook_fail_trigger BEFORE UPDATE ON "EnvioTransaccional" FOR EACH ROW EXECUTE FUNCTION webhook_fail();`)
+  const rollbackEvent=parseBrevoEvents({event:"spam",email:message.to,"message-id":earlyId,ts_event:1794614401},configuration.suppressionSecret)
+  const beforeFail=await db.notificacionCorreo.count()
+  const failing=real?db:{$transaction:fn=>db.$transaction(tx=>fn(new Proxy(tx,{get(target,property){if(property==="envioTransaccional")return new Proxy(target.envioTransaccional,{get(model,method){if(method==="update")return async()=>{throw new Error("Fallo de escritura ficticio")};return Reflect.get(model,method)}});return Reflect.get(target,property)}})))}
+  await assert.rejects(recordBrevoEvents(failing,rollbackEvent,configuration.suppressionSecret))
+  assert.equal(await db.notificacionCorreo.count(),beforeFail)
+  if(real)await raw.exec('DROP TRIGGER webhook_fail_trigger ON "EnvioTransaccional"; DROP FUNCTION webhook_fail();')
+  await recordBrevoEvents(db,rollbackEvent,configuration.suppressionSecret)
+  assert.equal(await db.notificacionCorreo.count(),beforeFail+1)
+  const technical=JSON.stringify({mail:await db.envioTransaccional.findMany(),events:await db.notificacionCorreo.findMany(),suppression:await db.supresionCorreo.findMany()})
   for(const value of [message.to,message.text,message.html,configuration.secret])assert(!technical.includes(value))
   assert.equal((await db.envioTransaccional.findUniqueOrThrow({where:{clave:"lost-save"}})).estado,"REVISION")
   console.log("OK recuperación segura: fallo tras aceptación pasa a revisión al vencer la reserva; registro sin cuerpos, códigos, enlaces ni correos.")

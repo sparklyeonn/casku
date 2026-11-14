@@ -7,6 +7,8 @@ import {PrismaClient} from "@prisma/client"
 import {PrismaPg} from "@prisma/adapter-pg"
 import {protocolGate} from "./pglite-protocol-gate.mjs"
 import {draftMailPlan,prepareMailPlan,processMailBatch,recordDeliveryEvent,reconcileDeliveryEvents} from "../src/lib/mail-queue/store.ts"
+import {recordBrevoEvents} from "../src/lib/mail/webhook-store.ts"
+import {parseBrevoEvents} from "../src/lib/mail/webhook-policy.ts"
 import {DeliveryFailure,LEASE_MS} from "../src/lib/mail-queue/policy.ts"
 import {PRIVACY_VERSION} from "../src/lib/privacy/policy.ts"
 const embedded=new PGlite(), socket=new PGLiteSocketServer({db:embedded,host:"127.0.0.1",port:0,maxConnections:20})
@@ -173,5 +175,17 @@ try {
  await reconcileDeliveryEvents(db,secret)
  assert.equal(await db.notificacionCorreo.count({where:{aplicadaAt:null}}),0)
  console.log("OK notificaciones: buzón separado de aceptación, correlación temprana, deduplicación, conflicto rechazado, rebotes/quejas no se borran con entregas tardías y bloquean futuros correos.")
+ const brevo=await fixture();await prepareMailPlan(db,brevo.publication.id,mixed,policy,now)
+ const brevoId=`clinical-${randomUUID()}@brevo.test`,brevoEvent=type=>parseBrevoEvents({event:type,email:brevo.family.correo,"message-id":brevoId,id:99,ts_event:1769871600},secret)
+ await recordBrevoEvents(db,brevoEvent("soft_bounce"),secret)
+ await processMailBatch(db,{name:"brevo",idempotencyWindowMs:0,async send(){return `<${brevoId}>`}},options(now,1))
+ const brevoOrder=(await orders(brevo.publication.id)).find(row=>row.etapa==="INICIAL")
+ assert.equal(brevoOrder.entrega,"REBOTE_TEMPORAL")
+ assert((await orders(brevo.publication.id)).some(row=>row.estado==="PENDIENTE"))
+ await recordBrevoEvents(db,brevoEvent("hard_bounce"),secret)
+ await recordBrevoEvents(db,brevoEvent("delivered"),secret)
+ assert.equal((await db.ordenCorreo.findUniqueOrThrow({where:{id:brevoOrder.id}})).entrega,"REBOTE")
+ assert((await orders(brevo.publication.id)).filter(row=>row.etapa!=="INICIAL").every(row=>row.estado==="CANCELADO"))
+ console.log("OK adaptador clínico simulado: correlación temprana con ID canónico, rebote temporal no suprime, rebote definitivo cancela recordatorios y entrega tardía no lo revierte.")
  console.log("Pruebas de infraestructura completas. Solo base temporal y transporte ficticio; sin Brevo ni envíos reales.")
 } finally {if(db)await db.$disconnect();if(second)await second.$disconnect();if(gate)await gate.close();await socket.stop();await embedded.close()}

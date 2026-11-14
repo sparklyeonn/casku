@@ -1,4 +1,6 @@
 import { createHmac, randomUUID } from "node:crypto"
+import { recipientKey, canonicalMessageId } from "./webhook-policy.ts"
+import { applyTransactionalEvents, lockBrevoMessage } from "./webhook-store.ts"
 import type { PrismaClient } from "@prisma/client"
 import { brevoPayload, postBrevo, MailUnavailable, type BrevoConfig, type MailMessage, type MailPurpose } from "./brevo.ts"
 
@@ -6,14 +8,15 @@ import { brevoPayload, postBrevo, MailUnavailable, type BrevoConfig, type MailMe
 export async function deliverOnce(db: PrismaClient, message: MailMessage, key: string, purpose: MailPurpose, config: BrevoConfig) {
   const payload = brevoPayload(message,config,key)
   const hash = createHmac("sha256",config.secret).update(JSON.stringify({purpose,payload})).digest("hex")
-  const lock = randomUUID()
+  const lock = randomUUID(), recipient = recipientKey(message.to,config.suppressionSecret)
   const decision = await db.$transaction(async tx => {
-    await tx.$executeRaw`INSERT INTO "EnvioTransaccional" (clave,finalidad,"hashMensaje") VALUES (${key},${purpose},${hash}) ON CONFLICT (clave) DO NOTHING`
+    await tx.$executeRaw`INSERT INTO "EnvioTransaccional" (clave,finalidad,"hashMensaje","destinatarioClave") VALUES (${key},${purpose},${hash},${recipient}) ON CONFLICT (clave) DO NOTHING`
     await tx.$queryRaw`SELECT clave FROM "EnvioTransaccional" WHERE clave=${key} FOR UPDATE`
     let row = await tx.envioTransaccional.findUniqueOrThrow({where:{clave:key}})
     if (row.estado === "REVISION" && row.hashMensaje === null) return {error:"INCIERTO" as const}
     if (row.hashMensaje !== hash || row.finalidad !== purpose) return {error:"PERMANENTE" as const}
     if (row.estado === "ACEPTADO" && row.proveedorId) return {id:row.proveedorId}
+    if (await tx.supresionCorreo.findUnique({where:{clave:recipient}})) return {error:"PERMANENTE" as const}
     if (row.estado === "ENVIANDO") {
       const expired = await tx.$queryRaw<Array<{clave:string}>>`SELECT clave FROM "EnvioTransaccional" WHERE clave=${key} AND "bloqueoHasta"<CURRENT_TIMESTAMP::timestamptz(3)`
       if (!expired.length) return {error:"TRANSITORIO" as const}
@@ -40,7 +43,12 @@ export async function deliverOnce(db: PrismaClient, message: MailMessage, key: s
     throw failure
   }
   // Si falla este guardado, el bloqueo vencido pasa a revisión y no repite el POST.
-  const saved = await db.$executeRaw`UPDATE "EnvioTransaccional" SET estado='ACEPTADO',"proveedorId"=${providerId},motivo=NULL,"aceptadoAt"=CURRENT_TIMESTAMP,"bloqueoToken"=NULL,"bloqueoHasta"=NULL,"updatedAt"=CURRENT_TIMESTAMP WHERE clave=${key} AND "bloqueoToken"=${lock}::uuid AND estado='ENVIANDO'`
+  const saved = await db.$transaction(async tx => {
+    await lockBrevoMessage(tx,canonicalMessageId(providerId))
+    const count = await tx.$executeRaw`UPDATE "EnvioTransaccional" SET estado='ACEPTADO',"proveedorId"=${providerId},"destinatarioClave"=${recipient},motivo=NULL,"aceptadoAt"=CURRENT_TIMESTAMP,"bloqueoToken"=NULL,"bloqueoHasta"=NULL,"updatedAt"=CURRENT_TIMESTAMP WHERE clave=${key} AND "bloqueoToken"=${lock}::uuid AND estado='ENVIANDO'`
+    if (count) await applyTransactionalEvents(tx,key)
+    return count
+  })
   if (!saved) throw new MailUnavailable("INCIERTO")
   return providerId
 }

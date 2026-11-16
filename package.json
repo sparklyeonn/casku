@@ -27,7 +27,8 @@
     "test:mail-admin": "node --experimental-strip-types tests/mail-admin.mjs",
     "test:mail-admin:http": "node tests/families-http.mjs --mail-admin-only",
     "test:mail-admin:devices": "node tests/production-http.mjs --mail-admin-only --devices",
-    "dev:familias": "node scripts/demo-familias.mjs"
+    "dev:familias": "node scripts/demo-familias.mjs",
+    "test:families:devices": "node tests/production-http.mjs --family-visual-only"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

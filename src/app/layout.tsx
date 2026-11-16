@@ -1,17 +1,10 @@
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import localFont from "next/font/local"
 import "./globals.css"
 import { Providers } from "./providers"
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-})
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-})
+const montserrat = localFont({ src: "./fonts/Montserrat.ttf", variable: "--font-casku-sans", display: "swap", weight: "100 900" })
+const playfair = localFont({ src: "./fonts/PlayfairDisplay.ttf", variable: "--font-casku-display", display: "swap", weight: "400 900" })
 
 export const metadata: Metadata = {
   title: "Casku Craneometría",
@@ -25,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className={`${montserrat.variable} ${playfair.variable} antialiased`}>
         <Providers>
           {children}
         </Providers>

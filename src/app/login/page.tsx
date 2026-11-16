@@ -3,6 +3,7 @@ import { Suspense, useState } from "react"
 import { signIn, getSession } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
+import { CaskuBrand } from "@/components/CaskuBrand"
 import { isRole, roleHomes } from "@/lib/roles"
 import { familyResultPath } from "@/lib/results/input"
 import { FamilyAccess } from "@/components/FamilyAccess"
@@ -32,8 +33,9 @@ function LoginContent() {
     } catch { setError("No pudimos conectar. Intenta nuevamente.") }
     finally { setLoading(false) }
   }
-  return <main className="mx-auto max-w-md px-5 py-16">
-    <Link href="/" className="text-2xl font-semibold text-teal-700">casku</Link>
+  return <main className="casku-ui casku-login">
+    <div className="login-story"><CaskuBrand /><p className="casku-eyebrow">BIENVENIDOS A CASKU</p><h2>Un espacio para cuidar su cabecita.</h2><p>Inscripciones, comprobantes y resultados. Todo en un mismo lugar, para acompañar a tu familia.</p><Link href="/inscripcion" className="casku-button">Ver próximos eventos <span aria-hidden="true">↗</span></Link></div>
+    <section className="login-panel">
     <div className="mt-8 flex gap-3" aria-label="Tipo de acceso">
       {(["equipo", "familias"] as const).map(value => <button key={value} type="button" aria-pressed={portal === value} className={`rounded-lg px-4 py-2 ${portal === value ? "bg-teal-700 text-white" : "border"}`} onClick={() => { setPortal(value); setError(""); setPassword("") }}>{value === "equipo" ? "Equipo Casku" : "Familias"}</button>)}
     </div>
@@ -46,6 +48,6 @@ function LoginContent() {
       <button disabled={loading} className="w-full rounded-lg bg-teal-700 p-3 font-medium text-white disabled:opacity-50">{loading ? "Ingresando…" : "Ingresar"}</button>
       <Link href="/recuperar-clave" className="block text-center underline">Olvidé mi contraseña</Link>
     </form>}
-  </main>
+  </section></main>
 }
 export default function Login() { return <Suspense fallback={<p className="p-8">Cargando acceso…</p>}><LoginContent /></Suspense> }

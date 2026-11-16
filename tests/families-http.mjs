@@ -1,3 +1,4 @@
+import { browserFamilyChecks } from "./browser-families.mjs"
 import { browserMailAdminChecks } from "./browser-mail-admin.mjs"
 import { mailAdminChecks } from "./mail-admin-checks.mjs"
 import { realPostgresFixture } from "./real-postgres-fixture.mjs"
@@ -169,7 +170,19 @@ try {
     assert(secondaryReady)
   }
   const admin = client(); assert.equal((await signIn(admin, "equipo", { email: adminAccount.email, password })).role, "ADMIN")
-  if(process.argv.includes("--mail-admin-only")) {
+  if(process.argv.includes("--family-visual-only")) {
+    const reception=client(),kine=client()
+    await signIn(reception,"equipo",{email:receptionAccounts[0].email,password})
+    await signIn(kine,"equipo",{email:receptionAccounts[2].email,password})
+    await browserFamilyChecks({base,mails,admin,createEvent,publish:async(receipt)=>{
+      assert.equal((await reception("/api/recepcion/llegadas",post({eventoId:receipt.evento.id,inscripcionId:receipt.id}))).status,201)
+      const called=await kine("/api/kinesiologia/llamar",post({id:randomUUID(),eventoId:receipt.evento.id}));assert.equal(called.status,200)
+      const attention=(await called.json()).atencion
+      const evaluated=await kine("/api/evaluaciones",post({atencionId:attention.id,reservaId:attention.reservaId,ap:140,bp:120,di:135,dd:138}));assert.equal(evaluated.status,201)
+      const {evaluacionId}=await evaluated.json()
+      const published=await kine(`/api/kinesiologia/resultados/${evaluacionId}/publicar`,post({revision:1}));assert.equal(published.status,201)
+    }})
+  } else if(process.argv.includes("--mail-admin-only")) {
     const fixture=await mailAdminChecks({db,client,signIn,password,accounts:receptionAccounts,admin,anonymous:client(),family,post,createEvent,mails,setMailFailure:value=>{failConfirmation=value}})
     if(process.argv.includes("--devices"))await browserMailAdminChecks({db,base,password,fixture})
     console.log("OK gestión de correos HTTP focalizada; datos y proveedor ficticios.")

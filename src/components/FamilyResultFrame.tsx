@@ -1,6 +1,17 @@
-import Link from "next/link"
 import type { ReactNode } from "react"
+import Link from "next/link"
+import { CaskuBrand } from "./CaskuBrand"
+import { FamilyNavigation } from "./FamilyNavigation"
 import { FamilyLogout } from "./FamilyLogout"
 export function FamilyResultFrame({ correo, children }: { correo: string; children: ReactNode }) {
-  return <div className="min-h-screen"><header className="border-b px-5 py-4"><div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-4"><Link href="/familias" className="text-2xl font-semibold text-teal-700 dark:text-teal-300">casku</Link><div className="flex flex-wrap items-center gap-4"><p className="break-all text-sm">{correo}</p><FamilyLogout /></div></div></header><nav aria-label="Espacio familiar" className="mx-auto flex max-w-4xl gap-4 px-5 py-4"><Link href="/familias">Mis inscripciones</Link><Link href="/familias/resultados">Resultados publicados</Link><Link href="/familias/privacidad">Mis autorizaciones</Link></nav>{children}</div>
+  return <div className="casku-ui family-space">
+    <a className="skip-link" href="#contenido-familiar">Saltar al contenido</a>
+    <header className="family-header"><div className="family-header-inner">
+      <div className="family-identity"><CaskuBrand href="/familias" /><span>Mi espacio familiar</span></div>
+      <div className="family-account"><span>{correo}</span><FamilyLogout /></div>
+    </div></header>
+    <FamilyNavigation />
+    <div id="contenido-familiar" tabIndex={-1}>{children}</div>
+    <footer className="family-footer"><p>Casku · Acompañando a tu familia</p><Link href="/privacidad">Privacidad y uso de datos</Link></footer>
+  </div>
 }

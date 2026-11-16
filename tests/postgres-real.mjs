@@ -7,7 +7,7 @@ import { access, readFile } from "node:fs/promises"
 import { chromium, webkit } from "@playwright/test"
 
 config({path:[".env.local",".env"],quiet:true})
-const recoveryOnly=process.argv.includes("--recovery-only"),mailOnly=process.argv.includes("--mail-only")||recoveryOnly
+const mailAdminOnly=process.argv.includes("--mail-admin-only"),recoveryOnly=process.argv.includes("--recovery-only"),mailOnly=process.argv.includes("--mail-only")||recoveryOnly||mailAdminOnly
 const source=process.env.CASKU_TEST_POSTGRES_ADMIN_URL || process.env.DATABASE_URL
 assert(source,"Configura CASKU_TEST_POSTGRES_ADMIN_URL o DATABASE_URL; se creará otra base sin tocar sus tablas")
 const name=`casku_test_${randomBytes(12).toString("hex")}`,marker=randomBytes(24).toString("hex")
@@ -44,7 +44,7 @@ try {
     if(!mailOnly) await run(["node_modules/next/dist/bin/next","build"],{NODE_ENV:"production",CASKU_PRODUCTION_TEST:"1",CASKU_TEST_MODE:"0",DATABASE_URL:"postgresql://postgres:postgres@127.0.0.1:1/not_used",CASKU_TEAM_ACCOUNTS:"[]",AUTH_SECRET:randomBytes(32).toString("base64url"),AUTH_URL:"http://localhost:3120",NEXTAUTH_URL:"http://localhost:3120",BREVO_API_KEY:"brevo_local_test_only",BREVO_SENDER_EMAIL:"test@example.com",BREVO_SENDER_VERIFIED:"1",CASKU_MAIL_ENABLED:"1",CASKU_MAIL_DELIVERY_SECRET:randomBytes(32).toString("base64url"),CASKU_MAIL_SUPPRESSION_SECRET:randomBytes(32).toString("base64url"),CASKU_MAIL_AUTOMATION:"0"})
   }
   if(!mailOnly) assert((await readFile(".next-production-tests/BUILD_ID","utf8")).trim(),"Compila primero; --skip-build solo reutiliza una compilación ya verificada")
-  await run(mailOnly?["--experimental-strip-types",recoveryOnly?"tests/recovery-queue.mjs":"tests/brevo-delivery.mjs","--postgres"]:["tests/families-http.mjs","--production","--postgres",...(process.argv.includes("--queue-only")?["--queue-only"]:[])],{CASKU_REAL_TEST_URL:testUrl.href,CASKU_REAL_TEST_MARKER:marker,CASKU_REAL_TEST_PORT:process.env.CASKU_REAL_TEST_PORT || "3120"})
+  await run(mailOnly?["--experimental-strip-types",mailAdminOnly?"tests/mail-admin.mjs":recoveryOnly?"tests/recovery-queue.mjs":"tests/brevo-delivery.mjs","--postgres"]:["tests/families-http.mjs","--production","--postgres",...(process.argv.includes("--queue-only")?["--queue-only"]:[])],{CASKU_REAL_TEST_URL:testUrl.href,CASKU_REAL_TEST_MARKER:marker,CASKU_REAL_TEST_PORT:process.env.CASKU_REAL_TEST_PORT || "3120"})
 } catch(error) {
   // No imprimir objetos pg completos: pueden contener datos de conexión.
   console.error(`Prueba PostgreSQL: ${error.code || error.name}. ${error instanceof assert.AssertionError?error.message:"No se completó; revisa permisos, conectividad o la salida de pruebas anterior. Instala los navegadores con npx playwright install chromium webkit."}`)

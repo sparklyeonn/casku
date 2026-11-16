@@ -25,7 +25,7 @@ export async function cleanRecoveryQueue(db:PrismaClient) {
   const ids=expired.flatMap(row=>row.recuperacionId?[row.recuperacionId]:[])
   if(ids.length)await tx.recuperacionClave.updateMany({where:{id:{in:ids},estado:"PENDIENTE"},data:{estado:"FALLIDO"}})
  })
- await db.$executeRaw`DELETE FROM "SolicitudRecuperacion" WHERE id IN (SELECT id FROM "SolicitudRecuperacion" WHERE "terminadoAt"<CURRENT_TIMESTAMP-interval '7 days' ORDER BY orden LIMIT 100)`
+ await db.$executeRaw`DELETE FROM "SolicitudRecuperacion" WHERE id IN (SELECT id FROM "SolicitudRecuperacion" WHERE "terminadoAt"<CURRENT_TIMESTAMP-interval '7 days' AND NOT EXISTS(SELECT 1 FROM "GestionCorreo" g WHERE g.tipo='RECUPERACION' AND g."destinoId"="SolicitudRecuperacion".id) ORDER BY orden LIMIT 100 FOR UPDATE SKIP LOCKED)`
  await db.$executeRaw`DELETE FROM "RecuperacionClave" WHERE id IN (SELECT id FROM "RecuperacionClave" WHERE "expiraAt"<CURRENT_TIMESTAMP-interval '7 days' ORDER BY "expiraAt" LIMIT 100)`
 }
 async function processOne(db:PrismaClient,options:RecoveryOptions) {

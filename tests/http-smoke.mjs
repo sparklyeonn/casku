@@ -1,3 +1,4 @@
+import { disabledMailAdminChecks } from "./mail-admin-checks.mjs"
 import { brevoWebhookChecks } from "./brevo-webhook-checks.mjs"
 import { protocolGate } from "./pglite-protocol-gate.mjs"
 import assert from "node:assert/strict"
@@ -92,7 +93,7 @@ try {
     assert.equal(session.user?.role, account.role)
     const mailSummary=await request(`/api/administracion/correos?eventoId=${randomUUID()}`)
     assert.equal(mailSummary.status,account.role==="ADMIN"?200:403)
-    if(account.role==="ADMIN")assert.deepEqual((await mailSummary.json()).estados,[])
+    if(account.role==="ADMIN"){assert.deepEqual((await mailSummary.json()).estados,[]);await disabledMailAdminChecks({db,request,post:body=>({method:"POST",headers:{"Content-Type":"application/json",origin:base},body:JSON.stringify(body)})})}
     const response = await request("/api/evaluaciones", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
     assert.equal(response.status, account.role === "KINESIOLOGO" ? 400 : 403)
     const page = await request(account.role === "KINESIOLOGO" ? "/evaluacion" : account.role === "ADMIN" ? "/administracion" : "/recepcion")

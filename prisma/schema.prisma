@@ -616,6 +616,7 @@ model RecuperacionClave {
 
 // Registro técnico del proveedor. No contiene destinatarios, cuerpos ni enlaces.
 model EnvioTransaccional {
+  idGestion String @unique @default(uuid()) @db.Uuid
   clave String @id
   finalidad String
   hashMensaje String?
@@ -651,4 +652,30 @@ model SolicitudRecuperacion {
  terminadoAt DateTime? @db.Timestamptz(3)
  @@index([estado, orden])
  @@index([destinatarioHash, orden])
+}
+
+model GestionCorreo {
+ id String @id @default(uuid()) @db.Uuid
+ tipo String
+ destinoId String @db.Uuid
+ estado String @default("PENDIENTE")
+ revision Int @default(0)
+ huellaCierre String?
+ @@unique([tipo, destinoId])
+}
+model CambioGestionCorreo {
+ actorNombre String
+ id String @id @db.Uuid
+ tipo String
+ destinoId String @db.Uuid
+ actorId String
+ accion String
+ motivo String
+ revision Int
+ huella String
+ anterior Json
+ nueva Json
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ @@unique([tipo, destinoId, revision])
+ @@index([tipo, destinoId, createdAt])
 }

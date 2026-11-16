@@ -1,3 +1,5 @@
+import { browserMailAdminChecks } from "./browser-mail-admin.mjs"
+import { mailAdminChecks } from "./mail-admin-checks.mjs"
 import { realPostgresFixture } from "./real-postgres-fixture.mjs"
 import { queueConcurrencyChecks } from "./queue-concurrency-checks.mjs"
 import { browserQueueChecks } from "./browser-queue-checks.mjs"
@@ -167,7 +169,11 @@ try {
     assert(secondaryReady)
   }
   const admin = client(); assert.equal((await signIn(admin, "equipo", { email: adminAccount.email, password })).role, "ADMIN")
-  if(process.argv.includes("--passwords-only")) {
+  if(process.argv.includes("--mail-admin-only")) {
+    const fixture=await mailAdminChecks({db,client,signIn,password,accounts:receptionAccounts,admin,anonymous:client(),family,post,createEvent,mails,setMailFailure:value=>{failConfirmation=value}})
+    if(process.argv.includes("--devices"))await browserMailAdminChecks({db,base,password,fixture})
+    console.log("OK gestión de correos HTTP focalizada; datos y proveedor ficticios.")
+  } else if(process.argv.includes("--passwords-only")) {
     const anonymous=client(),f1=await family("password-isolation@example.com")
     await teamPasswordChecks({db,client,signIn,password,admin,anonymous,f1,post,mails,secret:authSecret,production,setFailure:value=>{failAll=value},processRecovery:async()=>{const response=await anonymous("/api/interno/recuperaciones/procesar",{method:"POST",headers:{authorization:`Bearer ${authSecret}`}});assert.equal(response.status,200);const result=await response.json();assert.equal(typeof result.procesadas,"number");return result}})
     console.log("OK recuperación HTTP focalizada: solicitud uniforme, cola privada, entrega posterior y claves de uso único; no reemplaza la batería integral.")
@@ -332,6 +338,8 @@ try {
     await browserQueueChecks({db,base,accounts:extraAccounts.slice(4),password,admin,family,post,createEvent})
     await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[globalLoginKey])
   }
+  await mailAdminChecks({db,client,signIn,password,accounts:receptionAccounts,admin,anonymous,family,post,createEvent,mails,setMailFailure:value=>{failConfirmation=value}})
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[globalLoginKey])
   await teamPasswordChecks({db,client,signIn,password,admin,anonymous,f1,post,mails,secret:authSecret,production,setFailure:value=>{failAll=value},processRecovery:async()=>{const response=await anonymous("/api/interno/recuperaciones/procesar",{method:"POST",headers:{authorization:`Bearer ${authSecret}`}});assert.equal(response.status,200);const result=await response.json();assert.equal(typeof result.procesadas,"number");return result}})
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[globalLoginKey])
   await teamChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent })

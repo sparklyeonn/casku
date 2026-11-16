@@ -44,7 +44,7 @@ ACEPTADO significa que el proveedor confirmó la solicitud; la entrega al buzón
 
 ## Administración y validación
 
-El panel de administración muestra totales del evento para órdenes en preparación, pendientes, aceptadas o que requieren revisión. No expone diagnósticos, medidas, QR, direcciones de correo ni cuerpos. Recepción y kinesiología no acceden a esta API administrativa.
+El panel de administración muestra totales del evento para órdenes en preparación, pendientes, aceptadas o que requieren revisión. La [gestión de correos](GESTION_CORREOS.md) amplía la consulta con filtros, detalle, historial y acciones operativas auditadas, conservando los bloqueos del proveedor. No expone diagnósticos, medidas, QR, direcciones de correo ni cuerpos. Recepción y kinesiología no acceden a esta API administrativa.
 
 `npm run test:mail` utiliza Prisma, dos clientes, una base PGlite temporal y transporte ficticio. Comprueba bloqueo inicial, idempotencia, casos mixtos, normalidad explícita, calendario, permisos, reintentos, límites, interrupciones, cambio de destinatario, inicial ya enviado, tokens obsoletos, eventos tempranos/repetidos/desordenados y supresión. Las pruebas HTTP comprueban protección y desactivación del trabajador; las familiares verifican que la migración conserva los registros anteriores. `npm run check` incluye esta nueva batería.
 

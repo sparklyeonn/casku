@@ -24,6 +24,9 @@ Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas d
 - `npm run test:recovery:http`: recorrido HTTP focalizado de recuperación y claves temporales, con procesador privado y correo ficticio.
 - `npm run test:recovery`: cola privada de recuperación con dos clientes y proveedor retenido, expiración, fallos, versiones y privacidad.
 - `npm run test:brevo`: contrato de entrega, concurrencia, reintentos e interrupciones con base temporal y proveedor simulado.
+- `npm run test:mail-admin`: consulta, seguimiento, historial y acciones de correo con base temporal.
+- `npm run test:mail-admin:http`: recorrido HTTP focalizado de administración de correos con proveedor simulado.
+- `npm run test:mail-admin:devices`: pantalla de correos en perfiles Chromium/WebKit de computador, Android e iPad.
 - `npm run test:mail`: planificación, reintentos, recuperación y eventos de correo con base y transporte ficticios.
 - `npm run test:production`: compila una copia aislada y reutiliza permisos y recorridos familiares sobre el servidor de producción, con base y correo temporales.
 - `npm run check`: ejecuta todas las comprobaciones anteriores en serie y termina verificando los tipos.
@@ -80,3 +83,5 @@ La [recuperación desacoplada](docs/RECUPERACION_DESACOPLADA.md) separa la solic
 La [gestión de contraseñas del equipo](docs/CLAVES_EQUIPO.md) incorpora claves temporales obligatorias, cambio propio con contraseña actual y recuperación por enlaces de un uso. Los correos reales de recuperación permanecen desactivados hasta configurar y verificar Brevo; administración puede reasignar una clave temporal. Reiniciar el servidor después de regenerar Prisma.
 
 Las [pruebas integrales con PostgreSQL real y navegadores](docs/PRUEBAS_INTEGRALES.md) se ejecutan con `npm run test:postgres`, sobre una base separada y con dos servidores de producción. Incluyen Chromium y WebKit con perfiles de computador, Android e iPad; la aceptación de cámaras y equipos físicos se registra por separado. No envían correos reales.
+
+La [gestión administrativa de correos](docs/GESTION_CORREOS.md) permite consultar entregas e incidencias, registrar revisiones y solicitar reintentos de confirmación bajo controles. Conserva los bloqueos de entrega y los envíos reales desactivados.

@@ -2,7 +2,7 @@
 
 import { PaperPrivacy, emptyDeclaration } from "./PrivacyFields"
 import { PRIVACY_VERSION } from "@/lib/privacy/policy"
-import { useRef, useState } from "react"
+import { useId, useRef, useState } from "react"
 import Link from "next/link"
 
 import { calcularDiagnostico } from "@/lib/craneometria"
@@ -21,6 +21,7 @@ const colorVal = {
 
 export type AssignedForm = { id: string; reservaId: string; numero: number; evento: { nombre: string }; bebe: { nombre: string; rut: string; fnac: string }; correo: string }
 export default function FormularioEvaluacion({ profesional, atencion }: { profesional: string; atencion?: AssignedForm }) {
+  const formId = useId()
   const [declaration, setDeclaration] = useState(emptyDeclaration)
   const initial = { nombre: atencion?.bebe.nombre || "", rut: atencion?.bebe.rut || "", fnac: atencion?.bebe.fnac || "", correo: atencion?.correo || "", ap: "", bp: "", di: "", dd: "", kine: "" }
   const [form, setForm] = useState({
@@ -83,50 +84,35 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
   }
 
   return (
-    <div className="max-w-xl mx-auto px-4 py-7">
+    <main className="team-evaluation max-w-3xl mx-auto px-4 py-7">
       {savedId && <section className="mb-5 space-y-3 rounded-xl border border-teal-300 p-4"><p role="status">Borrador guardado. Revisa el resultado antes de publicarlo para la familia.</p><Link href={`/kinesiologia/resultados/${savedId}`} className="inline-block rounded-lg bg-teal-700 px-5 py-3 text-white">Revisar y publicar resultado</Link></section>}
       {atencion && <section className="mb-6 space-y-3 rounded-xl border border-teal-300 p-4"><h1 className="text-xl font-semibold">Craneometría · Inscripción N.º {String(atencion.numero).padStart(3, "0")}</h1><p>{atencion.evento.nombre}</p><p className="text-sm">Datos recuperados de la inscripción. Verifica el nombre del bebé antes de medir.</p>{guardada && <p role="status" className="font-medium text-teal-700 dark:text-teal-300">Evaluación guardada y atención finalizada.</p>}<Link href="/kinesiologia" className="inline-block underline">{guardada ? "Volver y llamar al siguiente bebé" : "Volver a mi atención"}</Link></section>}
       <fieldset disabled={guardando || guardada} className="min-w-0">
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <ellipse cx="8" cy="8" rx="6" ry="4.5" stroke="white" strokeWidth="1.5"/>
-              <line x1="2" y1="8" x2="14" y2="8" stroke="white" strokeWidth="1.3"/>
-              <line x1="8" y1="3.5" x2="8" y2="12.5" stroke="white" strokeWidth="1.3"/>
-            </svg>
-          </div>
-          <span className="font-semibold text-base">Casku</span>
-        </div>
-        <span className="text-xs font-medium text-gray-500 border border-gray-200 dark:border-gray-700 rounded-full px-3 py-1 uppercase tracking-wide">
-          Kinesióloga
-        </span>
-      </div>
+      <div className="team-form-intro"><p className="casku-eyebrow">Registro clínico</p>{!atencion && <h1 className="text-2xl font-semibold">Craneometría sin inscripción</h1>}<p>Revisa los datos del bebé y registra las mediciones en milímetros.</p></div>
 
       {/* Datos paciente */}
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Datos del paciente</p>
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5 mb-4 flex flex-col gap-4">
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500">Nombre completo</label>
-            <input className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" placeholder="Nombre del bebé" readOnly={Boolean(atencion)} value={form.nombre} onChange={e => set("nombre", e.target.value)} />
+            <label htmlFor={`${formId}-nombre`} className="text-xs font-medium text-gray-500">Nombre completo</label>
+            <input className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" id={`${formId}-nombre`} placeholder="Nombre del bebé" readOnly={Boolean(atencion)} value={form.nombre} onChange={e => set("nombre", e.target.value)} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500">RUT del paciente</label>
-            <input className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" placeholder={atencion ? "Sin RUT registrado" : "12.345.678-9"} readOnly={Boolean(atencion)} value={form.rut} onChange={e => set("rut", e.target.value)} />
+            <label htmlFor={`${formId}-rut`} className="text-xs font-medium text-gray-500">RUT del paciente</label>
+            <input className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" id={`${formId}-rut`} placeholder={atencion ? "Sin RUT registrado" : "12.345.678-9"} readOnly={Boolean(atencion)} value={form.rut} onChange={e => set("rut", e.target.value)} />
           </div>
         </div>
         <div className="border-t border-gray-100 dark:border-gray-800" />
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500">Fecha de nacimiento</label>
-            <input type="date" className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" readOnly={Boolean(atencion)} value={form.fnac} onChange={e => set("fnac", e.target.value)} />
+            <label htmlFor={`${formId}-fnac`} className="text-xs font-medium text-gray-500">Fecha de nacimiento</label>
+            <input id={`${formId}-fnac`} type="date" className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" readOnly={Boolean(atencion)} value={form.fnac} onChange={e => set("fnac", e.target.value)} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-gray-500">Correo padre/madre</label>
-            <input type="email" className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" placeholder="correo@ejemplo.com" readOnly={Boolean(atencion)} value={form.correo} onChange={e => set("correo", e.target.value)} />
+            <label htmlFor={`${formId}-correo`} className="text-xs font-medium text-gray-500">Correo padre/madre</label>
+            <input id={`${formId}-correo`} type="email" className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" placeholder="correo@ejemplo.com" readOnly={Boolean(atencion)} value={form.correo} onChange={e => set("correo", e.target.value)} />
           </div>
         </div>
       </div>
@@ -142,9 +128,10 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
             { key: "dd", label: "Diagonal derecha" },
           ].map(({ key, label }) => (
             <div key={key} className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-gray-500">{label}</label>
+              <label htmlFor={`${formId}-medida-${key}`} className="text-xs font-medium text-gray-500">{label} (mm)</label>
               <div className="relative">
                 <input
+                  id={`${formId}-medida-${key}`}
                   type="number"
                   step="0.1"
                   min="0"
@@ -216,12 +203,12 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
       </div>
 
       {/* Botones */}
-      <div className="flex gap-3">
+      <div className="team-evaluation-actions flex flex-wrap gap-3">
         <button onClick={() => setForm(initial)} className="border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 px-4 py-2.5 rounded-lg text-sm font-medium hover:border-gray-400 transition">
           {atencion ? "Limpiar medidas" : "Limpiar"}
         </button>
         {!atencion && <PaperPrivacy value={declaration} onChange={setDeclaration} disabled={guardando} />}
-        <button onClick={guardar} disabled={guardando} className="flex-1 bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2">
+        <button onClick={guardar} disabled={guardando} className="flex-1 bg-teal-700 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition disabled:opacity-60 flex items-center justify-center gap-2">
           {guardando ? "Guardando..." : (
             <>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -242,6 +229,6 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
           {toast}
         </div>
       )}
-    </div>
+    </main>
   )
 }

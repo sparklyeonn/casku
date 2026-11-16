@@ -1,3 +1,4 @@
+import { teamNavigate } from "./team-navigation.mjs"
 import assert from "node:assert/strict"
 import {randomUUID} from "node:crypto"
 import {mkdir} from "node:fs/promises"
@@ -16,7 +17,7 @@ export async function browserMailAdminChecks({db,base,password,fixture}){
    context.on("request",request=>{if(!["localhost","127.0.0.1"].includes(new URL(request.url()).hostname))errors.push("Recurso externo inesperado")})
    const page=await context.newPage();page.setDefaultTimeout(30000);page.on("pageerror",error=>errors.push(error.message))
    await page.goto('/login');await page.getByLabel('Correo',{exact:true}).fill(email);await page.getByLabel('Contraseña',{exact:true}).fill(password);await page.getByRole('button',{name:'Ingresar',exact:true}).click();await expect(page).toHaveURL(/\/administracion$/)
-   await page.getByRole('link',{name:'Correos',exact:true}).click();await expect(page.getByRole('heading',{name:'Gestión de correos',exact:true})).toBeVisible()
+   await teamNavigate(page,'Correos');await expect(page.getByRole('heading',{name:'Gestión de correos',exact:true})).toBeVisible()
    await page.getByRole('combobox',{name:/^Evento/}).selectOption(fixture.eventId)
    await expect(page.getByRole('button',{name:'Ver detalle',exact:true})).toHaveCount(1)
    await page.getByRole('button',{name:'Ver detalle',exact:true}).click()

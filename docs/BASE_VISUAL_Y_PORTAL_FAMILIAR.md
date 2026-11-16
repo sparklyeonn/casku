@@ -10,7 +10,7 @@ La referencia acordada es la web de Casku: turquesa #00899A, acción oscura #004
 - Encabezado, navegación activa y pie comunes a inscripciones, resultados y autorizaciones familiares.
 - Comprobantes con número, QR privado y estado de inscripción; formulario adaptable, vinculación presencial y lista de espera.
 - Conservación de los flujos de autorizaciones, cancelación, publicación/retiro y consulta de resultados. No se modifica el protocolo clínico.
-- Base de tipografía/color disponible para el equipo; el rediseño completo de sus paneles corresponde a otra entrega.
+- Base de tipografía/color compartida con el equipo. La adaptación de recepción, kinesiología y administración se documenta en [VISTAS_EQUIPO_CASKU.md](VISTAS_EQUIPO_CASKU.md).
 
 ## Adaptación y accesibilidad
 

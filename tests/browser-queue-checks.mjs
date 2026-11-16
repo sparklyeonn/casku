@@ -1,3 +1,4 @@
+import { teamNavigate } from "./team-navigation.mjs"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 import { mkdir } from "node:fs/promises"
@@ -14,6 +15,7 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
     {name:"android-chromium",engine:chromium,options:devices["Pixel 7"]},
     {name:"webkit-desktop",engine:webkit,options:{viewport:{width:1440,height:900}}},
     {name:"ipad-webkit",engine:webkit,options:devices["iPad (gen 7)"]},
+    {name:"small-dark-chromium",engine:chromium,options:{viewport:{width:320,height:740},colorScheme:"dark",reducedMotion:"reduce"}},
   ]
   await mkdir("test-results/devices",{recursive:true})
   for(const [index,profile] of profiles.entries()) {
@@ -36,7 +38,7 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
         })
       }
       reception=await receptionContext.newPage();kine=await kineContext.newPage()
-      for(const page of [reception,kine]) {page.setDefaultTimeout(30000);page.setDefaultNavigationTimeout(60000);page.on("pageerror",error=>errors.push(error.message))}
+      for(const page of [reception,kine]) {page.setDefaultTimeout(30000);page.setDefaultNavigationTimeout(60000);page.on("pageerror",error=>errors.push({page:page===reception?"recepcion":"kinesiologia",message:error.message,stack:error.stack}))}
       async function login(page,account,path) {
         await page.goto("/login")
         await page.getByLabel("Correo",{exact:true}).fill(account.email)
@@ -56,7 +58,7 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
       for(const page of [reception,kine]) {
         await page.reload()
         const select=page.getByLabel("Evento de trabajo")
-        await expect(select).toBeEnabled();await select.selectOption(event.id)
+        await expect(select).toBeEnabled();assert((await select.boundingBox()).height>=44,"Selector de evento con área táctil suficiente");await select.selectOption(event.id)
       }
       const lookup=reception.getByLabel("Número de inscripción o contenido del QR")
       await lookup.fill("99999")
@@ -77,6 +79,7 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
       await arrival.click();await expect(reception.getByRole("status")).toContainText("ya estaba confirmada")
       assert.equal((await db.query('SELECT count(*)::int n FROM "EntradaFila" WHERE "inscripcionId"=$1',[row.id])).rows[0].n,1)
       await noOverflow(reception,profile.name+" recepción")
+      await reception.evaluate(()=>window.scrollTo(0,0))
       await reception.screenshot({path:`test-results/devices/${profile.name}-recepcion.png`,fullPage:true})
       await kine.getByRole("button",{name:"Actualizar mi atención",exact:true}).click()
       const call=kine.getByRole("button",{name:"Llamar al siguiente",exact:true})
@@ -96,8 +99,10 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
       await kine.getByRole("button",{name:"Actualizar mi atención",exact:true}).click();await expect(call).toBeEnabled();await call.click()
       await expect(kine.getByRole("link",{name:"Abrir formulario de craneometría",exact:true})).toBeVisible()
       await noOverflow(kine,profile.name+" kinesiología")
+      await kine.evaluate(()=>window.scrollTo(0,0))
       await kine.screenshot({path:`test-results/devices/${profile.name}-kinesiologia.png`,fullPage:true})
       await kine.getByRole("link",{name:"Abrir formulario de craneometría",exact:true}).click()
+      await expect(kine.getByRole("navigation",{name:"Menú de equipo"}).getByRole("link",{name:"Mi atención",exact:true,includeHidden:true})).toHaveAttribute("aria-current","page")
       const name=kine.getByPlaceholder("Nombre del bebé",{exact:true})
       await expect(name).toHaveValue(row.bebe.nombre);await expect(name).toHaveAttribute("readonly","")
       for(const [i,value] of ["140","120","135","138"].entries()) await kine.getByRole("spinbutton").nth(i).fill(value)
@@ -105,9 +110,20 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
       await kine.getByRole("button",{name:"Guardar evaluación",exact:true}).click()
       await expect(kine.getByRole("status").filter({hasText:"Evaluación guardada y atención finalizada"})).toBeVisible()
       assert.equal((await db.query('SELECT count(*)::int n FROM "Evaluacion" e JOIN "EntradaFila" f ON f.id=e."filaId" WHERE f."inscripcionId"=$1',[row.id])).rows[0].n,1)
+      await kine.evaluate(()=>window.scrollTo(0,0))
       await kine.screenshot({path:`test-results/devices/${profile.name}-evaluacion.png`,fullPage:true})
       await kine.getByRole("link",{name:"Volver y llamar al siguiente bebé",exact:true}).click()
       await expect(kine.getByRole("button",{name:"Llamar al siguiente",exact:true})).toBeDisabled()
+      await teamNavigate(kine,"Mis resultados")
+      await expect(kine.getByRole("link",{name:"Revisar resultado",exact:true})).toBeVisible()
+      await kine.getByRole("link",{name:"Revisar resultado",exact:true}).click()
+      await expect(kine.getByRole("heading",{name:"Revisar resultado",exact:true})).toBeVisible()
+      await noOverflow(kine,profile.name+" revisión de resultado")
+      await kine.evaluate(()=>window.scrollTo(0,0))
+      await kine.screenshot({path:`test-results/devices/${profile.name}-resultado.png`,fullPage:true})
+      await teamNavigate(kine,"Evaluación sin inscripción")
+      await expect(kine.getByRole("heading",{name:"Craneometría sin inscripción",exact:true})).toBeVisible()
+      await noOverflow(kine,profile.name+" evaluación sin inscripción")
       assert.deepEqual(errors,[],"No deben producirse excepciones JavaScript")
       console.log(`OK navegador ${profile.name}: acceso, número/QR, cámara denegada, respuesta perdida, recarga, ausencia/regreso y guardado sin duplicados ni desborde.`)
     } catch(error) {

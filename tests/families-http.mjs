@@ -1,3 +1,4 @@
+import { browserTeamAdminChecks } from "./browser-team-admin.mjs"
 import { browserFamilyChecks } from "./browser-families.mjs"
 import { browserMailAdminChecks } from "./browser-mail-admin.mjs"
 import { mailAdminChecks } from "./mail-admin-checks.mjs"
@@ -44,7 +45,7 @@ import { seedBeforeCancellationMigration } from "./cancellations-migration.mjs"
 
 const production = process.argv.includes("--production")
 const realPostgres = process.argv.includes("--postgres")
-const browserTests = realPostgres || process.argv.includes("--devices")
+const browserTests = realPostgres || process.argv.includes("--devices") || process.argv.includes("--team-visual-only")
 assert(!realPostgres || production, "PostgreSQL real se comprueba con --production")
 const embeddedDb = realPostgres ? null : new PGlite()
 const socket = embeddedDb ? new PGLiteSocketServer({ db: embeddedDb, host: "127.0.0.1", port: 0, maxConnections: 20 }) : null
@@ -148,7 +149,7 @@ try {
   await new Promise(resolve => mailServer.listen(0, "127.0.0.1", resolve))
   const adminAccount = { id: "family-test-admin", email: "admin@example.com", name: "Admin ficticio", role: "ADMIN", active: true, passwordHash: await hashPassword(password) }
   const receptionAccounts = await Promise.all(["RECEPCION", "RECEPCION", "KINESIOLOGO", "KINESIOLOGO"].map(async (role, i) => ({ id: `reception-test-${i}`, email: `reception-${i}@example.com`, name: `Equipo ficticio ${i}`, role, active: true, passwordHash: await hashPassword(password) })))
-  const extraAccounts = browserTests ? await Promise.all(Array.from({length: 12}, async (_,i) => ({id:`real-pg-team-${i}`,email:`real-pg-${i}@example.com`,name:`Equipo de prueba ${i}`,role:i%2===0?"RECEPCION":"KINESIOLOGO",active:true,passwordHash:await hashPassword(password)}))) : []
+  const extraAccounts = browserTests ? await Promise.all(Array.from({length: 16}, async (_,i) => ({id:`real-pg-team-${i}`,email:`real-pg-${i}@example.com`,name:`Equipo de prueba ${i}`,role:i%2===0?"RECEPCION":"KINESIOLOGO",active:true,passwordHash:await hashPassword(password)}))) : []
   child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", String(basePort)], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_PASSWORD_RECOVERY_ENABLED:"1", CASKU_PASSWORD_RECOVERY_QUEUE_KEY:authSecret, CASKU_PASSWORD_RECOVERY_WORKER_SECRET:authSecret, CASKU_MAIL_AUTOMATION: "0",  CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts, ...extraAccounts]), AUTH_SECRET: authSecret, AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", BREVO_API_KEY: "brevo_local_test_only", BREVO_SENDER_EMAIL: "test@example.com", BREVO_SENDER_NAME: "Casku", BREVO_SENDER_VERIFIED: "1", CASKU_MAIL_ENABLED: "1", CASKU_MAIL_DELIVERY_SECRET: authSecret, CASKU_MAIL_SUPPRESSION_SECRET: authSecret, CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: databaseUrl }, stdio: ["ignore", "pipe", "pipe"] })
   child.stdout.on("data", recordLog); child.stderr.on("data", recordLog); child.on("exit", () => { exited = true })
   let ready = false
@@ -182,6 +183,9 @@ try {
       const {evaluacionId}=await evaluated.json()
       const published=await kine(`/api/kinesiologia/resultados/${evaluacionId}/publicar`,post({revision:1}));assert.equal(published.status,201)
     }})
+  } else if(process.argv.includes("--team-visual-only")) {
+    await browserQueueChecks({db,base,accounts:extraAccounts.slice(4),password,admin,family,post,createEvent})
+    await browserTeamAdminChecks({db,base,password})
   } else if(process.argv.includes("--mail-admin-only")) {
     const fixture=await mailAdminChecks({db,client,signIn,password,accounts:receptionAccounts,admin,anonymous:client(),family,post,createEvent,mails,setMailFailure:value=>{failConfirmation=value}})
     if(process.argv.includes("--devices"))await browserMailAdminChecks({db,base,password,fixture})

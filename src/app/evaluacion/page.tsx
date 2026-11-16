@@ -11,7 +11,7 @@ async function Evaluation({ searchParams }: { searchParams: Promise<{ atencion?:
   if (query.atencion !== undefined || query.reserva !== undefined) {
     let atencion = null
     try { atencion = await assignedAttention(user.id, parseEventId(query.atencion), parseEventId(query.reserva)) } catch { /* No revelar datos de otra reserva ni errores internos. */ }
-    return <TeamShell user={user}>{atencion ? <FormularioEvaluacion key={`${user.id}:${atencion.id}:${atencion.reservaId}`} profesional={user.name} atencion={atencion} /> : <main className="mx-auto max-w-xl space-y-5 p-8"><h1 className="text-2xl font-semibold">Atención no disponible</h1><p>La atención puede haber finalizado, vuelto a la fila o estar asignada a otra profesional.</p><Link href="/kinesiologia" className="inline-block rounded-lg bg-teal-700 px-5 py-3 text-white">Volver a mi atención</Link></main>}</TeamShell>
+    return <TeamShell user={user} assignedForm>{atencion ? <FormularioEvaluacion key={`${user.id}:${atencion.id}:${atencion.reservaId}`} profesional={user.name} atencion={atencion} /> : <main className="mx-auto max-w-xl space-y-5 p-8"><h1 className="text-2xl font-semibold">Atención no disponible</h1><p>La atención puede haber finalizado, vuelto a la fila o estar asignada a otra profesional.</p><Link href="/kinesiologia" className="inline-block rounded-lg bg-teal-700 px-5 py-3 text-white">Volver a mi atención</Link></main>}</TeamShell>
   }
   return <TeamShell user={user}><FormularioEvaluacion key={user.id} profesional={user.name} /></TeamShell>
 }

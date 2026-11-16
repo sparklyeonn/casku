@@ -85,3 +85,5 @@ La [gestión de contraseñas del equipo](docs/CLAVES_EQUIPO.md) incorpora claves
 Las [pruebas integrales con PostgreSQL real y navegadores](docs/PRUEBAS_INTEGRALES.md) se ejecutan con `npm run test:postgres`, sobre una base separada y con dos servidores de producción. Incluyen Chromium y WebKit con perfiles de computador, Android e iPad; la aceptación de cámaras y equipos físicos se registra por separado. No envían correos reales.
 
 La [gestión administrativa de correos](docs/GESTION_CORREOS.md) permite consultar entregas e incidencias, registrar revisiones y solicitar reintentos de confirmación bajo controles. Conserva los bloqueos de entrega y los envíos reales desactivados.
+
+Para probar el acceso de apoderado sin Brevo, usar `npm run dev:familias`: correo ficticio `apoderado@example.com`, buzón simulado y base temporal aislada. Ver [DEMO_FAMILIAS.md](docs/DEMO_FAMILIAS.md).

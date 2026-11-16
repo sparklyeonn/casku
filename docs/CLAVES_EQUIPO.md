@@ -30,7 +30,7 @@ Los cambios administrativos, desactivaciones, versiones de cuenta nuevas y cambi
 
 El transporte está separado en `src/lib/team-passwords/delivery.ts` y utiliza el adaptador compartido de Brevo. Ver [BREVO_TRANSACCIONAL.md](BREVO_TRANSACCIONAL.md). La simulación integrada se limita a desarrollo, dirección de loopback y clave ficticia. Las pruebas del servidor compilado interceptan explícitamente el proveedor con un archivo exclusivo de pruebas y ejercitan la solicitud y el enlace recibidos; no insertan tokens para sustituir este recorrido ni habilitan un acceso alternativo en producción.
 
-La solicitud actual espera al transporte; antes de habilitar envíos reales debe evaluarse el procesamiento desacoplado para evitar diferencias de tiempo que permitan inferir cuentas. La respuesta pública es genérica, pero no se declara un tiempo de respuesta constante. Las pruebas de esta etapa usan únicamente el proveedor simulado; la validación de entrega real sigue pendiente.
+La [recuperación desacoplada](RECUPERACION_DESACOPLADA.md) ya guarda una solicitud uniforme sin consultar cuentas ni esperar al proveedor. Un procesador privado revisa la cuenta y envía después. La respuesta pública no depende de la búsqueda de cuenta ni de la latencia de Brevo; no se promete tiempo constante de red/base. La activación real requiere configurar y comprobar la ejecución periódica del procesador.
 
 ## Límites y sesiones
 
@@ -38,7 +38,7 @@ Los límites viven en PostgreSQL y se comparten entre procesos. Se aplican 60 op
 
 Las reservas se confirman antes de comprobar las credenciales: una operación fallida o revertida no borra el intento. Al cambiar correctamente una contraseña se aumenta la versión de cuenta, se revocan todas sus sesiones y se invalidan otros enlaces. También se limpia el bloqueo de acceso de esa cuenta para permitir ingresar con su nueva clave; el límite global permanece.
 
-Las filas caducadas de límites se limpian en lotes acotados. Los tokens con más de siete días desde su vencimiento se eliminan en lotes durante solicitudes de prueba con transporte disponible. El despliegue posterior debe confirmar su ejecución periódica y retención; el historial de cambios de credencial se conserva separado de esos tokens.
+Las filas caducadas de límites se limpian en lotes acotados. Los tokens con más de siete días desde su vencimiento se eliminan en lotes durante las ejecuciones habilitadas del procesador privado, incluso si el transporte de correo está temporalmente sin configurar. El despliegue posterior debe confirmar su ejecución periódica y retención; el historial de cambios de credencial se conserva separado de esos tokens.
 
 ## Auditoría, migración y pruebas
 

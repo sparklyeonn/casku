@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import {randomBytes,randomUUID,createHmac} from "node:crypto"
-export async function teamPasswordChecks({db,client,signIn,admin,anonymous,f1,post,mails,secret,setFailure}) {
+export async function teamPasswordChecks({db,client,signIn,admin,anonymous,f1,post,mails,secret,setFailure,processRecovery}) {
  const own="/api/equipo/clave",requestPath="/api/equipo/recuperacion/solicitar",consume="/api/equipo/recuperacion/confirmar",accountsPath="/api/administracion/cuentas"
  const hash=value=>createHmac("sha256",secret).update(value).digest("hex")
  const session=async request=>(await (await request("/api/auth/session")).json())?.user
@@ -46,9 +46,13 @@ export async function teamPasswordChecks({db,client,signIn,admin,anonymous,f1,po
  const known=await json(anonymous,requestPath,post({email:reception.account.email}),202),unknown=await json(anonymous,requestPath,post({email:"sin-cuenta-equipo@example.com"}),202),familyOnly=await json(anonymous,requestPath,post({email:f1.user.email}),202)
  assert.deepEqual(known,unknown);assert.deepEqual(known,familyOnly)
  assert(!JSON.stringify(known).match(/token|cuentaId|desafio|navegador|passwordHash/))
+ assert.equal(recoveryMails().length,countBefore,"La solicitud pública no contacta a Brevo")
+ assert.equal((await db.query('SELECT count(*)::int n FROM "RecuperacionClave"')).rows[0].n,0)
+ await processRecovery()
  assert.equal(recoveryMails().length,countBefore+1)
  async function issue(account) {
   await json(anonymous,requestPath,post({email:account.email}),202)
+  await processRecovery()
   const mail=recoveryMails().filter(row=>[].concat(row.to).includes(account.email)).at(-1)
   assert(mail)
   const match=mail.text.match(/http[^\s]+#token=([A-Za-z0-9_-]{43})/);assert(match)
@@ -60,7 +64,7 @@ export async function teamPasswordChecks({db,client,signIn,admin,anonymous,f1,po
  await expireRequestLimit(reception.account)
  const token1=await issue(reception.account)
  {
-  setFailure(true);await json(anonymous,requestPath,post({email:reception.account.email}),202);setFailure(false)
+  setFailure(true);await json(anonymous,requestPath,post({email:reception.account.email}),202);await processRecovery();setFailure(false)
   assert.equal((await db.query('SELECT estado FROM "RecuperacionClave" WHERE "tokenHash"=$1',[hash(`team-recovery:${token1}`)])).rows[0].estado,"ACTIVA")
  }
  await expireRequestLimit(reception.account)
@@ -89,7 +93,7 @@ export async function teamPasswordChecks({db,client,signIn,admin,anonymous,f1,po
  await json(anonymous,consume,post({token:beforeEdit,nueva:"Nueva-clave-para-prueba",confirmacion:"Nueva-clave-para-prueba"}),400)
  const beforeDisable=await issue(secondAdmin.account)
  secondAdmin.account=await patch(secondAdmin.account,{active:false})
- const disabledMessage=await json(anonymous,requestPath,post({email:secondAdmin.account.email}),202);assert.deepEqual(disabledMessage,known)
+ const disabledMessage=await json(anonymous,requestPath,post({email:secondAdmin.account.email}),202);assert.deepEqual(disabledMessage,known);await processRecovery()
  await json(anonymous,consume,post({token:beforeDisable,nueva:"Nueva-clave-para-prueba",confirmacion:"Nueva-clave-para-prueba"}),400)
  // La auditoría forma parte de la transacción: no se pierde la clave ni la sesión si falla.
  await db.query('UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval \'1 second\' WHERE clave=$1',[hash(`team-auth:password:own:key:${kine.account.id}`)])

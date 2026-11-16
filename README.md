@@ -21,6 +21,8 @@ Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas d
 - `npm run test:http`: inicio/cierre de sesión y permisos mediante servidor temporal en el puerto 3117, con cuentas efímeras y PostgreSQL local temporal. No utiliza la base configurada ni envía correos.
 - `npm run test:events`: migración y gestión de eventos con PostgreSQL temporal aislado. No utiliza la base real de Casku.
 - `npm run test:families`: acceso por código, inscripciones, cupos, aislamiento familiar, QR, correo, recepción y kinesiología (llegadas, reservas, formularios, guardado y permisos), publicación de resultados, vinculación presencial, gestión de cuentas del equipo, resumen y edición de eventos y corrección de datos familiares, cancelaciones y lista de espera FIFO, con base y proveedor locales ficticios. No envía correos reales. Ejecutar las pruebas HTTP por separado.
+- `npm run test:recovery:http`: recorrido HTTP focalizado de recuperación y claves temporales, con procesador privado y correo ficticio.
+- `npm run test:recovery`: cola privada de recuperación con dos clientes y proveedor retenido, expiración, fallos, versiones y privacidad.
 - `npm run test:brevo`: contrato de entrega, concurrencia, reintentos e interrupciones con base temporal y proveedor simulado.
 - `npm run test:mail`: planificación, reintentos, recuperación y eventos de correo con base y transporte ficticios.
 - `npm run test:production`: compila una copia aislada y reutiliza permisos y recorridos familiares sobre el servidor de producción, con base y correo temporales.
@@ -72,6 +74,8 @@ Los [webhooks de Brevo](docs/WEBHOOKS_BREVO.md) registran entregas, rebotes y qu
 La [infraestructura de correos](docs/INFRAESTRUCTURA_CORREOS.md) prepara los tres momentos de envío, reintentos y notificaciones. La automatización clínica permanece desactivada hasta las aprobaciones y su integración específica con Brevo; es independiente de los tres correos transaccionales preparados.
 
 La [corrección y el retiro de publicaciones](docs/VERSIONES_RESULTADOS.md) permite a la autora conservar versiones y motivos, actualizar la vista familiar y detener los correos de la copia anterior.
+
+La [recuperación desacoplada](docs/RECUPERACION_DESACOPLADA.md) separa la solicitud pública del envío mediante una cola cifrada y un procesador privado, con límites compartidos y protección ante concurrencia. Su activación y ejecución periódica quedan pendientes del despliegue.
 
 La [gestión de contraseñas del equipo](docs/CLAVES_EQUIPO.md) incorpora claves temporales obligatorias, cambio propio con contraseña actual y recuperación por enlaces de un uso. Los correos reales de recuperación permanecen desactivados hasta configurar y verificar Brevo; administración puede reasignar una clave temporal. Reiniciar el servidor después de regenerar Prisma.
 

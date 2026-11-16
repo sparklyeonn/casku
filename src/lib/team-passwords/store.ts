@@ -1,4 +1,3 @@
-import { randomBytes,randomUUID } from "node:crypto"
 import { Prisma,type CuentaEquipo } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { privateHash } from "@/lib/families/security"
@@ -8,7 +7,8 @@ import { reserveAuthLimit } from "@/lib/team-auth/limits"
 import { TEAM_SESSION_IDLE_MINUTES } from "@/lib/team-auth/policy"
 import { TeamConflict,TeamForbidden } from "@/lib/team/store"
 import { TeamInputError } from "@/lib/team/input"
-import { recoveryTransport } from "./delivery"
+import { recoveryQueueKey } from "./queue-crypto"
+import { enqueueRecoveryRequest } from "./recovery-queue"
 import { passwordInput,RECOVERY_MESSAGE,INVALID_LINK } from "./input"
 export function configuredOrigin() {
  try {const url=new URL(process.env.AUTH_URL||process.env.NEXTAUTH_URL||"");if(url.username||url.password||!(url.protocol==="https:"||(url.protocol==="http:"&&["localhost","127.0.0.1","[::1]"].includes(url.hostname))))return null;return url.origin}catch{return null}
@@ -24,35 +24,9 @@ async function allowed(kind:string,account:string,limit:number,minutes:number,ne
 export async function requestPasswordRecovery(raw:unknown,network:string) {
  const email=normalizeEmail(raw)
  if(!await allowed("request",email,3,15,network))return {message:RECOVERY_MESSAGE}
- const delivery=recoveryTransport()
- if(!delivery)return {message:RECOVERY_MESSAGE}
- const origin=configuredOrigin()
- if(!origin)return {message:RECOVERY_MESSAGE}
- const account=await prisma.cuentaEquipo.findUnique({where:{email}})
- if(!account?.active)return {message:RECOVERY_MESSAGE}
- const token=randomBytes(32).toString("base64url"),id=randomUUID(),tokenHash=privateHash(`team-recovery:${token}`)
- const prepared=await prisma.$transaction(async tx=>{
-  await tx.$queryRaw`SELECT id FROM "CuentaEquipo" WHERE id=${account.id} FOR UPDATE`
-  const current=await tx.cuentaEquipo.findUnique({where:{id:account.id}})
-  if(!current?.active||current.version!==account.version||current.email!==email)return false
-  await tx.$executeRaw`INSERT INTO "RecuperacionClave" (id,"cuentaId","tokenHash","versionCuenta","expiraAt") VALUES (${id}::uuid,${account.id},${tokenHash},${account.version},CURRENT_TIMESTAMP+interval '30 minutes')`
-  return true
- })
- if(!prepared)return {message:RECOVERY_MESSAGE}
- const link=`${origin}/recuperar-clave#token=${token}`
- try {
-  await delivery(email,link,id)
-  await prisma.$transaction(async tx=>{
-   await tx.$queryRaw`SELECT id FROM "CuentaEquipo" WHERE id=${account.id} FOR UPDATE`
-   const current=await tx.cuentaEquipo.findUnique({where:{id:account.id}}),challenge=await tx.recuperacionClave.findUniqueOrThrow({where:{id}})
-   const newer=await tx.recuperacionClave.findFirst({where:{cuentaId:account.id,orden:{gt:challenge.orden},estado:{in:["ACTIVA","USADA"]}},select:{id:true}})
-   const valid=await tx.$queryRaw<Array<{id:string}>>`SELECT id FROM "RecuperacionClave" WHERE id=${id}::uuid AND "expiraAt">CURRENT_TIMESTAMP AND estado='PENDIENTE'`
-   if(!current?.active||current.version!==account.version||current.email!==email||newer||!valid.length){await tx.recuperacionClave.update({where:{id},data:{estado:"ANULADA"}});return}
-   await tx.recuperacionClave.updateMany({where:{cuentaId:account.id,estado:"ACTIVA"},data:{estado:"ANULADA"}})
-   await tx.recuperacionClave.update({where:{id},data:{estado:"ACTIVA"}})
-  })
- }catch {await prisma.recuperacionClave.updateMany({where:{id,estado:"PENDIENTE"},data:{estado:"FALLIDO"}})}
- await prisma.$executeRaw`DELETE FROM "RecuperacionClave" WHERE id IN (SELECT id FROM "RecuperacionClave" WHERE "expiraAt"<CURRENT_TIMESTAMP-interval '7 days' ORDER BY "expiraAt" LIMIT 100)`
+ if(process.env.CASKU_PASSWORD_RECOVERY_ENABLED!=="1")return {message:RECOVERY_MESSAGE}
+ const key=recoveryQueueKey(process.env.CASKU_PASSWORD_RECOVERY_QUEUE_KEY)
+ if(key)await enqueueRecoveryRequest(prisma,email,key)
  return {message:RECOVERY_MESSAGE}
 }
 async function finishChange(tx:Prisma.TransactionClient,account:CuentaEquipo,passwordHash:string,kind:string,resetId?:string) {

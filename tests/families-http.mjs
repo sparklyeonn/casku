@@ -146,7 +146,7 @@ try {
   const adminAccount = { id: "family-test-admin", email: "admin@example.com", name: "Admin ficticio", role: "ADMIN", active: true, passwordHash: await hashPassword(password) }
   const receptionAccounts = await Promise.all(["RECEPCION", "RECEPCION", "KINESIOLOGO", "KINESIOLOGO"].map(async (role, i) => ({ id: `reception-test-${i}`, email: `reception-${i}@example.com`, name: `Equipo ficticio ${i}`, role, active: true, passwordHash: await hashPassword(password) })))
   const extraAccounts = browserTests ? await Promise.all(Array.from({length: 12}, async (_,i) => ({id:`real-pg-team-${i}`,email:`real-pg-${i}@example.com`,name:`Equipo de prueba ${i}`,role:i%2===0?"RECEPCION":"KINESIOLOGO",active:true,passwordHash:await hashPassword(password)}))) : []
-  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", String(basePort)], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_MAIL_AUTOMATION: "0",  CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts, ...extraAccounts]), AUTH_SECRET: authSecret, AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", BREVO_API_KEY: "brevo_local_test_only", BREVO_SENDER_EMAIL: "test@example.com", BREVO_SENDER_NAME: "Casku", BREVO_SENDER_VERIFIED: "1", CASKU_MAIL_ENABLED: "1", CASKU_MAIL_DELIVERY_SECRET: authSecret, CASKU_MAIL_SUPPRESSION_SECRET: authSecret, CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: databaseUrl }, stdio: ["ignore", "pipe", "pipe"] })
+  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", String(basePort)], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_PASSWORD_RECOVERY_ENABLED:"1", CASKU_PASSWORD_RECOVERY_QUEUE_KEY:authSecret, CASKU_PASSWORD_RECOVERY_WORKER_SECRET:authSecret, CASKU_MAIL_AUTOMATION: "0",  CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts, ...extraAccounts]), AUTH_SECRET: authSecret, AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", BREVO_API_KEY: "brevo_local_test_only", BREVO_SENDER_EMAIL: "test@example.com", BREVO_SENDER_NAME: "Casku", BREVO_SENDER_VERIFIED: "1", CASKU_MAIL_ENABLED: "1", CASKU_MAIL_DELIVERY_SECRET: authSecret, CASKU_MAIL_SUPPRESSION_SECRET: authSecret, CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: databaseUrl }, stdio: ["ignore", "pipe", "pipe"] })
   child.stdout.on("data", recordLog); child.stderr.on("data", recordLog); child.on("exit", () => { exited = true })
   let ready = false
   for (const started = Date.now(); Date.now() - started < 180000;) {
@@ -156,7 +156,7 @@ try {
   }
   assert(ready)
   if (realPostgres) {
-    secondary = spawn(process.execPath, ["--import",new URL("./production-mail-preload.mjs",import.meta.url).href,"node_modules/next/dist/bin/next","start","--port",String(basePort+1)], {cwd:process.cwd(),env:{...process.env,NODE_ENV:"production",CASKU_PRODUCTION_TEST:"1",CASKU_TEST_MODE:"0",CASKU_MAIL_AUTOMATION:"0",CASKU_TEAM_ACCOUNTS:JSON.stringify([adminAccount,...receptionAccounts,...extraAccounts]),AUTH_SECRET:authSecret,AUTH_URL:base,NEXTAUTH_URL:base,AUTH_TRUST_HOST:"true",BREVO_API_KEY:"brevo_local_test_only",BREVO_SENDER_EMAIL:"test@example.com",BREVO_SENDER_NAME:"Casku",BREVO_SENDER_VERIFIED:"1",CASKU_MAIL_ENABLED:"1",CASKU_MAIL_DELIVERY_SECRET:authSecret,CASKU_MAIL_SUPPRESSION_SECRET:authSecret,CASKU_TEST_MAIL_URL:`http://127.0.0.1:${mailServer.address().port}`,DATABASE_URL:databaseUrl},stdio:["ignore","pipe","pipe"]})
+    secondary = spawn(process.execPath, ["--import",new URL("./production-mail-preload.mjs",import.meta.url).href,"node_modules/next/dist/bin/next","start","--port",String(basePort+1)], {cwd:process.cwd(),env:{...process.env,NODE_ENV:"production",CASKU_PRODUCTION_TEST:"1",CASKU_TEST_MODE:"0",CASKU_PASSWORD_RECOVERY_ENABLED:"1",CASKU_PASSWORD_RECOVERY_QUEUE_KEY:authSecret,CASKU_PASSWORD_RECOVERY_WORKER_SECRET:authSecret,CASKU_MAIL_AUTOMATION:"0",CASKU_TEAM_ACCOUNTS:JSON.stringify([adminAccount,...receptionAccounts,...extraAccounts]),AUTH_SECRET:authSecret,AUTH_URL:base,NEXTAUTH_URL:base,AUTH_TRUST_HOST:"true",BREVO_API_KEY:"brevo_local_test_only",BREVO_SENDER_EMAIL:"test@example.com",BREVO_SENDER_NAME:"Casku",BREVO_SENDER_VERIFIED:"1",CASKU_MAIL_ENABLED:"1",CASKU_MAIL_DELIVERY_SECRET:authSecret,CASKU_MAIL_SUPPRESSION_SECRET:authSecret,CASKU_TEST_MAIL_URL:`http://127.0.0.1:${mailServer.address().port}`,DATABASE_URL:databaseUrl},stdio:["ignore","pipe","pipe"]})
     secondary.stdout.on("data",recordLog);secondary.stderr.on("data",recordLog);secondary.on("exit",()=>{secondaryExited=true})
     let secondaryReady=false
     for(const started=Date.now();Date.now()-started<60000;){
@@ -167,7 +167,11 @@ try {
     assert(secondaryReady)
   }
   const admin = client(); assert.equal((await signIn(admin, "equipo", { email: adminAccount.email, password })).role, "ADMIN")
-  if (realPostgres && process.argv.includes("--queue-only")) {
+  if(process.argv.includes("--passwords-only")) {
+    const anonymous=client(),f1=await family("password-isolation@example.com")
+    await teamPasswordChecks({db,client,signIn,password,admin,anonymous,f1,post,mails,secret:authSecret,production,setFailure:value=>{failAll=value},processRecovery:async()=>{const response=await anonymous("/api/interno/recuperaciones/procesar",{method:"POST",headers:{authorization:`Bearer ${authSecret}`}});assert.equal(response.status,200);const result=await response.json();assert.equal(typeof result.procesadas,"number");return result}})
+    console.log("OK recuperación HTTP focalizada: solicitud uniforme, cola privada, entrega posterior y claves de uso único; no reemplaza la batería integral.")
+  } else if (realPostgres && process.argv.includes("--queue-only")) {
     await queueConcurrencyChecks({db,base,secondaryBase,client,signIn,password,accounts:extraAccounts.slice(0,4),admin,family,post,createEvent})
     await browserQueueChecks({db,base,accounts:extraAccounts.slice(4),password,admin,family,post,createEvent})
     console.log("OK comprobación focalizada de fila y dispositivos; no reemplaza el recorrido integral.")
@@ -285,20 +289,36 @@ try {
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await resultsChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, post, createEvent, mails, setResultFailure: value => { failResults = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await linkingChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await overviewChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await eventEditChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await dataCorrectionsChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await cancellationChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await waitlistChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails, setMailFailure: value => { failConfirmation = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await privacyChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, post, createEvent, mails, setResultFailure: value => { failResults = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await resultVersionChecks({db,client,signIn,password,accounts:receptionAccounts,admin,anonymous,f1,f2,post,createEvent,mails,setResultFailure:value=>{failResults=value}})
   // Grupos independientes: la versión compilada ejecuta sus accesos en menos de un minuto.
   // La batería test:security comprueba el límite global sin reiniciar esta ventana.
@@ -312,7 +332,7 @@ try {
     await browserQueueChecks({db,base,accounts:extraAccounts.slice(4),password,admin,family,post,createEvent})
     await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[globalLoginKey])
   }
-  await teamPasswordChecks({db,client,signIn,password,admin,anonymous,f1,post,mails,secret:authSecret,production,setFailure:value=>{failAll=value}})
+  await teamPasswordChecks({db,client,signIn,password,admin,anonymous,f1,post,mails,secret:authSecret,production,setFailure:value=>{failAll=value},processRecovery:async()=>{const response=await anonymous("/api/interno/recuperaciones/procesar",{method:"POST",headers:{authorization:`Bearer ${authSecret}`}});assert.equal(response.status,200);const result=await response.json();assert.equal(typeof result.procesadas,"number");return result}})
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[globalLoginKey])
   await teamChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)

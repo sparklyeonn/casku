@@ -16,11 +16,14 @@
     "test:families": "node tests/families-http.mjs",
     "prebuild": "prisma generate",
     "test:production": "node tests/production-http.mjs",
-    "check": "npm run lint && npm test && npm run test:mail && npm run test:brevo && npm run test:events && npm run test:security && npm run test:http && npm run test:families && npm run test:production && tsc --noEmit",
+    "check": "npm run lint && npm test && npm run test:mail && npm run test:brevo && npm run test:recovery && npm run test:events && npm run test:security && npm run test:http && npm run test:families && npm run test:production && tsc --noEmit",
     "test:mail": "node --experimental-strip-types tests/mail-queue.mjs",
     "test:postgres": "node tests/postgres-real.mjs",
     "test:devices": "node tests/production-http.mjs --devices",
-    "test:brevo": "node --experimental-strip-types tests/brevo-delivery.mjs"
+    "test:brevo": "node --experimental-strip-types tests/brevo-delivery.mjs",
+    "recovery:process": "node scripts/procesar-recuperaciones.mjs",
+    "test:recovery": "node --experimental-strip-types tests/recovery-queue.mjs",
+    "test:recovery:http": "node tests/families-http.mjs --passwords-only"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

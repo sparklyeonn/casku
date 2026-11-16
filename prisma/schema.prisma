@@ -634,3 +634,21 @@ model EnvioTransaccional {
   @@index([estado, disponibleAt])
   @@index([proveedorId])
 }
+
+// Solicitudes uniformes: no indican públicamente si existe una cuenta.
+model SolicitudRecuperacion {
+ id String @id @db.Uuid
+ orden BigInt @unique @default(autoincrement())
+ destinatarioHash String
+ correoCifrado String?
+ estado String @default("PENDIENTE")
+ motivo String?
+ recuperacionId String? @db.Uuid
+ bloqueoToken String? @db.Uuid
+ bloqueoHasta DateTime? @db.Timestamptz(3)
+ createdAt DateTime @default(now()) @db.Timestamptz(3)
+ expiraAt DateTime @default(dbgenerated("(CURRENT_TIMESTAMP + '00:10:00'::interval)")) @db.Timestamptz(3)
+ terminadoAt DateTime? @db.Timestamptz(3)
+ @@index([estado, orden])
+ @@index([destinatarioHash, orden])
+}

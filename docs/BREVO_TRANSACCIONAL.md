@@ -36,7 +36,7 @@ Se envía un UUID estable de idempotencia. La ventana del proveedor es limitada:
 
 La migración conserva los correos anteriores e incorpora marcadores de revisión para confirmaciones que tuvieron intentos sin aceptación registrada con el proveedor anterior. Evita reenviarlas automáticamente al cambiar a Brevo. Su revisión manual queda pendiente antes de activar; no hay una acción pública que elimine esos bloqueos.
 
-Se conservan las autorizaciones y límites existentes. Los enlaces de recuperación continúan siendo de un uso, con vencimiento de 30 minutos y revocación de sesiones. La solicitud espera al proveedor: la respuesta es genérica pero no se garantiza tiempo constante; evaluar procesamiento desacoplado antes de habilitar envíos reales, según [CLAVES_EQUIPO.md](CLAVES_EQUIPO.md).
+Se conservan las autorizaciones y límites existentes. Los enlaces de recuperación continúan siendo de un uso, con vencimiento de 30 minutos y revocación de sesiones. La solicitud pública ahora utiliza la [cola desacoplada](RECUPERACION_DESACOPLADA.md): no consulta la cuenta ni espera al proveedor. El procesador privado y sus secretos deben configurarse antes de activar recuperaciones reales.
 
 ## Pruebas sin mensajes reales
 

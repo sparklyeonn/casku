@@ -89,3 +89,5 @@ Las [pruebas integrales con PostgreSQL real y navegadores](docs/PRUEBAS_INTEGRAL
 La [gestión administrativa de correos](docs/GESTION_CORREOS.md) permite consultar entregas e incidencias, registrar revisiones y solicitar reintentos de confirmación bajo controles. Conserva los bloqueos de entrega y los envíos reales desactivados.
 
 Para probar el acceso de apoderado sin Brevo, usar `npm run dev:familias`: correo ficticio `apoderado@example.com`, buzón simulado y base temporal aislada. Ver [DEMO_FAMILIAS.md](docs/DEMO_FAMILIAS.md).
+
+Los [respaldos y la restauración](docs/RESPALDOS_RESTAURACION.md) incluyen copia cifrada, verificación completa y recuperación exclusivamente en una base nueva. `npm run test:backup` ensaya el procedimiento con PostgreSQL local y datos ficticios, sin usar la configuración de Casku.

@@ -29,7 +29,10 @@
     "test:mail-admin:devices": "node tests/production-http.mjs --mail-admin-only --devices",
     "dev:familias": "node scripts/demo-familias.mjs",
     "test:families:devices": "node tests/production-http.mjs --family-visual-only",
-    "test:team:devices": "node tests/production-http.mjs --team-visual-only"
+    "test:team:devices": "node tests/production-http.mjs --team-visual-only",
+    "db:backup": "node scripts/respaldo-base.mjs backup",
+    "db:restore": "node scripts/respaldo-base.mjs restore",
+    "test:backup": "node tests/backup-restore.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

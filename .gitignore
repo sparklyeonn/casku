@@ -49,3 +49,9 @@ next-env.d.ts
 
 # Plantilla sin secretos
 !.env.example
+
+# Respaldos: contienen información privada incluso cifrados
+/backups/
+*.casku-backup*
+*.dump
+*.sql.gz

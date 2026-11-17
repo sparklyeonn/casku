@@ -16,6 +16,8 @@ Perfiles disponibles: `KINESIOLOGO`, `RECEPCION`, `ADMIN`. No hay contraseñas d
 
 ## Verificación
 
+GitHub Actions ejecuta automáticamente `npm run check` en cada push y pull request, con datos ficticios y correo simulado. Ver [PRUEBAS_GITHUB.md](docs/PRUEBAS_GITHUB.md). Se activa al subir el archivo del workflow al repositorio.
+
 - `npm test`: contraseñas, permisos, cuentas y validación de evaluaciones.
 - `npm run test:security`: límites de acceso y sesiones del equipo con dos servidores simultáneos y base temporal. No utiliza datos reales.
 - `npm run test:http`: inicio/cierre de sesión y permisos mediante servidor temporal en el puerto 3117, con cuentas efímeras y PostgreSQL local temporal. No utiliza la base configurada ni envía correos.

@@ -1,0 +1,70 @@
+name: Casku CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: casku-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Código, pruebas y compilación
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      # Destino deliberadamente inutilizable. Cada suite crea su base temporal.
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:1/casku_ci_unused?sslmode=disable&connect_timeout=1
+      AUTH_SECRET: ci-only-fictitious-secret-never-use-in-production
+      AUTH_URL: http://localhost:3120
+      CASKU_TEAM_ACCOUNTS: '[]'
+      CASKU_MAIL_ENABLED: '0'
+      CASKU_MAIL_AUTOMATION: '0'
+      BREVO_API_KEY: ''
+      BREVO_SENDER_EMAIL: ''
+      BREVO_SENDER_VERIFIED: '0'
+      BREVO_WEBHOOK_ENABLED: '0'
+      CASKU_PASSWORD_RECOVERY_ENABLED: '0'
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Verificar aislamiento
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict'
+          import { readdir } from 'node:fs/promises'
+          const files = (await readdir('.')).filter(name => name === '.env' || name.startsWith('.env.') && name !== '.env.example')
+          assert.equal(files.length, 0, 'CI no debe cargar archivos de configuración privada')
+          assert.equal(process.env.DATABASE_URL, 'postgresql://postgres:postgres@127.0.0.1:1/casku_ci_unused?sslmode=disable&connect_timeout=1')
+          for (const key of ['CASKU_MAIL_ENABLED', 'CASKU_MAIL_AUTOMATION', 'BREVO_SENDER_VERIFIED', 'BREVO_WEBHOOK_ENABLED', 'CASKU_PASSWORD_RECOVERY_ENABLED']) assert.equal(process.env[key], '0')
+          assert.equal(process.env.BREVO_API_KEY, '')
+          assert.equal(process.env.BREVO_SENDER_EMAIL, '')
+          assert.equal(process.env.CASKU_TEAM_ACCOUNTS, '[]')
+          console.log('Entorno aislado: sin configuración privada y sin servicios reales habilitados.')
+          NODE
+
+      - name: Instalar dependencias del archivo de bloqueo
+        run: npm ci --no-audit --no-fund
+
+      - name: Generar cliente Prisma
+        run: npx --no-install prisma generate
+
+      - name: Comprobar código, pruebas y producción
+        run: npm run check

@@ -5,7 +5,7 @@ La referencia acordada es la web de Casku: turquesa #00899A, acción oscura #004
 ## Alcance
 
 - Variables compartidas de color y tipografía en `globals.css`, con superficies y contraste adaptados al modo oscuro del dispositivo.
-- Identificador tipográfico provisional `CaskuBrand`: pendiente reemplazar por el archivo de logo oficial. No es una reproducción del logotipo.
+- Logo oficial en `CaskuBrand`: variante azul sobre fondos claros y calipso en modo oscuro, sobre una superficie marfil que conserva la legibilidad. Ver [IDENTIDAD_VISUAL.md](IDENTIDAD_VISUAL.md).
 - Acceso para familias y equipo; catálogo público de eventos.
 - Encabezado, navegación activa y pie comunes a inscripciones, resultados y autorizaciones familiares.
 - Comprobantes con número, QR privado y estado de inscripción; formulario adaptable, vinculación presencial y lista de espera.

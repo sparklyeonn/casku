@@ -65,8 +65,10 @@ button, a, input, select, textarea, summary { -webkit-tap-highlight-color: trans
 .casku-ui [role="status"] { border: 1px solid var(--casku-line); background: var(--casku-tint); color: var(--foreground); padding: 1rem; border-radius: 16px; }
 .casku-ui summary { padding-block: .75rem; cursor: pointer; font-weight: 600; color: var(--casku-primary); }
 .casku-ui table { display: block; max-width: 100%; overflow-x: auto; }
-.casku-brand { font-size: 2.25rem; line-height: 1; letter-spacing: -.06em; font-weight: 600; color: var(--casku-primary); display: inline-flex; align-items: flex-start; gap: .15rem; padding-block: .4rem; }
-.casku-brand span { font-size: .65rem; letter-spacing: 0; padding-top: .3rem; }
+.casku-brand { display: inline-flex; align-items: center; flex-shrink: 0; line-height: 0; padding: .4rem .65rem; border-radius: 12px; background: #fffef8; }
+.casku-brand picture { display: block; }
+.casku-brand img { display: block; width: 112px; height: auto; max-width: 100%; }
+.login-story .casku-brand img { width: 148px; }
 .casku-eyebrow { font-size: .7rem; font-weight: 600; letter-spacing: .15em; color: var(--casku-primary); margin-bottom: .7rem; }
 .casku-card, .family-receipt, .family-support-grid > section, .family-space main > section:not(.family-hero), .family-space main li.rounded-xl {
   background: var(--casku-surface); border: 1px solid var(--casku-line); border-radius: 26px; padding: clamp(1.25rem, 3vw, 2rem);

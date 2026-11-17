@@ -24,4 +24,4 @@ Recepción y kinesiología prueban búsqueda por número/QR, cámara denegada, r
 
 `npm run check` mantiene la batería técnica integral. `npm run test:mail-admin:devices` comprueba además acciones auditadas en la gestión de correos.
 
-Los perfiles emulados no reemplazan la aceptación en equipos físicos, especialmente cámara, teclado, suspensión y conectividad del evento. No se requieren migraciones ni cambios de variables de entorno; no se activan correos reales ni se despliega el sitio. El logo oficial continúa pendiente.
+Los perfiles emulados no reemplazan la aceptación en equipos físicos, especialmente cámara, teclado, suspensión y conectividad del evento. No se requieren migraciones ni cambios de variables de entorno; no se activan correos reales ni se despliega el sitio. El logo oficial está integrado; ver [IDENTIDAD_VISUAL.md](IDENTIDAD_VISUAL.md).

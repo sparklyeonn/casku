@@ -1,3 +1,4 @@
+import { browserCalendlyChecks } from "./browser-calendly.mjs"
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
@@ -54,11 +55,12 @@ export async function browserTeamAdminChecks({ db, base, password }) {
       const stored = (await db.query('SELECT role,"mustChangePassword" FROM "CuentaEquipo" WHERE email=$1', [staffEmail])).rows[0]
       assert.equal(stored.role, 'RECEPCION'); assert(stored.mustChangePassword)
       await fits(); await page.screenshot({ path: `test-results/team-admin/${profile.name}-cuentas.png`, fullPage: true })
-      for (const [label, heading] of [['Datos de familias', 'Corrección de datos familiares'], ['Correos', 'Gestión de correos'], ['Trazabilidad', 'Trazabilidad de privacidad'], ['Seguridad y sesiones', 'Seguridad y sesiones'], ['Cambiar contraseña', 'Cambiar mi contraseña']]) {
+      for (const [label, heading] of [['Calendly', 'Conexión con Calendly'], ['Datos de familias', 'Corrección de datos familiares'], ['Correos', 'Gestión de correos'], ['Trazabilidad', 'Trazabilidad de privacidad'], ['Seguridad y sesiones', 'Seguridad y sesiones'], ['Cambiar contraseña', 'Cambiar mi contraseña']]) {
         await teamNavigate(page, label)
         await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible()
         await fits()
       }
+      await browserCalendlyChecks(page)
       assert.equal((await context.request.get('/api/kinesiologia/atencion')).status(), 403, 'La presentación no otorga permisos clínicos')
       await teamNavigate(page, 'Eventos')
       if (profile.name === 'desktop-chromium') { await page.setViewportSize({ width: 720, height: 500 }); await fits(); await teamNavigate(page, 'Cuentas del equipo'); await fits() }

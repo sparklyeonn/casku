@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto"
 import { readFile } from "node:fs/promises"
 const env = {
   ...process.env,
+  CALENDLY_ENABLED: "0", CALENDLY_API_TOKEN: "",
   NODE_ENV: "production",
   CASKU_PRODUCTION_TEST: "1",
   CASKU_TEST_MODE: "0",
@@ -30,5 +31,5 @@ if (!process.argv.includes("--skip-build")) {
 }
 assert((await readFile(".next-production-tests/BUILD_ID","utf8")).trim())
 await run(["tests/http-smoke.mjs","--production"])
-await run(["tests/families-http.mjs","--production",...(process.argv.includes("--passwords-only")?["--passwords-only"]:[]),...(process.argv.includes("--devices")?["--devices"]:[]),...(process.argv.includes("--mail-admin-only")?["--mail-admin-only"]:[]),...(process.argv.includes("--family-visual-only")?["--family-visual-only"]:[]),...(process.argv.includes("--team-visual-only")?["--team-visual-only"]:[])])
+await run(["tests/families-http.mjs","--production",...(process.argv.includes("--calendly-only")?["--calendly-only"]:[]),...(process.argv.includes("--passwords-only")?["--passwords-only"]:[]),...(process.argv.includes("--devices")?["--devices"]:[]),...(process.argv.includes("--mail-admin-only")?["--mail-admin-only"]:[]),...(process.argv.includes("--family-visual-only")?["--family-visual-only"]:[]),...(process.argv.includes("--team-visual-only")?["--team-visual-only"]:[])])
 console.log("OK producción: compilación aislada, recursos, acceso por perfil y recorridos familiares sobre next start, sin usar la base ni el correo reales.")

@@ -59,3 +59,7 @@ Se añadió `tests/browser-recovery.mjs` al recorrido de contraseñas para verif
 Validación: lint, 58 pruebas unitarias, `npm run test:recovery:http` y `node tests/production-http.mjs --passwords-only` con compilación de producción. Las bases, cuentas, contraseñas y correos de estas pruebas fueron ficticios. No se enviaron nuevos mensajes reales ni se modificaron las credenciales de la cuenta de administración.
 
 Si un enlace real anterior ya venció (30 minutos), debe solicitarse uno nuevo. En el entorno local el procesador de recuperaciones continúa ejecutándose manualmente con `npm run recovery:process`.
+
+## Aceptación manual confirmada
+
+La responsable confirmó que pudo cambiar su contraseña, iniciar sesión con la nueva y que el enlace ya utilizado fue rechazado. La recuperación queda validada manualmente en esos tres pasos.

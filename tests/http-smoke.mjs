@@ -22,7 +22,7 @@ await socket.start()
 const gate = production ? await protocolGate({host:"127.0.0.1",port:Number(socket.getServerConn().split(":").at(-1))}) : null
 const databaseHost = gate ? `127.0.0.1:${gate.port}` : socket.getServerConn()
 const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", "3117"], {
-  cwd: process.cwd(), env: { ...process.env, NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", CASKU_TEST_MODE: production ? "0" : "1", CASKU_MAIL_AUTOMATION: "0", CASKU_MAIL_WORKER_SECRET: "x".repeat(43), BREVO_API_KEY: "", BREVO_SENDER_EMAIL: "", BREVO_SENDER_VERIFIED: "0", CASKU_PASSWORD_RECOVERY_ENABLED:"1", CASKU_PASSWORD_RECOVERY_QUEUE_KEY:recoveryQueueSecret, CASKU_PASSWORD_RECOVERY_WORKER_SECRET:"r".repeat(43), CASKU_MAIL_ENABLED: "0", BREVO_WEBHOOK_ENABLED:"1", BREVO_WEBHOOK_SECRET:webhookSecret, CASKU_MAIL_SUPPRESSION_SECRET:suppressionSecret, NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify(accounts), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", DATABASE_URL: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"],
+  cwd: process.cwd(), env: { ...process.env, CALENDLY_ENABLED: "0", CALENDLY_API_TOKEN: "", NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", CASKU_TEST_MODE: production ? "0" : "1", CASKU_MAIL_AUTOMATION: "0", CASKU_MAIL_WORKER_SECRET: "x".repeat(43), BREVO_API_KEY: "", BREVO_SENDER_EMAIL: "", BREVO_SENDER_VERIFIED: "0", CASKU_PASSWORD_RECOVERY_ENABLED:"1", CASKU_PASSWORD_RECOVERY_QUEUE_KEY:recoveryQueueSecret, CASKU_PASSWORD_RECOVERY_WORKER_SECRET:"r".repeat(43), CASKU_MAIL_ENABLED: "0", BREVO_WEBHOOK_ENABLED:"1", BREVO_WEBHOOK_SECRET:webhookSecret, CASKU_MAIL_SUPPRESSION_SECRET:suppressionSecret, NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEAM_ACCOUNTS: JSON.stringify(accounts), AUTH_SECRET: randomBytes(32).toString("base64url"), AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", DATABASE_URL: `postgresql://postgres:postgres@${databaseHost}/postgres?sslmode=disable` }, stdio: ["ignore", "pipe", "pipe"],
 })
 let log = "", exited = false, testFailed = false
 child.stdout.on("data", b => { log = (log + b).slice(-10000) }); child.stderr.on("data", b => { log = (log + b).slice(-10000) }); child.on("exit", () => { exited = true })
@@ -43,6 +43,7 @@ try {
   }
   assert(ready, "El servidor no inició a tiempo: " + log)
   const anonymous = client()
+  assert.equal((await anonymous("/api/administracion/calendly?consultar=1")).status,401)
   if (production) {
     const home = await anonymous("/")
     assert.equal(home.status,200)
@@ -91,6 +92,12 @@ try {
     assert.equal(login.status, 200)
     const session = await (await request("/api/auth/session")).json()
     assert.equal(session.user?.role, account.role)
+    const calendly=await request("/api/administracion/calendly?consultar=1")
+    assert.equal(calendly.status,account.role==="ADMIN"?200:403)
+    if(account.role==="ADMIN") {
+      assert.deepEqual(await calendly.json(),{estado:"PENDIENTE_CONFIGURACION"})
+      const page=await request("/administracion/calendly");assert.equal(page.status,200);assert((await page.text()).includes("Conexión con Calendly"))
+    }
     const mailSummary=await request(`/api/administracion/correos?eventoId=${randomUUID()}`)
     assert.equal(mailSummary.status,account.role==="ADMIN"?200:403)
     if(account.role==="ADMIN"){assert.deepEqual((await mailSummary.json()).estados,[]);await disabledMailAdminChecks({db,request,post:body=>({method:"POST",headers:{"Content-Type":"application/json",origin:base},body:JSON.stringify(body)})})}

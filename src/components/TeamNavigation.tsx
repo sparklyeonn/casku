@@ -8,7 +8,7 @@ export function TeamNavigation({ role, assignedForm = false }: { role: Role; ass
   const pathname = usePathname(), [open, setOpen] = useState(false)
   const work = [
     { href: roleHomes[role], label: role === "ADMIN" ? "Eventos" : role === "KINESIOLOGO" ? "Mi atención" : "Mi espacio" },
-    ...(role === "ADMIN" ? [{ href: "/administracion/cuentas", label: "Cuentas del equipo" }] : []),
+    ...(role === "ADMIN" ? [{ href: "/administracion/cuentas", label: "Cuentas del equipo" }, { href: "/administracion/calendly", label: "Calendly" }] : []),
     ...(role === "ADMIN" || role === "RECEPCION" ? [{ href: "/datos-familias", label: "Datos de familias" }] : []),
     ...(role === "KINESIOLOGO" ? [{ href: "/kinesiologia/resultados", label: "Mis resultados" }, { href: "/evaluacion", label: "Evaluación sin inscripción" }] : []),
     ...(role === "ADMIN" ? [{ href: "/administracion/correos", label: "Correos" }, { href: "/administracion/privacidad", label: "Trazabilidad" }] : []),

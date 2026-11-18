@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { browserRecoveryChecks } from "./browser-recovery.mjs"
 import {randomBytes,randomUUID,createHmac} from "node:crypto"
 export async function teamPasswordChecks({db,client,signIn,admin,anonymous,f1,post,mails,secret,setFailure,processRecovery}) {
  const own="/api/equipo/clave",requestPath="/api/equipo/recuperacion/solicitar",consume="/api/equipo/recuperacion/confirmar",accountsPath="/api/administracion/cuentas"
@@ -114,5 +115,17 @@ export async function teamPasswordChecks({db,client,signIn,admin,anonymous,f1,po
  const stored=JSON.stringify((await db.query('SELECT * FROM "RecuperacionClave"')).rows,(_,value)=>typeof value==="bigint"?value.toString():value)
  for(const value of [token1,token2,token3,token4])assert(!stored.includes(value))
  assert.equal((await anonymous("/recuperar-clave")).status,200)
+ // Verificar también el enlace del correo en el navegador, no solo el endpoint.
+ await expireRequestLimit(kine.account)
+ const browserToken=await issue(kine.account),browserPassword=randomBytes(24).toString("base64url")
+ const browserMail=recoveryMails().filter(row=>[].concat(row.to).includes(kine.account.email)).at(-1)
+ const browserLink=browserMail.text.match(/http[^\s]+#token=[A-Za-z0-9_-]{43}/)[0]
+ const versionBeforeBrowser=(await current(kine.account.id)).version
+ await browserRecoveryChecks({link:browserLink,password:browserPassword})
+ assert.equal((await current(kine.account.id)).version,versionBeforeBrowser+1)
+ assert(!(await session(kine.request)))
+ assert(!(await session(await fresh(kine.account.email,kine.key))))
+ assert.equal((await session(await fresh(kine.account.email,browserPassword))).id,kine.account.id)
+ assert.equal((await db.query('SELECT estado FROM "RecuperacionClave" WHERE "tokenHash"=$1',[hash(`team-recovery:${browserToken}`)])).rows[0].estado,"USADA")
  console.log("OK consistencia: cambios administrativos invalidan enlaces, sesión y claves se conservan al fallar auditoría, secretos ausentes de respuestas/historial y correo real desactivado.")
 }

@@ -47,3 +47,15 @@ El cambio de clave, la marca temporal, la revocación de sesiones, la invalidaci
 La migración añade el estado y la tabla de recuperación sin modificar las contraseñas, perfiles, versiones o sesiones existentes. Después de aplicar migraciones y generar Prisma, reiniciar el servidor local para cargar el cliente actualizado.
 
 `npm test` valida formularios. `npm run test:families` cubre claves temporales en los tres perfiles, cambio propio, respuestas genéricas, expiración, reemplazo, fallo de envío, uso único, carreras, cuentas desactivadas, invalidación y rollback auditado. `npm run test:security` añade migración conservadora, bloqueo no manipulable, límites entre dos servidores, cambios concurrentes y revocación de cookies en ambos. `npm run test:production` comprueba el servidor compilado y que el transporte real siga desactivado. Todo utiliza datos ficticios y bases temporales.
+
+## Estabilidad del enlace de recuperación · 18 de noviembre de 2026
+
+Se reprodujo una recarga continua en el servidor de desarrollo tanto en recuperación como en acceso, incluso sin fragmento en la URL. El navegador recibía mensajes de recarga del servidor y no mantenía visible el formulario. Reiniciar el servidor local restableció la estabilidad. No se identificó la causa interna del estado del servidor; el reinicio es la solución operativa observada para ese incidente.
+
+El componente de recuperación utiliza ahora la llamada documentada de historial con estado `null`, conserva los parámetros de consulta al retirar el fragmento y mantiene el token exclusivamente en memoria para enviarlo al endpoint de confirmación. Se retiró el aviso desactualizado que decía que Brevo seguía pendiente. No se cambió la validación, vencimiento ni consumo único del enlace.
+
+Se añadió `tests/browser-recovery.mjs` al recorrido de contraseñas para verificar el enlace recibido por correo simulado en Chrome de escritorio, Android, WebKit de escritorio, iPad y pantalla de 320 píxeles en modo oscuro. Comprueba que el formulario aparezca y conserve sus valores sin recargas, que el token desaparezca de la URL y llegue correctamente a la API, que se rechacen contraseñas distintas y que se pueda solicitar otro enlace. Completa un cambio con una cuenta ficticia y verifica el rechazo del enlace usado, la revocación de sesiones, el rechazo de la clave anterior y el ingreso con la nueva.
+
+Validación: lint, 58 pruebas unitarias, `npm run test:recovery:http` y `node tests/production-http.mjs --passwords-only` con compilación de producción. Las bases, cuentas, contraseñas y correos de estas pruebas fueron ficticios. No se enviaron nuevos mensajes reales ni se modificaron las credenciales de la cuenta de administración.
+
+Si un enlace real anterior ya venció (30 minutos), debe solicitarse uno nuevo. En el entorno local el procesador de recuperaciones continúa ejecutándose manualmente con `npm run recovery:process`.

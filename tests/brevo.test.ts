@@ -64,3 +64,14 @@ test("Brevo: pruebas reales exigen lista explícita y rechazan destinatarios ant
   }finally{globalThis.fetch=saved}
   environment({...settings,CASKU_MAIL_MODE:"pruebas",CASKU_MAIL_TEST_RECIPIENTS:"familia@example.com"},()=>assert.throws(()=>mailConfig("RESULTADO"),MailUnavailable))
 })
+
+test("Brevo: programación explícita hasta 72 horas, sin convertir fechas vencidas en envíos inmediatos",()=>{
+  const config=configured(),batchId="25b38367-372a-4fdb-aa7a-1af93a22ad61",future=new Date(Date.now()+60_000).toISOString()
+  const payload=brevoPayload({...message,scheduledAt:future,batchId},config,"reminder-test")
+  assert.equal(payload.scheduledAt,future);assert.equal(payload.batchId,batchId)
+  for(const scheduledAt of [new Date(Date.now()-1000).toISOString(),new Date(Date.now()+73*60*60_000).toISOString(),"2026-11-18T19:00:00","invalida"])assert.throws(()=>brevoPayload({...message,scheduledAt,batchId},config,"reminder-test"),MailUnavailable)
+  assert.throws(()=>brevoPayload({...message,batchId},config,"reminder-test"),MailUnavailable)
+  assert.throws(()=>brevoPayload({...message,scheduledAt:future,batchId:"incorrecto"},config,"reminder-test"),MailUnavailable)
+  const limited=environment({...settings,CASKU_MAIL_MODE:"pruebas",CASKU_MAIL_TEST_RECIPIENTS:"familia@example.com"},()=>mailConfig("RECORDATORIO_EVENTO"))
+  assert.throws(()=>brevoPayload({...message,to:"otra@example.com",scheduledAt:future,batchId},limited,"reminder-test"),MailUnavailable)
+})

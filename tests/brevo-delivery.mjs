@@ -122,6 +122,13 @@ try {
   if(real)await raw.exec('DROP TRIGGER webhook_fail_trigger ON "EnvioTransaccional"; DROP FUNCTION webhook_fail();')
   await recordBrevoEvents(db,rollbackEvent,configuration.suppressionSecret)
   assert.equal(await db.notificacionCorreo.count(),beforeFail+1)
+  const scheduledAt=new Date(Date.now()+60*60_000).toISOString(),batchId=randomUUID(),beforeScheduled=calls.length
+  const scheduledMessage={...message,to:"recordatorio-programado@example.com",scheduledAt,batchId}
+  await deliverOnce(db,scheduledMessage,"scheduled-reminder","RECORDATORIO_EVENTO",configuration)
+  assert.equal(calls.at(-1).scheduledAt,scheduledAt);assert.equal(calls.at(-1).batchId,batchId)
+  await deliverOnce(second,scheduledMessage,"scheduled-reminder","RECORDATORIO_EVENTO",configuration)
+  assert.equal(calls.length,beforeScheduled+1)
+  console.log("OK recordatorio programado: fecha y lote enviados al proveedor ficticio, aceptación persistida y sin duplicados.")
   const technical=JSON.stringify({mail:await db.envioTransaccional.findMany(),events:await db.notificacionCorreo.findMany(),suppression:await db.supresionCorreo.findMany()})
   for(const value of [message.to,message.text,message.html,configuration.secret])assert(!technical.includes(value))
   assert.equal((await db.envioTransaccional.findUniqueOrThrow({where:{clave:"lost-save"}})).estado,"REVISION")

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 
-export type MailPurpose = "ACCESO" | "CONFIRMACION" | "RECUPERACION" | "RESULTADO"
-export type MailMessage = { to: string; subject: string; text: string; html: string; attachments?: { filename: string; content: string }[] }
+export type MailPurpose = "ACCESO" | "CONFIRMACION" | "RECUPERACION" | "RESULTADO" | "RECORDATORIO_EVENTO"
+export type MailMessage = { to: string; subject: string; text: string; html: string; scheduledAt?: string; batchId?: string; attachments?: { filename: string; content: string }[] }
 export class MailUnavailable extends Error {
   kind: "TRANSITORIO" | "PERMANENTE" | "INCIERTO"
   retryAfterMs: number
@@ -50,13 +50,18 @@ export function providerKey(key: string) {
 export function brevoPayload(message: MailMessage, config: BrevoConfig, key: string) {
   if (!validEmail(message.to) || !message.subject || message.subject.length > 998 || /[\r\n\0]/.test(message.subject) || !message.html || !message.text) throw new MailUnavailable()
   if (config.testRecipients && !config.testRecipients.includes(message.to.trim().toLowerCase())) throw new MailUnavailable()
+  if (message.scheduledAt !== undefined) {
+    const time = Date.parse(message.scheduledAt), now = Date.now()
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(message.scheduledAt) || !Number.isFinite(time) || new Date(time).toISOString() !== message.scheduledAt || time <= now || time > now + 72 * 60 * 60_000) throw new MailUnavailable()
+  }
+  if (message.batchId !== undefined && (message.scheduledAt === undefined || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(message.batchId))) throw new MailUnavailable()
   const attachment = message.attachments?.map(file => {
     if (!/^[\p{L}\p{N}_.-]{1,120}$/u.test(file.filename) || !file.content || file.content.length > 7_000_000) throw new MailUnavailable()
     const data = Buffer.from(file.content,"base64")
     if (!data.length || data.toString("base64") !== file.content) throw new MailUnavailable()
     return { name: file.filename, content: file.content }
   })
-  return { sender: config.sender, to: [{ email: message.to, contactPixelTrackingConsent: false }], subject: message.subject, htmlContent: message.html, textContent: message.text, headers: { idempotencyKey: providerKey(key) }, ...(attachment?.length ? { attachment } : {}) }
+  return { sender: config.sender, to: [{ email: message.to, contactPixelTrackingConsent: false }], subject: message.subject, htmlContent: message.html, textContent: message.text, headers: { idempotencyKey: providerKey(key) }, ...(attachment?.length ? { attachment } : {}), ...(message.scheduledAt ? { scheduledAt: message.scheduledAt } : {}), ...(message.batchId ? { batchId: message.batchId } : {}) }
 }
 export type BrevoPayload = ReturnType<typeof brevoPayload>
 export async function postBrevo(config: BrevoConfig, payload: BrevoPayload) {

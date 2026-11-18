@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { mailConfig, brevoPayload, providerKey, postBrevo, MailUnavailable } from "../src/lib/mail/brevo.ts"
-const settings={NODE_ENV:"production",CASKU_TEST_MODE:"0",CASKU_PRODUCTION_TEST:"0",CASKU_MAIL_ENABLED:"1",BREVO_SENDER_VERIFIED:"1",BREVO_API_KEY:"clave-ficticia-no-utilizable",BREVO_SENDER_EMAIL:"contacto@example.com",BREVO_SENDER_NAME:"Casku",CASKU_MAIL_DELIVERY_SECRET:"secreto-estable-ficticio-de-32-caracteres",CASKU_MAIL_SUPPRESSION_SECRET:"supresion-estable-ficticia-de-32-caracteres",CASKU_TEST_MAIL_URL:"http://127.0.0.1:9999"}
+const settings={CASKU_MAIL_MODE:"produccion",CASKU_MAIL_TEST_RECIPIENTS:"",NODE_ENV:"production",CASKU_TEST_MODE:"0",CASKU_PRODUCTION_TEST:"0",CASKU_MAIL_ENABLED:"1",BREVO_SENDER_VERIFIED:"1",BREVO_API_KEY:"clave-ficticia-no-utilizable",BREVO_SENDER_EMAIL:"contacto@example.com",BREVO_SENDER_NAME:"Casku",CASKU_MAIL_DELIVERY_SECRET:"secreto-estable-ficticio-de-32-caracteres",CASKU_MAIL_SUPPRESSION_SECRET:"supresion-estable-ficticia-de-32-caracteres",CASKU_TEST_MAIL_URL:"http://127.0.0.1:9999"}
 function environment<T>(values:Record<string,string>,run:()=>T) {
   const saved=Object.fromEntries(Object.keys(values).map(key=>[key,process.env[key]]))
   Object.assign(process.env,values)
@@ -47,4 +47,20 @@ test("Brevo: aceptación requiere messageId, y los errores nunca filtran el cuer
     globalThis.fetch=async()=>{throw new Error("datos privados de red")}
     await assert.rejects(postBrevo(config,payload),error=>error instanceof MailUnavailable&&error.kind==="INCIERTO"&&!error.message.includes("privados"))
   }finally{globalThis.fetch=original}
+})
+
+test("Brevo: pruebas reales exigen lista explícita y rechazan destinatarios antes de la red",async()=>{
+  for (const change of [{CASKU_MAIL_MODE:""},{CASKU_MAIL_MODE:"pruebas"},{CASKU_MAIL_MODE:"otro"},{CASKU_MAIL_MODE:"pruebas",CASKU_MAIL_TEST_RECIPIENTS:"familia@example.com,"},{CASKU_MAIL_MODE:"pruebas",CASKU_MAIL_TEST_RECIPIENTS:"familia@example.com\n"}]) environment({...settings,...change},()=>assert.throws(()=>mailConfig(),MailUnavailable))
+  const config=environment({...settings,CASKU_MAIL_MODE:"pruebas",CASKU_MAIL_TEST_RECIPIENTS:" FAMILIA@example.com, segunda@example.com "},()=>mailConfig())
+  const payload=brevoPayload(message,config,"test-recipient")
+  assert.throws(()=>brevoPayload({...message,to:"otra@example.com"},config,"test-recipient"),MailUnavailable)
+  assert.throws(()=>brevoPayload({...message,to:"familia+otro@example.com"},config,"test-recipient"),MailUnavailable)
+  const saved=globalThis.fetch;let calls=0
+  try {
+    globalThis.fetch=async()=>{calls++;return Response.json({messageId:"<prueba@brevo.test>"},{status:201})}
+    await assert.rejects(postBrevo(config,{...payload,to:[{email:"otra@example.com",contactPixelTrackingConsent:false}]}),MailUnavailable)
+    assert.equal(calls,0)
+    assert.equal(await postBrevo(config,payload),"<prueba@brevo.test>");assert.equal(calls,1)
+  }finally{globalThis.fetch=saved}
+  environment({...settings,CASKU_MAIL_MODE:"pruebas",CASKU_MAIL_TEST_RECIPIENTS:"familia@example.com"},()=>assert.throws(()=>mailConfig("RESULTADO"),MailUnavailable))
 })

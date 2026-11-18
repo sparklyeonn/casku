@@ -22,9 +22,20 @@ export function mailConfig(purpose: MailPurpose = "ACCESO") {
       baseUrl = url.origin
     } catch { throw new MailUnavailable() }
   }
+  const mode = process.env.CASKU_MAIL_MODE || "pruebas"
+  let testRecipients: string[] | undefined
+  if (!simulated) {
+    if (mode !== "pruebas" && mode !== "produccion") throw new MailUnavailable()
+    if (mode === "pruebas") {
+      const raw = process.env.CASKU_MAIL_TEST_RECIPIENTS || ""
+      if (raw.length > 4096 || /[\r\n\0]/.test(raw)) throw new MailUnavailable()
+      testRecipients = raw.split(",").map(value => value.trim().toLowerCase())
+      if (!testRecipients.length || testRecipients.some(value => !validEmail(value))) throw new MailUnavailable()
+    }
+  }
   // La integración clínica real conserva su aprobación y activación pendientes.
   if (purpose === "RESULTADO" && !simulated) throw new MailUnavailable()
-  return { key, sender: { email, name }, secret, suppressionSecret, baseUrl }
+  return { key, sender: { email, name }, secret, suppressionSecret, baseUrl, testRecipients }
 }
 export type BrevoConfig = ReturnType<typeof mailConfig>
 export function providerKey(key: string) {
@@ -38,6 +49,7 @@ export function providerKey(key: string) {
 }
 export function brevoPayload(message: MailMessage, config: BrevoConfig, key: string) {
   if (!validEmail(message.to) || !message.subject || message.subject.length > 998 || /[\r\n\0]/.test(message.subject) || !message.html || !message.text) throw new MailUnavailable()
+  if (config.testRecipients && !config.testRecipients.includes(message.to.trim().toLowerCase())) throw new MailUnavailable()
   const attachment = message.attachments?.map(file => {
     if (!/^[\p{L}\p{N}_.-]{1,120}$/u.test(file.filename) || !file.content || file.content.length > 7_000_000) throw new MailUnavailable()
     const data = Buffer.from(file.content,"base64")
@@ -48,6 +60,7 @@ export function brevoPayload(message: MailMessage, config: BrevoConfig, key: str
 }
 export type BrevoPayload = ReturnType<typeof brevoPayload>
 export async function postBrevo(config: BrevoConfig, payload: BrevoPayload) {
+  if (config.testRecipients && (payload.to.length !== 1 || !config.testRecipients.includes(payload.to[0].email.trim().toLowerCase()))) throw new MailUnavailable()
   let response: Response
   try {
     response = await fetch(`${config.baseUrl}/v3/smtp/email`, { method: "POST", headers: { "api-key": config.key, "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(payload), redirect: "error", cache: "no-store", signal: AbortSignal.timeout(12000) })

@@ -3,6 +3,7 @@ import { createServer } from "node:http"
 import { randomBytes,randomUUID } from "node:crypto"
 import { readFile,readdir } from "node:fs/promises"
 import { setTimeout as pause } from "node:timers/promises"
+import { Pool } from "pg"
 import { PGlite } from "@electric-sql/pglite"
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket"
 import { PrismaClient } from "@prisma/client"
@@ -14,7 +15,7 @@ import { recordBrevoEvents } from "../src/lib/mail/webhook-store.ts"
 import { parseBrevoEvents, recipientKey } from "../src/lib/mail/webhook-policy.ts"
 import { MailUnavailable } from "../src/lib/mail/brevo.ts"
 const real=process.argv.includes("--postgres"), embedded=real?null:new PGlite()
-let raw=embedded,fixturePool,socket,gate,db,second,url,failed=false,behavior="accept",release
+let raw=embedded,fixturePool,controlPool,socket,gate,db,second,url,failed=false,behavior="accept",release
 const calls=[]
 const server=createServer(async(request,response)=>{
   const chunks=[];for await(const chunk of request)chunks.push(chunk)
@@ -51,6 +52,7 @@ try {
   }
   assert.deepEqual((await raw.query('SELECT to_jsonb(t) data FROM "CorreoInscripcion" t WHERE id=$1',[legacyId])).rows[0].data,before)
   if(!real){socket=new PGLiteSocketServer({db:embedded,host:"127.0.0.1",port:0,maxConnections:20});await socket.start();gate=await protocolGate({host:"127.0.0.1",port:Number(socket.getServerConn().split(":").at(-1))});url=`postgresql://postgres:postgres@127.0.0.1:${gate.port}/postgres?sslmode=disable`}
+  controlPool=new Pool({connectionString:url,max:1})
   db=new PrismaClient({adapter:new PrismaPg({connectionString:url})});second=new PrismaClient({adapter:new PrismaPg({connectionString:url})})
   await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve))
   configuration={key:"brevo_local_test_only",sender:{email:"test@example.com",name:"Casku"},secret:randomBytes(32).toString("base64url"),suppressionSecret:randomBytes(32).toString("base64url"),baseUrl:`http://127.0.0.1:${server.address().port}`}
@@ -74,9 +76,11 @@ try {
     assert.equal((await db.envioTransaccional.findUniqueOrThrow({where:{clave:mode}})).estado,mode==="invalid"?"RECHAZADO":"REVISION")
   }
   console.log("OK fallos Brevo: 429 recuperable con misma clave/contenido; duplicado, 5xx y respuesta perdida no se repiten a ciegas.")
-  await raw.exec(`CREATE FUNCTION brevo_accept_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.estado='ACEPTADO' THEN RAISE EXCEPTION 'fallo ficticio'; END IF; RETURN NEW; END $$; CREATE TRIGGER brevo_accept_fail_trigger BEFORE UPDATE ON "EnvioTransaccional" FOR EACH ROW EXECUTE FUNCTION brevo_accept_fail();`)
+  // La preparación y limpieza pasan por el mismo gate que las transacciones.
+  // PGlite comparte un backend; exec directo podría adelantarse al ROLLBACK.
+  await controlPool.query(`CREATE FUNCTION brevo_accept_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.estado='ACEPTADO' THEN RAISE EXCEPTION 'fallo ficticio'; END IF; RETURN NEW; END $$; CREATE TRIGGER brevo_accept_fail_trigger BEFORE UPDATE ON "EnvioTransaccional" FOR EACH ROW EXECUTE FUNCTION brevo_accept_fail();`)
   const previous=calls.length;await assert.rejects(send("lost-save"))
-  await raw.exec('DROP TRIGGER brevo_accept_fail_trigger ON "EnvioTransaccional"; DROP FUNCTION brevo_accept_fail();')
+  await controlPool.query('DROP TRIGGER brevo_accept_fail_trigger ON "EnvioTransaccional"; DROP FUNCTION brevo_accept_fail();')
   await db.$executeRaw`UPDATE "EnvioTransaccional" SET "bloqueoHasta"=CURRENT_TIMESTAMP-interval '3 days' WHERE clave='lost-save'`
   await assert.rejects(send("lost-save"),rejectKind("INCIERTO"));assert.equal(calls.length,previous+1)
   // Guardar una notificación antes de la aceptación y probar ambos clientes a la vez.
@@ -125,6 +129,6 @@ try {
 } catch(error){console.error(error);if(db)console.error(await db.envioTransaccional.findMany({select:{clave:true,estado:true,intentos:true,motivo:true,disponibleAt:true}}));failed=true}
 finally {
   release?.();server.closeAllConnections();await new Promise(resolve=>server.close(resolve))
-  await db?.$disconnect();await second?.$disconnect();await fixturePool?.end();await gate?.close();await socket?.stop();await embedded?.close()
+  await db?.$disconnect();await second?.$disconnect();await controlPool?.end();await fixturePool?.end();await gate?.close();await socket?.stop();await embedded?.close()
 }
 if(failed)process.exitCode=1

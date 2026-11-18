@@ -55,7 +55,8 @@ jobs:
           const files = (await readdir('.')).filter(name => name === '.env' || name.startsWith('.env.') && name !== '.env.example')
           assert.equal(files.length, 0, 'CI no debe cargar archivos de configuración privada')
           assert.equal(process.env.DATABASE_URL, 'postgresql://postgres:postgres@127.0.0.1:1/casku_ci_unused?sslmode=disable&connect_timeout=1')
-          for (const key of ['CASKU_MAIL_ENABLED', 'CASKU_MAIL_AUTOMATION', 'BREVO_SENDER_VERIFIED', 'BREVO_WEBHOOK_ENABLED', 'CASKU_PASSWORD_RECOVERY_ENABLED']) assert.equal(process.env[key], '0')
+          for (const key of ['CASKU_MAIL_ENABLED', 'CASKU_MAIL_AUTOMATION', 'BREVO_SENDER_VERIFIED', 'BREVO_WEBHOOK_ENABLED', 'CASKU_PASSWORD_RECOVERY_ENABLED', 'CALENDLY_ENABLED']) assert.equal(process.env[key], '0')
+          assert.equal(process.env.CALENDLY_API_TOKEN, '')
           assert.equal(process.env.BREVO_API_KEY, '')
           assert.equal(process.env.BREVO_SENDER_EMAIL, '')
           assert.equal(process.env.CASKU_TEAM_ACCOUNTS, '[]')
@@ -67,6 +68,9 @@ jobs:
 
       - name: Generar cliente Prisma
         run: npx --no-install prisma generate
+
+      - name: Instalar navegadores de las pruebas y dependencias de Ubuntu
+        run: npx --no-install playwright install --with-deps chromium webkit
 
       - name: Comprobar código, pruebas y producción
         run: npm run check

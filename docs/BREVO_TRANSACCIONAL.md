@@ -72,3 +72,27 @@ Se revisó la configuración sin mostrar credenciales y se consultó la base con
 Se inició el servidor local con los envíos activados y lista de dos correos privados. Se solicitó un código desde la API real de acceso para cada dirección autorizada. Ambas solicitudes respondieron HTTP 200 y cada intención quedó registrada como ACEPTADO, con un intento e identificador del proveedor. No se registraron cuerpos, códigos ni credenciales en este documento. La entrega en buzón sigue pendiente de confirmación; sin webhook público, el estado local de entrega permanece SIN_CONFIRMAR.
 
 Para completar el ingreso desde el navegador se debe solicitar un código nuevo en `/login`: las solicitudes de verificación de transporte no crean el estado de acceso de la pantalla del usuario. Los resultados y seguimientos clínicos continúan bloqueados y la recuperación requiere su procesador independiente.
+
+## Confirmaciones y recuperación reales controladas · 18 de noviembre de 2026
+
+Se reutilizó la configuración privada con `CASKU_MAIL_MODE=pruebas`, envíos activos y únicamente las dos direcciones autorizadas. No se añadieron destinatarios ni se habilitaron resultados o seguimiento clínico.
+
+### Confirmaciones de inscripción
+
+Se creó un evento rotulado «PRUEBA BREVO · NO ES UN EVENTO REAL» con dos cupos y dos bebés claramente ficticios. Se conservaron los datos existentes de los apoderados. La inscripción se creó mediante las funciones de validación, reserva y consentimiento del sistema; esta prueba del servidor no sustituye la aceptación manual del formulario desde una sesión familiar.
+
+Ambas confirmaciones quedaron ENVIADO, con números 001 y 002, un intento y aceptación registrada de Brevo. Antes de contactar al proveedor, se verificaron el destinatario, el número en el asunto y el PNG adjunto. Se decodificó cada QR de 240 × 240 píxeles y se comprobó su coincidencia con el token de su inscripción, sin imprimir ni guardar el token en este documento. Ejecutar de nuevo la confirmación no incrementó los intentos ni produjo un segundo envío.
+
+Al finalizar se cerraron las inscripciones del evento ficticio. No se seleccionó ese evento para recepción ni se modificaron eventos existentes. Se conservan los registros para que se puedan revisar los comprobantes en las cuentas autorizadas.
+
+### Recuperación del equipo
+
+Se generaron secretos privados independientes para la cola y su procesador, conservando los existentes si los había. Se habilitó la recuperación local. Se utilizó la cuenta de administración ya existente de una de las direcciones autorizadas; no se creó una cuenta del equipo para la otra dirección ni se cambió una contraseña para ejecutar esta prueba.
+
+La solicitud pública respondió 202 con mensaje genérico, sin devolver token. Se comprobó que no hubiera solicitudes pendientes ajenas a la prueba antes de ejecutar manualmente el procesador privado. El lote procesó una solicitud: enviada, cero fallos y cero casos en revisión. Brevo aceptó el mensaje con un intento; el enlace quedó ACTIVA y vigente, y la dirección cifrada se eliminó de la solicitud terminada. La contraseña y la versión de la cuenta conservaron sus valores. Una segunda ejecución del procesador envió cero mensajes.
+
+El procesador se ejecutó manualmente; no se configuró un temporizador local ni el servicio periódico del despliegue. Para nuevas pruebas de recuperación, solicitar el enlace desde la web y ejecutar `npm run recovery:process` en la carpeta del proyecto. El enlace apunta al servidor local y requiere que este permanezca iniciado.
+
+### Aceptación pendiente en buzones
+
+La aceptación del proveedor no confirma por sí sola la entrega. Queda comprobar en los buzones autorizados la recepción de las confirmaciones, la apertura de los adjuntos y el acceso al formulario desde el enlace de recuperación. El cambio efectivo de la contraseña y el uso único del enlace no se ejercitaron en la cuenta real de administración: las pruebas automáticas previas cubren ese comportamiento con cuentas ficticias. No se deben compartir códigos, enlaces ni contraseñas en el chat.

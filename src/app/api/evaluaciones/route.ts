@@ -1,3 +1,4 @@
+import { complementaryData } from "@/lib/measurement-storage"
 import { randomUUID } from "node:crypto"
 import { parsePrivacy, paperDeclaration, PrivacyInputError } from "@/lib/privacy/policy"
 import { recordConsent, PrivacyConflict, trace } from "@/lib/privacy/store"
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
       const authorization = await recordConsent(tx, { pacienteId: paciente.id, eventoId: null, apoderadoId: null, ambito: `evaluacion:${id}` }, privacy, { id: user.id, role: user.role }, declaration)
       const result = await tx.evaluacion.create({ data: { id, autorizacionId: authorization.id,
         autorId: user.id, pacienteId: paciente.id, correoPadre: data.correo, anteroposterior: data.ap, biparietal: data.bp,
-        diagonalIzq: data.di, diagonalDer: data.dd, indiceCraneal: data.indiceCraneal, indiceAsimetria: data.indiceAsimetria,
+        diagonalIzq: data.di, diagonalDer: data.dd, medicionesComplementarias: complementaryData(data), indiceCraneal: data.indiceCraneal, indiceAsimetria: data.indiceAsimetria,
         diagnostico: data.diagnostico, recomendacion: data.recomendacion, kinesiologa: user.name,
       } })
       await trace(tx, { id: user.id, role: user.role }, "GUARDAR", "EVALUACION", result.id)

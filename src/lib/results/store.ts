@@ -1,3 +1,4 @@
+import { complementaryData, complementaryValues } from "@/lib/measurement-storage"
 import { draftMailPlan } from "@/lib/mail-queue/store"
 import { requireDataConsent, trace } from "@/lib/privacy/store"
 import { privateHash } from "@/lib/families/security"
@@ -13,7 +14,7 @@ type Review=Prisma.EvaluacionGetPayload<{include:typeof reviewInclude}>
 type Publication=NonNullable<Review["publicacion"]>
 type Measures=ReturnType<typeof parseMeasurements>
 function draftSnapshot(row:Review):ResultSnapshot {
- return parseSnapshot({nombreBebe:row.paciente.nombre,fechaNacimiento:row.paciente.fechaNacimiento.toISOString().slice(0,10),profesional:row.kinesiologa,evento:row.fila?.inscripcion.evento.nombre??null,numero:row.fila?.inscripcion.numero??null,fechaEvaluacion:row.createdAt.toISOString(),medidas:{ap:row.anteroposterior,bp:row.biparietal,di:row.diagonalIzq,dd:row.diagonalDer},indiceCraneal:row.indiceCraneal,indiceAsimetria:row.indiceAsimetria,diagnostico:row.diagnostico,recomendacion:row.recomendacion})
+ return parseSnapshot({nombreBebe:row.paciente.nombre,fechaNacimiento:row.paciente.fechaNacimiento.toISOString().slice(0,10),profesional:row.kinesiologa,evento:row.fila?.inscripcion.evento.nombre??null,numero:row.fila?.inscripcion.numero??null,fechaEvaluacion:row.createdAt.toISOString(),medidas:{ap:row.anteroposterior,bp:row.biparietal,di:row.diagonalIzq,dd:row.diagonalDer,...complementaryValues(row.medicionesComplementarias)},indiceCraneal:row.indiceCraneal,indiceAsimetria:row.indiceAsimetria,diagnostico:row.diagnostico,recomendacion:row.recomendacion})
 }
 function latest(publication:Publication) {
  const version=publication.versiones.find(row=>row.numero===publication.versionActual)
@@ -51,7 +52,7 @@ async function lockOwned(tx:Prisma.TransactionClient,staffId:string,id:string) {
  return tx.evaluacion.findUniqueOrThrow({where:{id},include:reviewInclude})
 }
 function measureData(measures:Measures) {
- return {anteroposterior:measures.ap,biparietal:measures.bp,diagonalIzq:measures.di,diagonalDer:measures.dd,indiceCraneal:measures.indiceCraneal,indiceAsimetria:measures.indiceAsimetria,diagnostico:measures.diagnostico,recomendacion:measures.recomendacion}
+ return {anteroposterior:measures.ap,biparietal:measures.bp,diagonalIzq:measures.di,diagonalDer:measures.dd,medicionesComplementarias:complementaryData(measures),indiceCraneal:measures.indiceCraneal,indiceAsimetria:measures.indiceAsimetria,diagnostico:measures.diagnostico,recomendacion:measures.recomendacion}
 }
 export async function reviseResult(staffId:string,id:string,revision:number,measures:Measures) {
  return prisma.$transaction(async tx=>{
@@ -59,8 +60,9 @@ export async function reviseResult(staffId:string,id:string,revision:number,meas
   if(row.publicacion)throw new AttentionConflict("El resultado ya está publicado. Usa la corrección con motivo y nueva versión.")
   if(row.revision!==revision)throw new AttentionConflict("La evaluación cambió en otra pantalla. Actualiza antes de guardar.")
   await requireDataConsent(tx,row.autorizacionId??row.fila?.inscripcion.autorizacionId,row.pacienteId,row.paciente.apoderadoId)
+  if(row.medicionesComplementarias && measures.perimetro===undefined)throw new InvalidEvaluation("Conserva el perímetro y las dos desviaciones registradas.")
   const anterior=draftSnapshot(row),data=measureData(measures)
-  if(Object.entries(data).every(([key,value])=>row[key as keyof typeof data]===value))return reviewSummary(row)
+  if(Object.entries(data).every(([key,value])=>key==="medicionesComplementarias" ? ["perimetro","desviacionDer","desviacionIzq"].every(k=>complementaryValues(row.medicionesComplementarias)[k as "perimetro"]===complementaryValues(value===Prisma.DbNull?null:value)[k as "perimetro"]) : row[key as keyof typeof data]===value))return reviewSummary(row)
   const updated=await tx.evaluacion.update({where:{id},data:{...data,revision:{increment:1}},include:reviewInclude})
   await tx.revisionEvaluacion.create({data:{evaluacionId:id,revision:updated.revision,autorId:staffId,anterior,nueva:draftSnapshot(updated)}})
   return reviewSummary(updated)
@@ -112,8 +114,9 @@ export async function changePublishedResult(actor:{id:string;version:number},id:
    if(!family || family.id!==publication.apoderadoId)throw new AttentionConflict("La vinculación familiar debe estar verificada y corresponder a la publicación antes de republicar.")
    await requireDataConsent(tx,row.autorizacionId??row.fila?.inscripcion.autorizacionId,row.pacienteId,family.id)
    if(!measures)throw new InvalidEvaluation("Revisa las medidas corregidas.")
+   if(base.medidas.perimetro!==undefined && measures.perimetro===undefined)throw new InvalidEvaluation("Conserva el perímetro y las dos desviaciones registradas.")
    if(publication.estado==="VIGENTE"&&Object.entries(base.medidas).every(([key,value])=>measures[key as keyof typeof base.medidas]===value))throw new InvalidEvaluation("Modifica al menos una medición antes de publicar una corrección.")
-   const snapshot:ResultSnapshot={...base,medidas:{ap:measures.ap,bp:measures.bp,di:measures.di,dd:measures.dd},indiceCraneal:measures.indiceCraneal,indiceAsimetria:measures.indiceAsimetria,diagnostico:measures.diagnostico,recomendacion:measures.recomendacion}
+   const snapshot:ResultSnapshot={...base,medidas:{ap:measures.ap,bp:measures.bp,di:measures.di,dd:measures.dd,...(measures.perimetro===undefined?{}:{perimetro:measures.perimetro,desviacionDer:measures.desviacionDer,desviacionIzq:measures.desviacionIzq})},indiceCraneal:measures.indiceCraneal,indiceAsimetria:measures.indiceAsimetria,diagnostico:measures.diagnostico,recomendacion:measures.recomendacion}
    const updated=await tx.evaluacion.update({where:{id},data:{...measureData(measures),revision:{increment:1}}})
    await tx.revisionEvaluacion.create({data:{evaluacionId:id,revision:updated.revision,autorId:actor.id,anterior:base,nueva:snapshot}})
    newVersion=publication.versionActual+1

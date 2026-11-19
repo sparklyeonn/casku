@@ -94,3 +94,37 @@
   background-size: 5px 5px;
   background-repeat: no-repeat;
 }
+
+/* Craneometría: misma identidad, campos amplios y lectura clínica por indicador. */
+.craneometry-intro { background: var(--casku-soft); color: #004e58; padding: clamp(1.5rem,4vw,2.5rem); border-radius: 42px 16px; }
+.craneometry-intro h1 { font-family: var(--font-casku-display),Georgia,serif; color: #004e58; font-size: clamp(1.8rem,3vw,2.6rem); }
+.team-content .craneometry-intro p { color: #004e58; }
+.craneometry-measurements { display: grid; gap: 1.25rem; margin-block: 1.5rem; }
+.team-content fieldset.craneometry-group { background: var(--casku-surface); border: 1px solid var(--casku-line); border-radius: 24px; padding: 1.25rem; }
+.craneometry-group legend { color: var(--casku-primary); font-size: 1.1rem; font-weight: 600; padding-inline: .4rem; }
+.craneometry-group legend span { display: inline-block; margin-right: .6rem; color: var(--casku-accent); font-size: .8rem; }
+.craneometry-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1.25rem; }
+.craneometry-fields label { font-size: .9rem; font-weight: 500; }
+.craneometry-unit,.craneometry-help { color: var(--casku-muted); font-size: .85rem; font-weight: 400; }
+.craneometry-help { margin-block: .75rem 1.25rem; }
+.craneometry-professional { margin-block: 1rem; }
+.craneometry-reference { margin-block: 1.5rem; background: var(--casku-surface); border: 1px solid var(--casku-line); border-radius: 24px; padding: clamp(1rem,3vw,1.5rem); }
+.craneometry-result-heading { display:flex; justify-content:space-between; flex-wrap:wrap; gap:1rem; align-items:center; margin-bottom:1.25rem; }
+.craneometry-result-heading h2 { font-size:1.4rem; font-weight:600; }
+.craneometry-badge { border-radius:999px; padding:.45rem .75rem; font-size:.75rem; background:var(--casku-tint); color:var(--casku-primary); }
+.craneometry-indices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.85rem; }
+.craneometry-indices > div { background:var(--casku-tint); border-radius:18px; padding:1.25rem; }
+.craneometry-indices dt { font-size:.8rem; font-weight:600; color:var(--casku-primary); }
+.craneometry-indices dd { font-size:.8rem; margin-top:.6rem; }
+.craneometry-indices .craneometry-number { font-size:clamp(1.35rem,3vw,2rem); font-weight:600; color:var(--casku-primary); font-variant-numeric:tabular-nums; }
+.craneometry-range { font-weight:600; }
+.craneometry-empty { background:var(--casku-tint); border-radius:24px; padding:2rem; margin-block:1.5rem; }
+.craneometry-empty h2 { font-family:var(--font-casku-display),Georgia,serif; font-size:1.5rem; margin-bottom:.75rem; }
+@media (max-width:599px) { .craneometry-fields,.craneometry-indices { grid-template-columns:minmax(0,1fr); } .craneometry-intro { border-radius:28px 12px; } }
+.craneometry-page > section:first-child h1 { font-family:var(--font-casku-display),Georgia,serif; color:var(--casku-primary); }
+.craneometry-reference th { font-weight:600; }
+.craneometry-reference table { line-height:1.5; }
+@media (max-width:599px) {
+  .team-evaluation-actions { display:grid; grid-template-columns:minmax(0,1fr); }
+  .team-evaluation-actions > button { width:100%; }
+}

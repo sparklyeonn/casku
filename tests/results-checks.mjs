@@ -15,7 +15,7 @@ export async function resultsChecks({ db, client, signIn, password, accounts, ad
     assert.equal(response.status, 201); const row = (await response.json()).inscripcion; registrations.push(row)
     assert.equal((await reception("/api/recepcion/llegadas", post({ eventoId: event.id, inscripcionId: row.id }))).status, 201)
   }
-  const measures = { ap: 140, bp: 120, di: 135, dd: 138 }
+  const measures = { ap: 140, bp: 120, di: 135, dd: 138, perimetro: 440, desviacionDer: 5, desviacionIzq: 8 }
   async function evaluate() {
     const called = await kine("/api/kinesiologia/llamar", post({ id: randomUUID(), eventoId: event.id })); assert.equal(called.status, 200)
     const attention = (await called.json()).atencion
@@ -42,11 +42,14 @@ export async function resultsChecks({ db, client, signIn, password, accounts, ad
   const previewPage = await kine(`/kinesiologia/resultados/${first}`)
   assert.equal(previewPage.status, 200); assert((await previewPage.text()).includes("Revisar resultado"))
   assert.equal((await kine(detail, { ...post({ revision: 1, ...measures, ap: -1 }), method: "PATCH" })).status, 400)
-  const changedMeasures = { ...measures, ap: 141 }
+  assert.equal(owned.resultado.datos.medidas.perimetro,440)
+  assert.equal(owned.resultado.datos.medidas.desviacionIzq,8)
+  assert.equal((await kine(detail, { ...post({revision:1,ap:140,bp:120,di:135,dd:138}),method:"PATCH" })).status,400,"No perder las mediciones complementarias al editar desde un cliente anterior")
+  const changedMeasures = { ...measures, ap: 141, desviacionIzq: 9 }
   const changed = await kine(detail, { ...post({ revision: 1, ...changedMeasures, diagnostico: "falso", correo: "intruso@example.com" }), method: "PATCH" })
   assert.equal(changed.status, 200)
   const corrected = (await changed.json()).resultado
-  assert.equal(corrected.revision, 2); assert.equal(corrected.datos.indiceCraneal, 120 / 141 * 100); assert.notEqual(corrected.datos.diagnostico, "falso")
+  assert.equal(corrected.datos.medidas.desviacionIzq,9); assert.equal(corrected.revision, 2); assert.equal(corrected.datos.indiceCraneal, 120 / 141 * 100); assert.notEqual(corrected.datos.diagnostico, "falso")
   assert.equal((await db.query('SELECT count(*)::int n FROM "RevisionEvaluacion" WHERE "evaluacionId"=$1', [first])).rows[0].n, 1)
   assert.equal((await kine(detail, { ...post({ revision: 1, ...measures }), method: "PATCH" })).status, 409)
   assert.equal((await kine(`${detail}/publicar`, post({ revision: 1 }))).status, 409)
@@ -61,7 +64,7 @@ export async function resultsChecks({ db, client, signIn, password, accounts, ad
   const resultMail = mails.at(-1)
   assert.equal(resultMail.subject, "Tu resultado de craneometría en Casku")
   assert([].concat(resultMail.to).includes(f1.user.email)); assert(![].concat(resultMail.to).includes("intruso@example.com"))
-  assert(resultMail.text.includes(corrected.datos.diagnostico)); assert(resultMail.text.includes(corrected.datos.recomendacion))
+  assert(resultMail.text.includes("DPOE: 9 mm")); assert(resultMail.text.includes("Perímetro craneal: 440 mm")); assert(resultMail.text.includes(corrected.datos.diagnostico)); assert(resultMail.text.includes(corrected.datos.recomendacion))
   assert(!resultMail.html.includes("<script>")); assert(resultMail.html.includes("&lt;script&gt;"))
   const familyDetail = `/api/familias/resultados/${published.id}`
   for (const request of [anonymous, kine, reception, admin]) assert.equal((await request(familyDetail)).status, 401)

@@ -118,6 +118,7 @@ model Evaluacion {
   biparietal      Float
   diagonalIzq     Float
   diagonalDer     Float
+  medicionesComplementarias Json?
   indiceCraneal   Float
   indiceAsimetria Float
   diagnostico     String

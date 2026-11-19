@@ -5,25 +5,16 @@ import { PRIVACY_VERSION } from "@/lib/privacy/policy"
 import { useId, useRef, useState } from "react"
 import Link from "next/link"
 
-import { calcularDiagnostico } from "@/lib/craneometria"
-
-const colorChip = {
-  normal: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
-  leve: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
-  moderado: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400",
-}
-
-const colorVal = {
-  normal: "text-emerald-600 dark:text-emerald-400",
-  leve: "text-amber-600 dark:text-amber-400",
-  moderado: "text-red-600 dark:text-red-400",
-}
+import { MeasurementFields } from "./MeasurementFields"
+import { CraneometryReference } from "./CraneometryReference"
+import { measurementForm, measurementValues, validMeasurements } from "@/lib/measurement-fields"
+import type { CompleteMeasurements } from "@/lib/craneometry-reference"
 
 export type AssignedForm = { id: string; reservaId: string; numero: number; evento: { nombre: string }; bebe: { nombre: string; rut: string; fnac: string }; correo: string }
 export default function FormularioEvaluacion({ profesional, atencion }: { profesional: string; atencion?: AssignedForm }) {
   const formId = useId()
   const [declaration, setDeclaration] = useState(emptyDeclaration)
-  const initial = { nombre: atencion?.bebe.nombre || "", rut: atencion?.bebe.rut || "", fnac: atencion?.bebe.fnac || "", correo: atencion?.correo || "", ap: "", bp: "", di: "", dd: "", kine: "" }
+  const initial = { nombre: atencion?.bebe.nombre || "", rut: atencion?.bebe.rut || "", fnac: atencion?.bebe.fnac || "", correo: atencion?.correo || "", ...measurementForm() }
   const [form, setForm] = useState({
     ...initial,
   })
@@ -35,12 +26,8 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }))
 
-  const ap = parseFloat(form.ap)
-  const bp = parseFloat(form.bp)
-  const di = parseFloat(form.di)
-  const dd = parseFloat(form.dd)
-  const medidasOk = [ap, bp, di, dd].every(v => Number.isFinite(v) && v > 0)
-  const resultado = medidasOk ? calcularDiagnostico(ap, bp, di, dd) : null
+  const measures = measurementValues(form)
+  const medidasOk = validMeasurements(measures, true)
 
   function mostrarToast(msg: string) {
     setToast(msg)
@@ -48,7 +35,7 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
   }
 
   async function guardar() {
-    if (!resultado) return mostrarToast("Ingresa las 4 medidas")
+    if (!medidasOk) return mostrarToast("Completa las siete mediciones válidas en milímetros. Las desviaciones pueden ser cero.")
     if (inFlight.current || guardada) return
     if (!form.fnac) return mostrarToast("Ingresa la fecha de nacimiento")
     if (!form.correo && !atencion) return mostrarToast("⚠ Ingresa el correo del padre/madre")
@@ -60,13 +47,10 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
       const res = await fetch("/api/evaluaciones", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(atencion ? { atencionId: atencion.id, reservaId: atencion.reservaId, ap, bp, di, dd } : {
+        body: JSON.stringify(atencion ? { atencionId: atencion.id, reservaId: atencion.reservaId, ...measures } : {
           ...form, declaracion: declaration, privacidad: { version: PRIVACY_VERSION, datos: declaration.documentada, correoResultados: false, seguimiento: false },
-          ap, bp, di, dd,
-          indiceCraneal: resultado.indiceCraneal,
-          indiceAsimetria: resultado.indiceAsimetria,
-          diagnostico: [resultado.diagCraneal, resultado.diagAsim].filter(Boolean).join(" + "),
-          recomendacion: resultado.recomendacion,
+          ...measures,
+
         }),
       })
       const data = await res.json()
@@ -84,12 +68,12 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
   }
 
   return (
-    <main className="team-evaluation max-w-3xl mx-auto px-4 py-7">
+    <main className="team-evaluation craneometry-page max-w-5xl mx-auto px-4 py-7">
       {savedId && <section className="mb-5 space-y-3 rounded-xl border border-teal-300 p-4"><p role="status">Borrador guardado. Revisa el resultado antes de publicarlo para la familia.</p><Link href={`/kinesiologia/resultados/${savedId}`} className="inline-block rounded-lg bg-teal-700 px-5 py-3 text-white">Revisar y publicar resultado</Link></section>}
       {atencion && <section className="mb-6 space-y-3 rounded-xl border border-teal-300 p-4"><h1 className="text-xl font-semibold">Craneometría · Inscripción N.º {String(atencion.numero).padStart(3, "0")}</h1><p>{atencion.evento.nombre}</p><p className="text-sm">Datos recuperados de la inscripción. Verifica el nombre del bebé antes de medir.</p>{guardada && <p role="status" className="font-medium text-teal-700 dark:text-teal-300">Evaluación guardada y atención finalizada.</p>}<Link href="/kinesiologia" className="inline-block underline">{guardada ? "Volver y llamar al siguiente bebé" : "Volver a mi atención"}</Link></section>}
       <fieldset disabled={guardando || guardada} className="min-w-0">
 
-      <div className="team-form-intro"><p className="casku-eyebrow">Registro clínico</p>{!atencion && <h1 className="text-2xl font-semibold">Craneometría sin inscripción</h1>}<p>Revisa los datos del bebé y registra las mediciones en milímetros.</p></div>
+      <div className="team-form-intro craneometry-intro"><p className="casku-eyebrow">Evaluación craneométrica</p>{!atencion && <h1 className="text-2xl font-semibold">Craneometría sin inscripción</h1>}<p>Siete medidas, una ficha. Revisa los datos del bebé y registra cada medición en milímetros.</p></div>
 
       {/* Datos paciente */}
       <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Datos del paciente</p>
@@ -117,90 +101,9 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
         </div>
       </div>
 
-      {/* Medidas */}
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Medidas craneales (mm)</p>
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-5 mb-4 flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            { key: "ap", label: "Anteroposterior" },
-            { key: "bp", label: "Biparietal" },
-            { key: "di", label: "Diagonal izquierda" },
-            { key: "dd", label: "Diagonal derecha" },
-          ].map(({ key, label }) => (
-            <div key={key} className="flex flex-col gap-1.5">
-              <label htmlFor={`${formId}-medida-${key}`} className="text-xs font-medium text-gray-500">{label} (mm)</label>
-              <div className="relative">
-                <input
-                  id={`${formId}-medida-${key}`}
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 pr-10 text-sm font-mono outline-none focus:border-blue-500 transition"
-                  placeholder="0.0"
-                  value={form[key as keyof typeof form]}
-                  onChange={e => set(key, e.target.value)}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 font-mono">mm</span>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="border-t border-gray-100 dark:border-gray-800" />
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-gray-500">Nombre kinesióloga</label>
-          <input className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 transition" placeholder="Tu nombre" value={profesional} readOnly aria-label="Profesional de la sesión" />
-        </div>
-      </div>
-
-      {/* Resultado */}
-      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">Resultado</p>
-      <div className={`bg-white dark:bg-gray-900 border rounded-xl mb-5 overflow-hidden transition-colors ${resultado ? "border-blue-400" : "border-gray-200 dark:border-gray-800"}`}>
-        <div className="px-5 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${resultado ? "bg-blue-500 animate-pulse" : "bg-gray-300"}`} />
-          <span className="text-xs font-semibold uppercase tracking-widest text-gray-400">Calculando en tiempo real</span>
-        </div>
-        <div className="p-5">
-          {!resultado ? (
-            <div className="flex flex-col items-center gap-2 py-5 text-gray-300 dark:text-gray-600">
-              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                <ellipse cx="18" cy="18" rx="13" ry="10" stroke="currentColor" strokeWidth="2"/>
-                <line x1="5" y1="18" x2="31" y2="18" stroke="currentColor" strokeWidth="1.5"/>
-                <line x1="18" y1="8" x2="18" y2="28" stroke="currentColor" strokeWidth="1.5"/>
-              </svg>
-              <p className="text-sm">Ingresa las 4 medidas para ver el diagnóstico</p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                  <p className={`font-mono text-2xl font-medium tabular-nums ${colorVal[resultado.severidad]}`}>
-                    {resultado.indiceCraneal.toFixed(1)}
-                  </p>
-                  <p className="text-xs uppercase tracking-wide text-gray-400 mt-1">Índice craneal</p>
-                </div>
-                <div className={`bg-gray-50 dark:bg-gray-800 rounded-lg p-3`}>
-                  <p className={`font-mono text-2xl font-medium tabular-nums ${resultado.indiceAsimetria >= 6 ? colorVal[resultado.severidad] : "text-gray-700 dark:text-gray-200"}`}>
-                    {resultado.indiceAsimetria.toFixed(1)}
-                  </p>
-                  <p className="text-xs uppercase tracking-wide text-gray-400 mt-1">Asimetría (mm)</p>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${colorChip[resultado.severidad]}`}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                  {resultado.diagCraneal}
-                </span>
-                {resultado.diagAsim && (
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold ${resultado.indiceAsimetria >= 12 ? colorChip["moderado"] : colorChip["leve"]}`}>                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                    {resultado.diagAsim}
-                  </span>
-                )}
-              </div>
-              <p className="text-sm text-gray-500 leading-relaxed">{resultado.recomendacion}</p>
-            </div>
-          )}
-        </div>
-      </div>
+      <MeasurementFields value={form} onChange={set} required />
+      <section className="craneometry-professional"><p className="casku-eyebrow">Profesional responsable</p><p>{profesional}</p></section>
+      {medidasOk ? <CraneometryReference measurements={measures as CompleteMeasurements} /> : <section className="craneometry-empty"><h2>Los indicadores aparecerán aquí</h2><p>Completa las siete medidas para ver el índice cefálico, CVA y DPOE. CVAI queda pendiente de confirmar con Casku.</p></section>}
 
       {/* Botones */}
       <div className="team-evaluation-actions flex flex-wrap gap-3">

@@ -118,7 +118,7 @@ async function createEvent(admin, nombre, cupos, open = true) {
   return input
 }
 const registration = (event, changes = {}) => ({ ...familyConsent, id: randomUUID(), eventoId: event.id, nombreApoderado: "Apoderado ficticio", nombreBebe: "Bebé ficticio", fechaNacimiento: "2026-01-01", ...changes })
-const clinicalSnapshot = () => db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' - 'revisionDatos' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' - 'autorizacionId' FROM "Evaluacion" e WHERE id='legacy-evaluation'`)
+const clinicalSnapshot = () => db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' - 'revisionDatos' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' - 'autorizacionId' - 'medicionesComplementarias' FROM "Evaluacion" e WHERE id='legacy-evaluation'`)
 try {
   if (realPostgres) {
     const fixture = await realPostgresFixture()
@@ -135,6 +135,7 @@ try {
     if (verify) await verify()
   }
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   if (!realPostgres) {
     await socket.start()
     // PGlite tiene un único backend también en desarrollo: serializar sus ciclos de protocolo.
@@ -303,45 +304,58 @@ try {
   assert.equal((await db.query('SELECT inscritos FROM "Evento" WHERE id=$1', [b.id])).rows[0].inscritos, actual)
   const parentPage = await f1.request("/familias"); assert.equal(parentPage.status, 200); assert((await parentPage.text()).includes("Mis inscripciones"))
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   console.log("OK concurrencia y correo: último cupo protegido, fallos recuperables, idempotencia del envío y datos clínicos anteriores intactos.")
   await receptionChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, a, b, first, second, own2, png, token, post, createEvent })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   await kinesiologyChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, a, b, first, second, post, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   await onsiteChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent, mails, setMailFailure: value => { failConfirmation = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   await absenceChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   await resultsChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, post, createEvent, mails, setResultFailure: value => { failResults = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await linkingChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await overviewChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await eventEditChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await dataCorrectionsChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await cancellationChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await waitlistChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, family, post, createEvent, mails, setMailFailure: value => { failConfirmation = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await privacyChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, post, createEvent, mails, setResultFailure: value => { failResults = value } })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await resultVersionChecks({db,client,signIn,password,accounts:receptionAccounts,admin,anonymous,f1,f2,post,createEvent,mails,setResultFailure:value=>{failResults=value}})
@@ -363,6 +377,7 @@ try {
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[globalLoginKey])
   await teamChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, post, createEvent })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
+  assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   console.log(realPostgres ? "OK recorrido integral con PostgreSQL real aislado y dos instancias. Sin correos reales." : "Pruebas completas con PostgreSQL y correo locales. No se usó Neon ni se enviaron mensajes reales.")
   }
   assert(!renderingFailure, "El servidor no debe registrar errores de prerender ni excepciones sin manejar")

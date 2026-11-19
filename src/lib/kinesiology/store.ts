@@ -1,3 +1,4 @@
+import { complementaryData, complementaryValues } from "@/lib/measurement-storage"
 import { requireDataConsent, trace } from "@/lib/privacy/store"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
@@ -97,13 +98,13 @@ export async function saveAssignedEvaluation(staff: { id: string; name: string }
     if (!row || row.profesionalId !== staff.id || row.reservaId !== reservaId) throw new AttentionUnavailable()
     if (row.evaluacion) {
       const old = row.evaluacion
-      if (old.anteroposterior !== measures.ap || old.biparietal !== measures.bp || old.diagonalIzq !== measures.di || old.diagonalDer !== measures.dd) throw new AttentionConflict("La evaluación ya se guardó con otras mediciones. No se sobrescribió.")
+      if (old.anteroposterior !== measures.ap || old.biparietal !== measures.bp || old.diagonalIzq !== measures.di || old.diagonalDer !== measures.dd || JSON.stringify(complementaryValues(old.medicionesComplementarias)) !== JSON.stringify(measures.perimetro === undefined ? {} : { perimetro: measures.perimetro, desviacionDer: measures.desviacionDer, desviacionIzq: measures.desviacionIzq })) throw new AttentionConflict("La evaluación ya se guardó con otras mediciones. No se sobrescribió.")
       return { evaluacionId: old.id, nueva: false }
     }
     if (row.estado !== "EN_ATENCION") throw new AttentionConflict("Esta atención ya no está activa. Vuelve a tu fila.")
     const authorization = await requireDataConsent(tx, row.inscripcion.autorizacionId, row.inscripcion.pacienteId, row.inscripcion.apoderadoId)
     const saved = await tx.evaluacion.create({ data: { autorizacionId: authorization.id, autorId: staff.id, filaId: row.id, pacienteId: row.inscripcion.pacienteId, correoPadre: row.inscripcion.apoderado?.correo || row.inscripcion.contactoCorreo || null,
-      anteroposterior: measures.ap, biparietal: measures.bp, diagonalIzq: measures.di, diagonalDer: measures.dd,
+      anteroposterior: measures.ap, biparietal: measures.bp, diagonalIzq: measures.di, diagonalDer: measures.dd, medicionesComplementarias: complementaryData(measures),
       indiceCraneal: measures.indiceCraneal, indiceAsimetria: measures.indiceAsimetria, diagnostico: measures.diagnostico, recomendacion: measures.recomendacion, kinesiologa: staff.name } })
     await trace(tx, { id: staff.id, role: "KINESIOLOGO" }, "GUARDAR", "EVALUACION", saved.id)
     await tx.entradaFila.update({ where: { id }, data: { estado: "ATENDIDO", finalizadaAt: new Date() } })

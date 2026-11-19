@@ -1,3 +1,4 @@
+import { calcularReferencia } from "./craneometry-reference.ts"
 import { calcularDiagnostico } from "./craneometria.ts"
 export class InvalidEvaluation extends Error {}
 export function parseEvaluation(input: unknown) {
@@ -19,7 +20,7 @@ export function parseEvaluation(input: unknown) {
     ...measurements }
 }
 
-export function parseMeasurements(input: unknown) {
+export function parseMeasurements(input: unknown): import("./measurement-fields").MeasurementValues & { indiceCraneal:number; indiceAsimetria:number; diagnostico:string; recomendacion:string } {
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new InvalidEvaluation("Datos de evaluación inválidos.")
   const raw = input as Record<string, unknown>
   function measure(key: string) {
@@ -28,6 +29,15 @@ export function parseMeasurements(input: unknown) {
     return value
   }
   const ap = measure("ap"), bp = measure("bp"), di = measure("di"), dd = measure("dd")
+  const extraKeys = ["perimetro", "desviacionDer", "desviacionIzq"] as const
+  if (extraKeys.some(key => raw[key] !== undefined)) {
+    const perimetro = raw.perimetro, desviacionDer = raw.desviacionDer, desviacionIzq = raw.desviacionIzq
+    if (typeof perimetro !== "number" || !Number.isFinite(perimetro) || perimetro <= 0 || ![desviacionDer, desviacionIzq].every(v=>typeof v==="number"&&Number.isFinite(v)&&v>=0)) throw new InvalidEvaluation("Completa el perímetro positivo y las dos desviaciones occipitales mayores o iguales a cero, en milímetros.")
+    const measurements = { ap, bp, di, dd, perimetro, desviacionDer: desviacionDer as number, desviacionIzq: desviacionIzq as number }
+    let result
+    try { result = calcularReferencia(measurements) } catch { throw new InvalidEvaluation("Las mediciones no permiten calcular el resultado.") }
+    return { ...measurements, indiceCraneal: result.ci, indiceAsimetria: result.cva, diagnostico: result.diagnostico, recomendacion: result.recomendacion }
+  }
   const result = calcularDiagnostico(ap, bp, di, dd)
   if (!Number.isFinite(result.indiceCraneal) || !Number.isFinite(result.indiceAsimetria)) throw new InvalidEvaluation("Las mediciones no permiten calcular el resultado.")
   return { ap, bp, di, dd, indiceCraneal: result.indiceCraneal, indiceAsimetria: result.indiceAsimetria,

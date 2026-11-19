@@ -91,3 +91,7 @@ La [gestión administrativa de correos](docs/GESTION_CORREOS.md) permite consult
 Para probar el acceso de apoderado sin Brevo, usar `npm run dev:familias`: correo ficticio `apoderado@example.com`, buzón simulado y base temporal aislada. Ver [DEMO_FAMILIAS.md](docs/DEMO_FAMILIAS.md).
 
 Los [respaldos y la restauración](docs/RESPALDOS_RESTAURACION.md) incluyen copia cifrada, verificación completa y recuperación exclusivamente en una base nueva. `npm run test:backup` ensaya el procedimiento con PostgreSQL local y datos ficticios, sin usar la configuración de Casku.
+
+La [preparación de hosting y despliegue](docs/PREPARACION_DESPLIEGUE.md) incluye una plantilla de ensayo y `npm run deploy:check`, sin publicar ni modificar los servicios reales. El hosting del sistema se confirma por separado de la web institucional en Wix.
+
+Preparación específica para [Vercel](docs/DESPLIEGUE_VERCEL.md): cuenta, configuración, cron protegido y activación pendiente.

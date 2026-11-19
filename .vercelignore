@@ -1,0 +1,8 @@
+.env
+.env.*
+backups/
+*.casku-backup*
+*.dump
+*.sql.gz
+playwright-report/
+test-results/

@@ -1,3 +1,4 @@
+import { measurementExtras } from "@/lib/measurement-fields"
 import { complementaryData, complementaryValues } from "@/lib/measurement-storage"
 import { draftMailPlan } from "@/lib/mail-queue/store"
 import { requireDataConsent, trace } from "@/lib/privacy/store"
@@ -60,7 +61,9 @@ export async function reviseResult(staffId:string,id:string,revision:number,meas
   if(row.publicacion)throw new AttentionConflict("El resultado ya está publicado. Usa la corrección con motivo y nueva versión.")
   if(row.revision!==revision)throw new AttentionConflict("La evaluación cambió en otra pantalla. Actualiza antes de guardar.")
   await requireDataConsent(tx,row.autorizacionId??row.fila?.inscripcion.autorizacionId,row.pacienteId,row.paciente.apoderadoId)
-  if(row.medicionesComplementarias && measures.perimetro===undefined)throw new InvalidEvaluation("Conserva el perímetro y las dos desviaciones registradas.")
+  if(row.medicionesComplementarias && measures.desviacionDer===undefined)throw new InvalidEvaluation("Conserva las dos desviaciones registradas.")
+  const historical=complementaryValues(row.medicionesComplementarias)
+  if(historical.perimetro!==undefined && measures.perimetro===undefined)measures={...measures,perimetro:historical.perimetro}
   const anterior=draftSnapshot(row),data=measureData(measures)
   if(Object.entries(data).every(([key,value])=>key==="medicionesComplementarias" ? ["perimetro","desviacionDer","desviacionIzq"].every(k=>complementaryValues(row.medicionesComplementarias)[k as "perimetro"]===complementaryValues(value===Prisma.DbNull?null:value)[k as "perimetro"]) : row[key as keyof typeof data]===value))return reviewSummary(row)
   const updated=await tx.evaluacion.update({where:{id},data:{...data,revision:{increment:1}},include:reviewInclude})
@@ -114,9 +117,11 @@ export async function changePublishedResult(actor:{id:string;version:number},id:
    if(!family || family.id!==publication.apoderadoId)throw new AttentionConflict("La vinculación familiar debe estar verificada y corresponder a la publicación antes de republicar.")
    await requireDataConsent(tx,row.autorizacionId??row.fila?.inscripcion.autorizacionId,row.pacienteId,family.id)
    if(!measures)throw new InvalidEvaluation("Revisa las medidas corregidas.")
-   if(base.medidas.perimetro!==undefined && measures.perimetro===undefined)throw new InvalidEvaluation("Conserva el perímetro y las dos desviaciones registradas.")
-   if(publication.estado==="VIGENTE"&&Object.entries(base.medidas).every(([key,value])=>measures[key as keyof typeof base.medidas]===value))throw new InvalidEvaluation("Modifica al menos una medición antes de publicar una corrección.")
-   const snapshot:ResultSnapshot={...base,medidas:{ap:measures.ap,bp:measures.bp,di:measures.di,dd:measures.dd,...(measures.perimetro===undefined?{}:{perimetro:measures.perimetro,desviacionDer:measures.desviacionDer,desviacionIzq:measures.desviacionIzq})},indiceCraneal:measures.indiceCraneal,indiceAsimetria:measures.indiceAsimetria,diagnostico:measures.diagnostico,recomendacion:measures.recomendacion}
+   if(base.medidas.desviacionDer!==undefined && measures.desviacionDer===undefined)throw new InvalidEvaluation("Conserva las dos desviaciones registradas.")
+   if(base.medidas.perimetro!==undefined && measures.perimetro===undefined)measures={...measures,perimetro:base.medidas.perimetro}
+   const currentMeasures=measures
+   if(publication.estado==="VIGENTE"&&Object.entries(base.medidas).every(([key,value])=>currentMeasures[key as keyof typeof base.medidas]===value))throw new InvalidEvaluation("Modifica al menos una medición antes de publicar una corrección.")
+   const snapshot:ResultSnapshot={...base,medidas:{ap:measures.ap,bp:measures.bp,di:measures.di,dd:measures.dd,...measurementExtras(measures)},indiceCraneal:measures.indiceCraneal,indiceAsimetria:measures.indiceAsimetria,diagnostico:measures.diagnostico,recomendacion:measures.recomendacion}
    const updated=await tx.evaluacion.update({where:{id},data:{...measureData(measures),revision:{increment:1}}})
    await tx.revisionEvaluacion.create({data:{evaluacionId:id,revision:updated.revision,autorId:actor.id,anterior:base,nueva:snapshot}})
    newVersion=publication.versionActual+1

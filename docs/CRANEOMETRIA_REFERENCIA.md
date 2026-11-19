@@ -2,6 +2,16 @@
 
 Fuente: INDICES CRANEOMETRIAS.pdf, dos páginas entregadas por Casku. Versión de referencia: `casku-pdf-borrador-v1`. No constituye un protocolo clínico confirmado.
 
+## Actualización: seis medidas y autorización presencial
+
+Por solicitud de Casku se retiró el perímetro de los formularios nuevos. No se borra el valor si ya pertenece a una evaluación o versión histórica. La columna de medidas complementarias existente admite las dos desviaciones sin perímetro; este cambio no requiere otra migración.
+
+Los indicadores aparecen de forma independiente: CI con anterior posterior y biparietal, CVA con ambas diagonales y DPOE con ambas desviaciones (cero es un valor válido). No se espera a completar toda la ficha para mostrar los resultados disponibles. Se requieren las seis medidas válidas al guardar una ficha nueva. CVAI y las decisiones clínicas pendientes permanecen sin activar.
+
+En la evaluación sin inscripción, el apoderado presente acepta mediante una única casilla. No se pide nuevamente nombre ni referencia documental. El servidor reutiliza el declarante previamente registrado de ese bebé cuando existe; si no hay nombre, deja constancia explícita de que no estaba registrado, sin inventar identidad ni vincular cuentas por coincidencia de correo. El evento de consentimiento registra fecha, profesional, texto vigente y canal `CASILLA_PRESENCIAL`, sin afirmar que hubo un documento físico y sin habilitar correos. El flujo de autorización documental de recepción se conserva separado.
+
+Las secciones siguientes documentan la base original de siete medidas y su migración; el perímetro allí descrito corresponde al formato anterior.
+
 ## Registro
 
 Siete mediciones en mm: anterior posterior, biparietal, perímetro, diagonal izquierda frontal a derecha occipital, diagonal derecha frontal a izquierda occipital, desviación del punto rojo posterior (POE) al trago derecho y al izquierdo. Las cinco dimensiones deben ser positivas; las desviaciones admiten cero. Estas últimas se interpretan como desviaciones, no como distancias anatómicas completas, según la definición provisional acordada.
@@ -56,3 +66,11 @@ La compilación de producción pasó al repetirla según la indicación de Next.
 Se comprobó que `20261118000100_mediciones_craneometria` era la única migración pendiente y que las huellas de las migraciones aplicadas coincidían con los archivos locales. Se ejecutó `npm run db:deploy` y se regeneró el cliente Prisma.
 
 La comprobación posterior confirmó la columna JSONB nullable, sin valor predeterminado, y cero migraciones pendientes. Las huellas anteriores y posteriores de las tres evaluaciones existentes coincidieron exactamente, excluyendo únicamente la columna nueva. Sus medidas complementarias permanecen vacías. No se crearon evaluaciones de prueba en esta base ni se enviaron correos.
+
+### Verificación de la actualización a seis medidas
+
+Pasaron 73 pruebas unitarias, lint, TypeScript y el recorrido integral HTTP sobre una base temporal, incluidos el consentimiento presencial con correos desactivados, la reutilización del nombre previamente registrado y la conservación del perímetro histórico al corregir mediante seis medidas. La compilación de producción y los recorridos visuales pasaron en los cinco perfiles de navegador descritos arriba.
+
+La prueba visual comprueba CI visible al ingresar solo anterior posterior y biparietal, DPOE pendiente mientras falte un lado, seis campos sin perímetro, autorización de una sola casilla, bloqueo si no se acepta, guardado y limpieza de la aceptación después de guardar. No se modificó la base real.
+
+Durante la verificación se detectaron excepciones síncronas de consulta al navegar en WebKit. La carga y actualización de kinesiología ahora capturan también esas excepciones y difieren la consulta del efecto hasta después de su ejecución. Se añadió una prueba explícita de fallo síncrono y recuperación, manteniendo la comprobación de ausencia de excepciones de navegador. El aviso de actualización de seguridad de Next.js continúa pendiente; no se actualizaron dependencias en este cambio.

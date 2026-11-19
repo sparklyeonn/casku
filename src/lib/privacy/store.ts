@@ -11,7 +11,7 @@ function publicChoice(value: unknown) {
   return { datos: row.datos===true, correoResultados: row.correoResultados===true, seguimiento: row.seguimiento===true }
 }
 const state = (row: AutorizacionPrivacidad) => ({ datos: row.datos, correoResultados: row.correoResultados, seguimiento: row.seguimiento, apoderadoId: row.apoderadoId, versionTexto: row.versionTexto })
-export async function recordConsent(tx: Prisma.TransactionClient, context: { pacienteId: string; eventoId: string | null; ambito?: string; apoderadoId: string | null }, choice: PrivacyChoice, actor: PrivacyActor, declaration: { declarante: string; referencia?: string }, revision?: number) {
+export async function recordConsent(tx: Prisma.TransactionClient, context: { pacienteId: string; eventoId: string | null; ambito?: string; apoderadoId: string | null }, choice: PrivacyChoice, actor: PrivacyActor, declaration: { declarante: string; referencia?: string; canal?: "CASILLA_PRESENCIAL" }, revision?: number) {
   const ambito = context.ambito ?? `evento:${context.eventoId}:bebe:${context.pacienteId}`
   const previous = await tx.autorizacionPrivacidad.findUnique({ where: { ambito } })
   // La persona y el evento/paciente se bloquean por el llamador. Nunca adoptar una aceptación antigua por coincidencia de correo.
@@ -20,7 +20,7 @@ export async function recordConsent(tx: Prisma.TransactionClient, context: { pac
   const next = { datos: choice.datos, correoResultados: choice.correoResultados, seguimiento: choice.seguimiento, apoderadoId: context.apoderadoId, versionTexto: PRIVACY_VERSION }
   if (previous && JSON.stringify(state(previous)) === JSON.stringify(next)) return previous
   const row = previous ? await tx.autorizacionPrivacidad.update({ where: { id: previous.id }, data: { ...next, revision: { increment: 1 } } }) : await tx.autorizacionPrivacidad.create({ data: { ambito, pacienteId: context.pacienteId, eventoId: context.eventoId, ...next } })
-  await tx.cambioPrivacidad.create({ data: { autorizacionId: row.id, revision: row.revision, actorId: actor.id, perfilActor: actor.role, declarante: declaration.declarante, referencia: declaration.referencia ?? null, canal: actor.role === "APODERADO" ? "CUENTA_VERIFICADA" : "DOCUMENTO_REVISADO", versionTexto: PRIVACY_VERSION, textos: PRIVACY_TEXT, anterior: previous ? state(previous) : Prisma.DbNull, nueva: state(row) } })
+  await tx.cambioPrivacidad.create({ data: { autorizacionId: row.id, revision: row.revision, actorId: actor.id, perfilActor: actor.role, declarante: declaration.declarante, referencia: declaration.referencia ?? null, canal: actor.role === "APODERADO" ? "CUENTA_VERIFICADA" : declaration.canal ?? "DOCUMENTO_REVISADO", versionTexto: PRIVACY_VERSION, textos: PRIVACY_TEXT, anterior: previous ? state(previous) : Prisma.DbNull, nueva: state(row) } })
   if (context.eventoId && context.apoderadoId) {
     if (!choice.datos || !choice.correoResultados) {
       await tx.$executeRaw`UPDATE "CorreoResultado" m SET estado='CANCELADO',"ultimoError"='PRIVACIDAD',"updatedAt"=CURRENT_TIMESTAMP FROM "ResultadoPublicado" p JOIN "Evaluacion" e ON e.id=p."evaluacionId" JOIN "EntradaFila" f ON f.id=e."filaId" JOIN "Inscripcion" i ON i.id=f."inscripcionId" WHERE m."publicacionId"=p.id AND i."pacienteId"=${context.pacienteId} AND i."eventoId"=${context.eventoId}::uuid AND p."apoderadoId"=${context.apoderadoId}::uuid AND m.estado IN ('PENDIENTE','FALLIDO')`

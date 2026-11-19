@@ -32,8 +32,8 @@ export function parseMeasurements(input: unknown): import("./measurement-fields"
   const extraKeys = ["perimetro", "desviacionDer", "desviacionIzq"] as const
   if (extraKeys.some(key => raw[key] !== undefined)) {
     const perimetro = raw.perimetro, desviacionDer = raw.desviacionDer, desviacionIzq = raw.desviacionIzq
-    if (typeof perimetro !== "number" || !Number.isFinite(perimetro) || perimetro <= 0 || ![desviacionDer, desviacionIzq].every(v=>typeof v==="number"&&Number.isFinite(v)&&v>=0)) throw new InvalidEvaluation("Completa el perímetro positivo y las dos desviaciones occipitales mayores o iguales a cero, en milímetros.")
-    const measurements = { ap, bp, di, dd, perimetro, desviacionDer: desviacionDer as number, desviacionIzq: desviacionIzq as number }
+    if ((perimetro !== undefined && (typeof perimetro !== "number" || !Number.isFinite(perimetro) || perimetro <= 0)) || ![desviacionDer, desviacionIzq].every(v=>typeof v==="number"&&Number.isFinite(v)&&v>=0)) throw new InvalidEvaluation("Completa las dos desviaciones occipitales mayores o iguales a cero, en milímetros.")
+    const measurements = { ap, bp, di, dd, ...(perimetro===undefined?{}:{perimetro:perimetro as number}), desviacionDer: desviacionDer as number, desviacionIzq: desviacionIzq as number }
     let result
     try { result = calcularReferencia(measurements) } catch { throw new InvalidEvaluation("Las mediciones no permiten calcular el resultado.") }
     return { ...measurements, indiceCraneal: result.ci, indiceAsimetria: result.cva, diagnostico: result.diagnostico, recomendacion: result.recomendacion }

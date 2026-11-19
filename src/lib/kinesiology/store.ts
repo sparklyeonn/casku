@@ -1,3 +1,4 @@
+import { measurementExtras } from "@/lib/measurement-fields"
 import { complementaryData, complementaryValues } from "@/lib/measurement-storage"
 import { requireDataConsent, trace } from "@/lib/privacy/store"
 import { Prisma } from "@prisma/client"
@@ -98,7 +99,9 @@ export async function saveAssignedEvaluation(staff: { id: string; name: string }
     if (!row || row.profesionalId !== staff.id || row.reservaId !== reservaId) throw new AttentionUnavailable()
     if (row.evaluacion) {
       const old = row.evaluacion
-      if (old.anteroposterior !== measures.ap || old.biparietal !== measures.bp || old.diagonalIzq !== measures.di || old.diagonalDer !== measures.dd || JSON.stringify(complementaryValues(old.medicionesComplementarias)) !== JSON.stringify(measures.perimetro === undefined ? {} : { perimetro: measures.perimetro, desviacionDer: measures.desviacionDer, desviacionIzq: measures.desviacionIzq })) throw new AttentionConflict("La evaluación ya se guardó con otras mediciones. No se sobrescribió.")
+      const historical=complementaryValues(old.medicionesComplementarias)
+      if(historical.perimetro!==undefined && measures.perimetro===undefined)measures={...measures,perimetro:historical.perimetro}
+      if (old.anteroposterior !== measures.ap || old.biparietal !== measures.bp || old.diagonalIzq !== measures.di || old.diagonalDer !== measures.dd || JSON.stringify(complementaryValues(old.medicionesComplementarias)) !== JSON.stringify(measurementExtras(measures))) throw new AttentionConflict("La evaluación ya se guardó con otras mediciones. No se sobrescribió.")
       return { evaluacionId: old.id, nueva: false }
     }
     if (row.estado !== "EN_ATENCION") throw new AttentionConflict("Esta atención ya no está activa. Vuelve a tu fila.")

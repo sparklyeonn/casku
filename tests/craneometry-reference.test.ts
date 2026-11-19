@@ -5,7 +5,7 @@ import { parseMeasurements,InvalidEvaluation } from "../src/lib/evaluation-input
 import { measurementForm,measurementValues,validMeasurements } from "../src/lib/measurement-fields.ts"
 import { parseSnapshot } from "../src/lib/results/snapshot.ts"
 const m={ap:140,bp:120,di:135,dd:138,perimetro:440,desviacionDer:5,desviacionIzq:8}
-test("siete medidas: CI y CVA independientes; DPOE es el mayor incluso al invertir lados",()=>{
+test("seis medidas: CI y CVA independientes; DPOE es el mayor incluso al invertir lados",()=>{
  const r=calcularReferencia(m)
  assert.equal(r.ci,120/140*100);assert.equal(r.cva,3);assert.equal(r.dpoe,8);assert.equal(r.cvai,null)
  assert.equal(calcularReferencia({...m,desviacionDer:8,desviacionIzq:5}).dpoe,8)
@@ -25,10 +25,10 @@ test("servidor: extras completos, cero válido en desviaciones y recálculo sin 
  const r=parseMeasurements({...m,dpoe:999,cvai:999,diagnostico:"falso"})
  assert.equal(r.desviacionIzq,8);assert.equal(r.indiceAsimetria,3);assert.notEqual(r.diagnostico,"falso");assert(!Object.hasOwn(r,"cvai"))
  assert.equal(parseMeasurements({...m,desviacionDer:0}).desviacionDer,0)
- for(const change of [{perimetro:0},{perimetro:"440"},{desviacionDer:-1},{desviacionIzq:null},{desviacionDer:Infinity},{perimetro:undefined},{desviacionIzq:undefined}])assert.throws(()=>parseMeasurements({...m,...change}),InvalidEvaluation)
+ for(const change of [{perimetro:0},{perimetro:"440"},{desviacionDer:-1},{desviacionIzq:null},{desviacionDer:Infinity},{desviacionIzq:undefined}])assert.throws(()=>parseMeasurements({...m,...change}),InvalidEvaluation)
  const old=parseMeasurements({ap:140,bp:120,di:135,dd:138});assert(!Object.hasOwn(old,"perimetro"));assert(!old.diagnostico.includes("preliminar"))
 })
-test("formulario: cero no equivale a campo vacío y una ficha completa exige siete medidas",()=>{
+test("formulario: cero no equivale a campo vacío y una ficha completa exige seis medidas",()=>{
  assert(!validMeasurements(measurementValues(measurementForm()),true))
  assert(validMeasurements(measurementValues(measurementForm({...m,desviacionDer:0})),true))
  assert(!validMeasurements(measurementValues({...measurementForm(m),desviacionDer:""}),true))
@@ -38,4 +38,18 @@ test("copia de resultados: conservar siete mediciones y rechazar extras parciale
  const s={nombreBebe:"Ficticio",fechaNacimiento:"2026-01-01",profesional:"Prueba",evento:null,numero:null,fechaEvaluacion:"2026-11-18T12:00:00Z",medidas:m,indiceCraneal:120/140*100,indiceAsimetria:3,diagnostico:"Referencia",recomendacion:"Revisar"}
  assert.deepEqual(parseSnapshot(s).medidas,m)
  assert.throws(()=>parseSnapshot({...s,medidas:{...m,desviacionDer:undefined}}))
+})
+
+test("seis medidas sin perímetro: calcular, guardar y conservar copias antiguas",()=>{
+ const {perimetro,...six}=m
+ assert.equal(perimetro,440)
+ assert.equal(calcularReferencia(six).dpoe,8)
+ const result=parseMeasurements(six)
+ assert.equal(result.indiceCraneal,120/140*100)
+ assert(!Object.hasOwn(result,"perimetro"))
+ const values=measurementValues(measurementForm(six))
+ assert(validMeasurements(values,true));assert(!Object.hasOwn(values,"perimetro"))
+ assert.equal(measurementValues(measurementForm(m)).perimetro,440,"Conservar perímetro histórico aunque no se edite")
+ const s={nombreBebe:"Ficticio",fechaNacimiento:"2026-01-01",profesional:"Prueba",evento:null,numero:null,fechaEvaluacion:"2026-11-19T12:00:00Z",medidas:six,indiceCraneal:result.indiceCraneal,indiceAsimetria:result.indiceAsimetria,diagnostico:result.diagnostico,recomendacion:result.recomendacion}
+ assert.deepEqual(parseSnapshot(s).medidas,six)
 })

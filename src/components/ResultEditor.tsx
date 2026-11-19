@@ -14,7 +14,7 @@ export function ResultEditor({ initial }: { initial: ResultReview }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("")
   const inFlight = useRef(false)
   const measures = measurementValues(form)
-  const valid = validMeasurements(measures, row.datos.medidas.perimetro !== undefined)
+  const valid = validMeasurements(measures, row.datos.medidas.desviacionDer !== undefined)
   const changed = JSON.stringify(measures) !== JSON.stringify(row.datos.medidas)
   const calculated = valid && changed ? parseMeasurements(measures) : null
   const preview = calculated && !row.publicacion ? { ...row.datos, medidas: measures, indiceCraneal: calculated.indiceCraneal, indiceAsimetria: calculated.indiceAsimetria, diagnostico: calculated.diagnostico, recomendacion: calculated.recomendacion } : row.datos

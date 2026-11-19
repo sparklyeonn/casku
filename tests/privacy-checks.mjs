@@ -120,5 +120,17 @@ export async function privacyChecks({db,client,signIn,password,accounts,admin,an
  await db.exec('DROP TRIGGER access_failure ON "AccesoPrivado"; DROP FUNCTION fail_access_audit();')
  assert.equal((await f1.request("/familias/privacidad")).status,200);assert.equal((await admin("/administracion/privacidad")).status,200)
  await json(f1.request,permissions+"?pagina=0",undefined,400)
+ // Casilla presencial en evaluación: aceptación expresa, auditoría diferenciada y sin correos.
+ const presencial={nombre:"Bebé consentimiento presencial",rut:"17888999-1",fnac:"2026-01-01",correo:"presencial-consent@example.com",ap:140,bp:120,di:135,dd:138,desviacionDer:0,desviacionIzq:8,privacidad:{...noMail},autorizacionPresencial:true}
+ for(const value of [false,"true",null])await json(kine,"/api/evaluaciones",post({...presencial,autorizacionPresencial:value}),400)
+ await json(kine,"/api/evaluaciones",post({...presencial,privacidad:all}),400)
+ const firstPresencial=await json(kine,"/api/evaluaciones",post(presencial),201)
+ const firstLedger=(await db.query('SELECT c.*,a."correoResultados",a.seguimiento FROM "Evaluacion" e JOIN "AutorizacionPrivacidad" a ON a.id=e."autorizacionId" JOIN "CambioPrivacidad" c ON c."autorizacionId"=a.id WHERE e.id=$1',[firstPresencial.evaluacionId])).rows[0]
+ assert.equal(firstLedger.canal,"CASILLA_PRESENCIAL");assert.equal(firstLedger.referencia,null);assert.equal(firstLedger.perfilActor,"KINESIOLOGO");assert.equal(firstLedger.correoResultados,false);assert.equal(firstLedger.seguimiento,false)
+ const known={...presencial,rut:"17888998-1",autorizacionPresencial:undefined,...paperConsent,declaracion:{...paperConsent.declaracion,declarante:"Apoderado registrado de prueba"}}
+ await json(kine,"/api/evaluaciones",post(known),201)
+ const nextKnown=await json(kine,"/api/evaluaciones",post({...presencial,rut:known.rut,declarante:"Nombre falsificado"}),201)
+ const nextLedger=(await db.query('SELECT c.declarante,c.canal FROM "Evaluacion" e JOIN "CambioPrivacidad" c ON c."autorizacionId"=e."autorizacionId" WHERE e.id=$1',[nextKnown.evaluacionId])).rows[0]
+ assert.equal(nextLedger.declarante,"Apoderado registrado de prueba");assert.equal(nextLedger.canal,"CASILLA_PRESENCIAL")
  console.log("OK trazabilidad: históricos pendientes, evidencia documental sin correo por terceros, formulario antiguo/documento revocado bloqueados, historial paginado e inmutable, auditoría sin contenido clínico y lectura que falla cerrada.")
 }

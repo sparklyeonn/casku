@@ -24,25 +24,27 @@ export function KinesiologyDesk() {
   const operation = useRef(false), requestId = useRef<string | null>(null), polling = useRef(false), revision = useRef(0)
   useEffect(() => {
     const controller = new AbortController()
-    Promise.all([fetch("/api/kinesiologia/eventos", { cache: "no-store", signal: controller.signal }).then(read), fetch("/api/kinesiologia/atencion", { cache: "no-store", signal: controller.signal }).then(read)])
+    ;(async () => Promise.all([fetch("/api/kinesiologia/eventos", { cache: "no-store", signal: controller.signal }).then(read), fetch("/api/kinesiologia/atencion", { cache: "no-store", signal: controller.signal }).then(read)]))()
       .then(([data, attention]) => { if (!controller.signal.aborted) { setEvents(data.eventos); setSelected(data.seleccionadoId || attention.atencion?.eventoId || ""); setActive(attention.atencion) } })
       .catch(cause => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "No pudimos cargar tus eventos.") })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
   }, [])
-  const refresh = useCallback((signal?: AbortSignal) => {
-    if (polling.current || operation.current) return Promise.resolve()
+  const refresh = useCallback(async (signal?: AbortSignal) => {
+    if (polling.current || operation.current) return
     polling.current = true
     const version = revision.current
-    return fetch(`/api/kinesiologia/atencion${selected ? `?eventoId=${selected}` : ""}`, { cache: "no-store", signal }).then(read)
-      .then(data => { if (!signal?.aborted && version === revision.current && !operation.current) { setActive(data.atencion); setWaiting(data.esperando ?? null); setPreview(data.esperando === undefined ? null : data); setUpdated(new Date().toLocaleTimeString("es-CL")); if (data.atencion) { requestId.current = null; setUncertain(false) } } })
-      .catch(cause => { if (!signal?.aborted) setError(cause instanceof Error ? cause.message : "No pudimos actualizar la atención. La pantalla puede estar desactualizada.") })
-      .finally(() => { polling.current = false })
+    try {
+      const data = await read(await fetch(`/api/kinesiologia/atencion${selected ? `?eventoId=${selected}` : ""}`, { cache: "no-store", signal }))
+      if (!signal?.aborted && version === revision.current && !operation.current) { setActive(data.atencion); setWaiting(data.esperando ?? null); setPreview(data.esperando === undefined ? null : data); setUpdated(new Date().toLocaleTimeString("es-CL")); if (data.atencion) { requestId.current = null; setUncertain(false) } }
+    } catch (cause) {
+      if (!signal?.aborted) setError(cause instanceof Error ? cause.message : "No pudimos actualizar la atención. La pantalla puede estar desactualizada.")
+    } finally { polling.current = false }
   }, [selected])
   useEffect(() => {
     if (loading) return
     const controller = new AbortController()
-    void refresh(controller.signal)
+    queueMicrotask(() => { if (!controller.signal.aborted) void refresh(controller.signal) })
     const interval = setInterval(() => { if (!document.hidden) void refresh(controller.signal) }, 10000)
     const focus = () => { if (!document.hidden) void refresh(controller.signal) }
     window.addEventListener("focus", focus)

@@ -30,7 +30,10 @@ export async function POST(req: Request) {
     }
     const data = parseEvaluation(input)
     const body = input as Record<string, unknown>
-    const privacy = parsePrivacy(body.privacidad), declaration = paperDeclaration(body.declaracion)
+    const privacy = parsePrivacy(body.privacidad)
+    const presencial = body.autorizacionPresencial !== undefined
+    if (presencial && body.autorizacionPresencial !== true) throw new PrivacyInputError("El apoderado debe marcar la autorización antes de guardar.")
+    const declaration = presencial ? null : paperDeclaration(body.declaracion)
     if (privacy.correoResultados || privacy.seguimiento) throw new PrivacyInputError("El correo clínico requiere autorización desde una cuenta familiar verificada.")
     const evaluacion = await prisma.$transaction(async tx => {
       const matches = await tx.paciente.findMany({ where: { rut: { in: data.rutVariants } }, take: 2 })
@@ -40,7 +43,9 @@ export async function POST(req: Request) {
       if (paciente && (paciente.nombre.trim().toLocaleLowerCase() !== data.nombre.toLocaleLowerCase() || paciente.fechaNacimiento.toISOString().slice(0, 10) !== data.fecha.toISOString().slice(0, 10))) throw new PatientConflict()
       if (!paciente) paciente = await tx.paciente.create({ data: { rut: data.rut, nombre: data.nombre, fechaNacimiento: data.fecha } })
       const id = randomUUID()
-      const authorization = await recordConsent(tx, { pacienteId: paciente.id, eventoId: null, apoderadoId: null, ambito: `evaluacion:${id}` }, privacy, { id: user.id, role: user.role }, declaration)
+      const previous = presencial ? await tx.cambioPrivacidad.findFirst({where:{autorizacion:{pacienteId:paciente.id}},orderBy:{createdAt:"desc"},select:{declarante:true}}) : null
+      const consent = declaration ?? { declarante: previous?.declarante || "Apoderado presente sin nombre registrado", canal: "CASILLA_PRESENCIAL" as const }
+      const authorization = await recordConsent(tx, { pacienteId: paciente.id, eventoId: null, apoderadoId: null, ambito: `evaluacion:${id}` }, privacy, { id: user.id, role: user.role }, consent)
       const result = await tx.evaluacion.create({ data: { id, autorizacionId: authorization.id,
         autorId: user.id, pacienteId: paciente.id, correoPadre: data.correo, anteroposterior: data.ap, biparietal: data.bp,
         diagonalIzq: data.di, diagonalDer: data.dd, medicionesComplementarias: complementaryData(data), indiceCraneal: data.indiceCraneal, indiceAsimetria: data.indiceAsimetria,

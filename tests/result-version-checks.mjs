@@ -18,7 +18,7 @@ export async function resultVersionChecks({db,client,signIn,password,accounts,ad
  setResultFailure(false)
  assert.equal(initial.publicacion.version,1);assert.equal(initial.publicacion.revisionControl,1)
  const publication=initial.publicacion.id,familyPath=`/api/familias/resultados/${publication}`,reason="Corrección de una medición registrada durante la evaluación"
- const body={id:randomUUID(),revisionControl:1,motivo:reason,confirmar:true,...measures,ap:142,diagnostico:"No confiar en este diagnóstico enviado por el cliente"}
+ const body={id:randomUUID(),revisionControl:1,motivo:reason,confirmar:true,...measures,perimetro:undefined,ap:142,diagnostico:"No confiar en este diagnóstico enviado por el cliente"}
  for(const [request,status]of [[anonymous,401],[f1.request,401],[admin,403],[rec,403],[other,404]])for(const suffix of ["corregir","retirar","historial"])await json(request,`${root}/${suffix}`,suffix==="historial"?undefined:post(body),status)
  for(const invalid of [{...body,motivo:""},{...body,motivo:"x".repeat(501)},{...body,confirmar:false},{...body,revisionControl:0},{...body,id:"incorrecto"},{...body,ap:0}])await json(kine,root+"/corregir",post(invalid),400)
  await json(kine,root+"/corregir",post({...body,ap:140}),400)
@@ -28,7 +28,7 @@ export async function resultVersionChecks({db,client,signIn,password,accounts,ad
  const token=randomUUID()
  await db.query(`UPDATE "OrdenCorreo" SET estado='ENVIANDO',destinatario=$2,mensaje='{"subject":"Prueba","text":"Prueba","html":"Prueba"}'::jsonb,"politicaVersion"='ficticia',"programadoAt"=CURRENT_TIMESTAMP,"disponibleAt"=CURRENT_TIMESTAMP,"limiteAt"=CURRENT_TIMESTAMP+interval '72 hours',intentos=1,"bloqueoToken"=$3,"bloqueoHasta"=CURRENT_TIMESTAMP+interval '2 minutes' WHERE "publicacionId"=$1 AND etapa='SEMANA'`,[publication,f1.user.email,token])
  const mailCount=mails.length
- const corrected=await json(kine,root+"/corregir",post(body)),v2=corrected.resultado
+ const corrected=await json(kine,root+"/corregir",post({...body,perimetro:undefined})),v2=corrected.resultado
  assert.equal(corrected.cambio.enviosEnCurso,1);assert.equal(v2.publicacion.version,2);assert.equal(v2.publicacion.revisionControl,2);assert.equal(v2.revision,2)
  assert.equal(v2.datos.medidas.ap,142);assert.equal(v2.datos.indiceCraneal,120/142*100);assert.notEqual(v2.datos.diagnostico,body.diagnostico)
  assert.equal(mails.length,mailCount,"Corregir no envía automáticamente una nueva copia")

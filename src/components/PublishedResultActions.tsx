@@ -10,7 +10,7 @@ export function PublishedResultActions({row,disabled,onStart,onFinish,onChanged}
  const [mode,setMode]=useState<"corregir"|"retirar"|null>(null),[reason,setReason]=useState(""),[confirmed,setConfirmed]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState("")
  const [form,setForm]=useState(measurementForm(row.datos.medidas))
  const pending=useRef<{mode:string;body:Record<string,unknown>}|null>(null),[uncertain,setUncertain]=useState(false)
- const measures=measurementValues(form),valid=validMeasurements(measures,row.datos.medidas.perimetro!==undefined)
+ const measures=measurementValues(form),valid=validMeasurements(measures,row.datos.medidas.desviacionDer!==undefined)
  const changed=JSON.stringify(measures)!==JSON.stringify(row.datos.medidas)
  const calc=valid&&mode==="corregir"?parseMeasurements(measures):null
  const preview=calc?{...row.datos,medidas:measures,indiceCraneal:calc.indiceCraneal,indiceAsimetria:calc.indiceAsimetria,diagnostico:calc.diagnostico,recomendacion:calc.recomendacion}:null

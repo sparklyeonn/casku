@@ -15,8 +15,8 @@ export function parseSnapshot(value: unknown): ResultSnapshot {
   if (Number(row.indiceCraneal) <= 0 || Number(row.indiceAsimetria) < 0) throw new Error("Resultado no disponible")
   const extra: {perimetro?:number;desviacionDer?:number;desviacionIzq?:number} = {}
   if (["perimetro","desviacionDer","desviacionIzq"].some(key=>measures[key]!==undefined)) {
-    if (typeof measures.perimetro!=="number"||!Number.isFinite(measures.perimetro)||measures.perimetro<=0||![measures.desviacionDer,measures.desviacionIzq].every(v=>typeof v==="number"&&Number.isFinite(v)&&v>=0)) throw new Error("Resultado no disponible")
-    Object.assign(extra,{perimetro:measures.perimetro,desviacionDer:measures.desviacionDer,desviacionIzq:measures.desviacionIzq})
+    if ((measures.perimetro!==undefined&&(typeof measures.perimetro!=="number"||!Number.isFinite(measures.perimetro)||measures.perimetro<=0))||![measures.desviacionDer,measures.desviacionIzq].every(v=>typeof v==="number"&&Number.isFinite(v)&&v>=0)) throw new Error("Resultado no disponible")
+    Object.assign(extra,{...(measures.perimetro===undefined?{}:{perimetro:measures.perimetro}),desviacionDer:measures.desviacionDer,desviacionIzq:measures.desviacionIzq})
   }
   // Construir una lista explícita evita devolver campos añadidos accidentalmente al JSON.
   return { nombreBebe: String(row.nombreBebe), fechaNacimiento: String(row.fechaNacimiento), profesional: String(row.profesional), evento: row.evento as string | null, numero: row.numero as number | null, fechaEvaluacion: String(row.fechaEvaluacion), medidas: { ap: Number(measures.ap), bp: Number(measures.bp), di: Number(measures.di), dd: Number(measures.dd), ...extra }, indiceCraneal: Number(row.indiceCraneal), indiceAsimetria: Number(row.indiceAsimetria), diagnostico: String(row.diagnostico), recomendacion: String(row.recomendacion) }

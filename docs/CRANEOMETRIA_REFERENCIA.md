@@ -37,7 +37,7 @@ Proporción normal: CI 76–83 %. Los intervalos se trasladan literalmente. Un C
 
 ## Persistencia y compatibilidad
 
-Migración aditiva: `20261118000100_mediciones_craneometria`. Agrega una columna JSONB nullable; no rellena ni recalcula evaluaciones existentes. No se ejecutó contra la base real durante esta implementación. Debe aplicarse en el entorno de destino antes de usar el código actualizado.
+Migración aditiva: `20261118000100_mediciones_craneometria`. Agrega una columna JSONB nullable; no rellena ni recalcula evaluaciones existentes. Se validó primero en una base temporal y posteriormente se aplicó, con autorización de la responsable del proyecto, a la base configurada del sistema. En otros entornos debe aplicarse antes de usar el código actualizado.
 
 Las nuevas siete medidas se recalculan en el servidor y se guardan con versión de referencia. Los datos adicionales pasan a borradores, publicaciones, versiones, historial, portal y contenido de correos. No se permite eliminarlos enviando una edición antigua de solo cuatro medidas. Repetir una atención con datos complementarios distintos se rechaza.
 
@@ -50,3 +50,9 @@ Pasaron 72 pruebas unitarias, lint, TypeScript y el recorrido HTTP completo de f
 La compilación de producción pasó al repetirla según la indicación de Next.js. Las pruebas visuales de la evaluación pasaron en Chromium y WebKit de escritorio, Pixel 7 emulado, iPad emulado y Chromium de 320 px en modo oscuro, incluyendo DPOE 5/8 = 8, guardado y ausencia de desborde. No equivalen a pruebas en hardware físico.
 
 `npm run check` se intentó dos veces y quedó interrumpido en la prueba de seguridad por el aviso de actualización de seguridad de Next.js 16.4.3. No se modificaron dependencias ni se desactivó esa comprobación. Los recorridos relevantes se ejecutaron por separado, y queda pendiente resolver la actualización y repetir el comando integral.
+
+## Aplicación en la base del sistema
+
+Se comprobó que `20261118000100_mediciones_craneometria` era la única migración pendiente y que las huellas de las migraciones aplicadas coincidían con los archivos locales. Se ejecutó `npm run db:deploy` y se regeneró el cliente Prisma.
+
+La comprobación posterior confirmó la columna JSONB nullable, sin valor predeterminado, y cero migraciones pendientes. Las huellas anteriores y posteriores de las tres evaluaciones existentes coincidieron exactamente, excluyendo únicamente la columna nueva. Sus medidas complementarias permanecen vacías. No se crearon evaluaciones de prueba en esta base ni se enviaron correos.

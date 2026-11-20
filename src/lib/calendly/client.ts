@@ -13,7 +13,7 @@ const text = (value: unknown, max: number) => {
   if (typeof value !== "string" || !value.trim() || value.length > max || /[\r\n\0]/.test(value)) throw new CalendlyUnavailable("RESPUESTA")
   return value.trim()
 }
-function resource(value: unknown, collection: "users" | "event_types") {
+function resource(value: unknown, collection: "users" | "event_types" | "scheduled_events") {
   const uri = text(value, 300)
   if (!new RegExp(`^https://api\\.calendly\\.com/${collection}/[A-Za-z0-9_-]{1,128}$`).test(uri)) throw new CalendlyUnavailable("RESPUESTA")
   return uri
@@ -73,3 +73,5 @@ export async function listCalendlyEventTypes(cursor: string | null = null, signa
   return { estado: "CONECTADO" as const, cuenta: { nombre: text(me.name, 200), zonaHoraria: text(me.timezone, 100) }, tipos: listing.collection.map(eventType), siguiente: next }
 }
 export type CalendlyListing = Awaited<ReturnType<typeof listCalendlyEventTypes>>
+
+export { read as calendlyRead, object as calendlyObject, text as calendlyText, resource as calendlyResource }

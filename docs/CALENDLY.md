@@ -58,3 +58,28 @@ La responsable aclaró que el campo de nombre puede corresponder al padre o al b
 La consulta real queda habilitada localmente. No se ha creado una suscripción de webhook ni modificado la cuenta externa. Los identificadores y las credenciales reales no forman parte de los datos de prueba versionados.
 
 Validación técnica: 63 pruebas unitarias, lint, tipos y compilación con el recorrido administrativo en cinco perfiles de navegador y pantalla. Las comprobaciones de servidor verifican acceso anónimo, los tres perfiles del equipo y configuración ausente. Las pruebas automáticas usan credenciales vacías y datos ficticios, incluso cuando la configuración local real está presente.
+
+
+## Agenda de citas en Vercel · 19 de noviembre de 2026
+
+La vista `/agenda` y la API `/api/calendly/agenda` permiten consultar las citas del enlace confirmado de Expo Bebé desde administración, recepción y kinesiología. No dependen del subdominio de Wix: funcionan con el HTTPS estable de Vercel. Las familias y visitantes anónimos no acceden a esta API. El panel administrativo conserva su consulta de tipos de cita y añade un enlace a la agenda.
+
+Se identifica el tipo de cita mediante la URL de reserva confirmada `https://calendly.com/contacto-casku/new-meeting` entre los tipos pertenecientes a la cuenta del token. No se selecciona por nombre. Si no existe una única coincidencia se informa un error, sin mostrar otras reservas. El token necesita `users:read`, `event_types:read` y `scheduled_events:read`.
+
+En Vercel configurar `CALENDLY_ENABLED=1` y la misma clave privada autorizada en `CALENDLY_API_TOKEN`, con alcance del despliegue elegido. Volver a desplegar el código actualizado. No usar NEXT_PUBLIC para la clave, añadir suscripciones ni habilitar correo como parte de esta operación. Conservar todas las banderas de correo en 0 durante el ensayo.
+
+La consulta es manual y de solo lectura: el botón Consultar citas/Actualizar agenda vuelve a leer Calendly. No hay actualización en tiempo real, cron ni webhook nuevo. Se muestran inicio y fin en America/Santiago, nombre de la reserva y estado activo/cancelado/reprogramado. El nombre podría ser del padre o del bebé; no se trata como identidad infantil verificada. El equipo clínico no recibe correos de contacto; administración y recepción sí pueden usarlos para revisar la reserva. No se devuelven teléfonos, respuestas del formulario, notas, enlaces de cancelación/reprogramación, datos de pago o claves.
+
+La API filtra por el día completo de Santiago, incluyendo cambios de horario de verano, y por la cuenta del token. Solo se consultan participantes de citas del tipo y día esperados. Se valida la pertenencia de cada participante a su cita. La paginación utiliza tokens contra rutas fijas de api.calendly.com, sin seguir URLs recibidas. Cada página solicita 10 eventos y hasta 100 participantes por evento; la concurrencia se limita a tres consultas de participantes. La vista indica páginas pendientes y ofrece Cargar más citas; buscar afecta únicamente las páginas ya cargadas. Si una cita tiene más participantes que el límite de su respuesta, se marca como incompleta. Los errores no se convierten en un listado vacío: se informa el fallo y se identifica la vista anterior conservada.
+
+Todas las respuestas son privadas y no-store; no se persisten las reservas en Neon, no se aplican migraciones y no se envían correos. La autenticación conserva sus controles habituales de sesión y actividad. Los datos reales de Calendly permanecen separados de las fichas ficticias de ensayo.
+
+### Alcance pendiente
+
+Esta agenda muestra horarios, pero no convierte reservas en inscripciones, no crea bebés, no confirma llegadas, no consume cupos locales y no asigna profesionales. La admisión desde Calendly a la fila necesita identificación del bebé y autorizaciones; no se deducen por nombre/correo. Una cita cancelada o reprogramada en Calendly cambia en la siguiente consulta, sin cancelar automáticamente una inscripción o evaluación de Casku.
+
+### Verificación
+
+Las pruebas unitarias utilizan un proveedor simulado y comprueban selección del tipo, fecha chilena/invierno/verano/salto de medianoche, paginación, cancelación/reprogramación, datos ajenos, privacidad por perfil, credenciales y límites. Las pruebas HTTP verifican rechazo anónimo y acceso del equipo sin token real. Las pruebas de navegador cubren horario, páginas, búsqueda, estados y errores conservando los datos anteriores, con interceptación ficticia del proveedor. Ninguna prueba automática usa las credenciales de Calendly o Neon reales.
+
+Referencias: [citas](https://developer.calendly.com/api-docs/calendly-api/scheduled-events/list-scheduled-events), [participantes](https://developer.calendly.com/api-docs/calendly-api/scheduled-events/list-event-invitees).

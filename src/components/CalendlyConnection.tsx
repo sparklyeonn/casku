@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import type { CalendlyListing } from "@/lib/calendly/client"
 type Status = "PENDIENTE_CONFIGURACION" | "DESACTIVADO" | "LISTO_PARA_CONSULTAR" | "CONECTADO"
 const labels: Record<Status, string> = { PENDIENTE_CONFIGURACION: "Falta configurar el acceso privado a Calendly.", DESACTIVADO: "La conexión con Calendly está desactivada.", LISTO_PARA_CONSULTAR: "Acceso configurado. Puedes comprobar la conexión.", CONECTADO: "Cuenta conectada. Puedes revisar sus tipos de cita." }
@@ -31,7 +32,8 @@ export function CalendlyConnection() {
   }
   return <main className="mx-auto max-w-5xl space-y-6 px-5 py-8">
     <h1 className="text-3xl font-semibold">Conexión con Calendly</h1>
-    <p>Las reservas de Expo Bebé incluyen una hora de atención. Estamos preparando su vinculación con los eventos y las inscripciones de Casku.</p>
+    <Link href="/agenda" className="inline-block rounded-full bg-teal-700 px-5 py-3 text-white">Ver agenda de citas y horarios</Link>
+    <p>Las reservas de Expo Bebé incluyen una hora de atención. Puedes consultarlas en la agenda. Su vinculación con fichas y fila requiere confirmar los datos de cada familia.</p>
     <section className="space-y-3 rounded-xl border p-5" aria-labelledby="calendly-status"><h2 id="calendly-status" className="text-xl font-semibold">Estado de la conexión</h2>
       <p role="status">{busy ? "Consultando Calendly…" : status ? labels[status] : error ? "Conexión no disponible." : "Revisando la configuración…"}</p>
       {error && <p role="alert">{error}</p>}

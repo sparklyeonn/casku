@@ -44,6 +44,7 @@ try {
   assert(ready, "El servidor no inició a tiempo: " + log)
   const anonymous = client()
   assert.equal((await anonymous("/api/administracion/calendly?consultar=1")).status,401)
+  assert.equal((await anonymous("/api/calendly/agenda?consultar=1&fecha=2026-11-20")).status,401)
   if (production) {
     const home = await anonymous("/")
     assert.equal(home.status,200)
@@ -100,6 +101,10 @@ try {
     assert.equal(login.status, 200)
     const session = await (await request("/api/auth/session")).json()
     assert.equal(session.user?.role, account.role)
+    const agenda=await request("/api/calendly/agenda?consultar=1&fecha=2026-11-20")
+    assert.equal(agenda.status,200);assert.equal(agenda.headers.get("cache-control"),"private, no-store")
+    assert.deepEqual(await agenda.json(),{estado:"PENDIENTE_CONFIGURACION"})
+    assert.equal((await request("/agenda")).status,200)
     const calendly=await request("/api/administracion/calendly?consultar=1")
     assert.equal(calendly.status,account.role==="ADMIN"?200:403)
     if(account.role==="ADMIN") {

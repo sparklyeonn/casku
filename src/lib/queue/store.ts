@@ -14,5 +14,11 @@ export async function nextWaiting(tx: Prisma.TransactionClient, eventoId: string
     orderBy: [{ inscripcion: { citaInicio: "asc" } }, { esperaDesde: "asc" }, { orden: "asc" }],
     select: { id: true, orden: true, esperaDesde: true, inscripcion: { select: { origen: true, citaInicio: true } } },
   })
-  return chooseWithAppointment(previous, walkin, due ? { id: due.id, orden: due.orden, esperaDesde: due.esperaDesde, origen: due.inscripcion.origen, citaInicio: due.inscripcion.citaInicio! } : null, streak, now)
+  // Solo adelantar una llegada ya autorizada cuando no queda ninguna familia habilitada.
+  const early = !previous && !walkin && !due ? await tx.entradaFila.findFirst({
+    where: { eventoId, estado: "EN_ESPERA", inscripcion: { citaInicio: { gt: now }, revisionCalendlyPendiente: false, autorizacion: { is: { datos: true, versionTexto: PRIVACY_VERSION } } } },
+    orderBy: [{ inscripcion: { citaInicio: "asc" } }, { esperaDesde: "asc" }, { orden: "asc" }],
+    select: { id: true, orden: true, esperaDesde: true, inscripcion: { select: { origen: true, citaInicio: true } } },
+  }) : null
+  return chooseWithAppointment(previous, walkin, due ? { id: due.id, orden: due.orden, esperaDesde: due.esperaDesde, origen: due.inscripcion.origen, citaInicio: due.inscripcion.citaInicio! } : null, streak, now, early ? { id: early.id, orden: early.orden, esperaDesde: early.esperaDesde, origen: early.inscripcion.origen, citaInicio: early.inscripcion.citaInicio! } : null)
 }

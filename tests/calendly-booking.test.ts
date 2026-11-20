@@ -36,7 +36,7 @@ test("llegada Calendly: exige confirmación y autorización; ignora identidad de
   for (const key of ["origen", "apoderadoId", "citaInicio"]) assert(!Object.hasOwn(value, key))
   for (const change of [{ confirmado: false }, { autorizado: false }, { numero: "1" }, { numero: 0 }, { privacidad: { ...raw.privacidad, correoResultados: true } }, { fechaNacimiento: "2026-02-30" }]) assert.throws(() => parseCalendlyArrival({ ...raw, ...change }))
 })
-test("citas en fila: nunca llama antes de la hora, prioriza cita vencida y conserva protección de 30 minutos", () => {
+test("citas en fila: no adelanta sin alternativa explícita, prioriza cita vencida y conserva protección de 30 minutos", () => {
   const now = new Date("2026-11-20T13:00:00Z")
   const regular: QueueCandidate = { id: "walkin", orden: 1, origen: "PRESENCIAL", esperaDesde: new Date(now.getTime() - 5 * 60000) }
   const appointment = { ...regular, origen: "PREVIA" as const, id: "scheduled", orden: 2, citaInicio: now }
@@ -45,3 +45,13 @@ test("citas en fila: nunca llama antes de la hora, prioriza cita vencida y conse
   assert.equal(chooseWithAppointment(null, regular, appointment, 3, now)?.motivo, "CITA_PROGRAMADA")
   assert.equal(chooseWithAppointment(null, { ...regular, esperaDesde: new Date(now.getTime() - 30 * 60000) }, appointment, 0, now)?.motivo, "ESPERA_MAXIMA")
 })
+
+ test("cita anticipada: solo como alternativa a una fila sin familias habilitadas", () => {
+  const now = new Date("2026-11-20T13:00:00Z")
+  const early = { id: "early", orden: 2, origen: "PREVIA" as const, esperaDesde: now, citaInicio: new Date(now.getTime()+3600000) }
+  const regular: QueueCandidate = { id: "regular", orden: 1, origen: "PRESENCIAL", esperaDesde: now }
+  assert.equal(chooseWithAppointment(null, null, null, 0, now, early)?.motivo, "CITA_ADELANTADA")
+  assert.equal(chooseWithAppointment(null, regular, null, 0, now, early)?.entrada.id, "regular")
+  assert.equal(chooseWithAppointment(null, null, {...early, id:"due", citaInicio:now}, 0, now, early)?.entrada.id, "due")
+  assert.equal(early.citaInicio.toISOString(), "2026-11-20T14:00:00.000Z")
+ })

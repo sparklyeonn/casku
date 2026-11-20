@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react"
 import type { FormEvent } from "react"
 import type { EventSummary } from "@/lib/events/input"
 import { EventOverview } from "./EventOverview"
+import { CalendlyProtection } from "./CalendlyProtection"
+import Link from "next/link"
 import { EventEditor } from "./EventEditor"
 
 type EventsState = { eventos: EventSummary[]; seleccionadoId: string | null }
@@ -105,6 +107,8 @@ export function EventManager() {
       {selected && <p className="mt-3 text-sm font-medium">Inscripciones {selected.inscripcionesAbiertas ? "abiertas" : "cerradas"}</p>}
       <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">La selección se guarda para tu cuenta y no cambia el evento de otros administradores.</p>
     </section>
+    {selected && <CalendlyProtection key={`calendly:${selected.id}:${selected.revision}`} fecha={selected.fecha} reception={false} evento={selected} />}
+    {selected && <p><Link className="underline" href="/agenda">Ver nombres y horarios en la agenda de Calendly</Link></p>}
     {selected && <EventOverview key={`${selected.id}:${selected.revision}`} eventoId={selected.id} />}
     {selected && <details className="team-support"><summary>Correos de resultados y seguimiento</summary><MailQueueSummary key={`correo:${selected.id}`} eventoId={selected.id} /></details>}
     {selected && <details className="team-support"><summary>Gestionar lista de espera de cupos</summary><WaitlistPanel key={selected.id} eventoId={selected.id} disabled={disabled} onStart={() => { if (inFlight.current) return false; inFlight.current = true; setBusy("waitlist"); return true }} onFinish={() => { inFlight.current = false; setBusy(null) }} /></details>}
@@ -122,7 +126,7 @@ export function EventManager() {
         </li>)}</ul>}
       </section>
       <section aria-labelledby="new-event-title" className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
-        <h2 id="new-event-title" className="text-xl font-semibold">Crear evento</h2><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Al crearlo, quedará seleccionado como tu evento de trabajo.</p>
+        <h2 id="new-event-title" className="text-xl font-semibold">Crear evento</h2><p className="mt-2 text-sm text-gray-600 dark:text-gray-300">Al crearlo, quedará seleccionado como tu evento de trabajo. Para una expo de varios días, crea una jornada por fecha: cada una conserva su fila, cupos y reservas de Calendly. Después vincula las reservas desde el bloque del evento seleccionado.</p>
         <form onSubmit={create} className="mt-5 space-y-5"><fieldset disabled={disabled || !loaded} className="space-y-5 disabled:opacity-60">
           <label className="block text-sm font-medium">Nombre del evento<input name="nombre" className={inputClass} value={form.nombre} onChange={e => change("nombre", e.target.value)} maxLength={120} required placeholder="Ej.: Expo Bebé · Santiago" autoComplete="off" /></label>
           <label className="block text-sm font-medium">Fecha<input name="fecha" type="date" className={inputClass} value={form.fecha} onChange={e => change("fecha", e.target.value)} min="1900-01-01" max="9999-12-31" required /></label>

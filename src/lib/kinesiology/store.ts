@@ -63,6 +63,7 @@ export async function callNext(staffId: string, eventoId: string, requestId: str
         await requireDataConsent(tx, entry.inscripcion.autorizacionId, entry.inscripcion.pacienteId, entry.inscripcion.apoderadoId)
         active = await tx.entradaFila.update({ where: { id: next.entrada.id }, data: { estado: "EN_ATENCION", profesionalId: staffId, reservaId: requestId, llamadaAt: new Date(), finalizadaAt: null }, select: attentionSelect })
         await tx.evento.update({ where: { id: eventoId }, data: { previosConsecutivos: next.siguientesPrevios } })
+        if (next.motivo === "CITA_ADELANTADA") await trace(tx, { id: staffId, role: "KINESIOLOGO" }, "ADELANTAR_CITA_CALENDLY", "FILA", active.id)
       }
     }
     await tx.llamadaFila.create({ data: { id: requestId, profesionalId: staffId, eventoId, entradaId: active?.id, reservaId: active?.reservaId } })

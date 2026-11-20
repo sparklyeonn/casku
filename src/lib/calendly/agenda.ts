@@ -51,7 +51,7 @@ function status(value: unknown) {
   if (value !== "active" && value !== "canceled") throw new CalendlyUnavailable("RESPUESTA")
   return value
 }
-async function expo(signal: AbortSignal) {
+export async function expo(signal: AbortSignal) {
   const me = object((await read("/users/me", signal)).resource), user = resource(me.uri, "users")
   const matches = new Map<string, { uri: string; nombre: string }>()
   const seen = new Set<string>()

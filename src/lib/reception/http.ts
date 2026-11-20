@@ -25,6 +25,6 @@ export function receptionFailure(error: unknown) {
   if (error instanceof ReceptionConflict) return receptionResponse({ error: error.message }, 409)
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return receptionResponse({ error: "Estos datos ya están registrados o necesitan revisión. Busca la inscripción antes de continuar." }, 409)
   if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2021", "P2022"].includes(error.code)) return receptionResponse({ error: "Es necesario actualizar la base antes de utilizar recepción." }, 503)
-  console.error("Recepción no disponible", error instanceof Error ? error.name : "Error")
+  console.error("Recepción no disponible", error instanceof Error ? error.name : "Error", error instanceof Prisma.PrismaClientKnownRequestError ? error.code : "")
   return receptionResponse({ error: "No pudimos completar la operación. Reintenta sin cambiar los datos." }, 503)
 }

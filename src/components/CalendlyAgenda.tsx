@@ -1,13 +1,16 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { CalendlyArrival } from "./CalendlyArrival"
 import type { CalendlyAgendaListing } from "@/lib/calendly/agenda"
-type Row = Omit<CalendlyAgendaListing["citas"][number], "correo"> & { correo?: string }
+type Row = Omit<CalendlyAgendaListing["citas"][number], "correo"> & { correo?: string; vinculacion?: { numero: number; estado: string } | null }
 type Listing = Omit<CalendlyAgendaListing, "citas"> & { citas: Row[] }
 const time = (value: string) => new Intl.DateTimeFormat("es-CL", { timeZone: "America/Santiago", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(value))
+const arrivalState: Record<string, string> = { EN_ESPERA: "En espera", EN_ATENCION: "En atención", ATENDIDO: "Atención finalizada", AUSENTE: "Ausente", CANCELADO: "Inscripción cancelada", SIN_LLEGADA: "Sin llegada confirmada" }
 const day = (value: string) => new Intl.DateTimeFormat("es-CL", { timeZone: "America/Santiago", dateStyle: "full" }).format(new Date(value + "T12:00:00Z"))
-export function CalendlyAgenda({ initialDate }: { initialDate: string }) {
+export function CalendlyAgenda({ initialDate, canReceive = false }: { initialDate: string; canReceive?: boolean }) {
   const [fecha, setFecha] = useState(initialDate), [estado, setEstado] = useState("active")
   const [data, setData] = useState<Listing | null>(null), [status, setStatus] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(false), [search, setSearch] = useState("")
+  const [confirming, setConfirming] = useState<string | null>(null)
   const active = useRef<AbortController | null>(null), working = useRef(false)
   const consult = useCallback(async (cursor?: string) => {
     if (working.current) return
@@ -42,7 +45,7 @@ export function CalendlyAgenda({ initialDate }: { initialDate: string }) {
     <div><p className="text-sm uppercase tracking-widest">Expo Bebé · Calendly</p><h1 className="mt-2 text-3xl font-semibold">Agenda de citas</h1></div>
     <p>Consulta las citas con hora reservada en Calendly. Todos los horarios se muestran en Santiago de Chile.</p>
     <section className="space-y-3 rounded-2xl border p-5">
-      <p>El nombre corresponde a lo ingresado en la reserva y puede ser del bebé o del apoderado. Esta agenda no crea fichas, no confirma llegadas ni incorpora personas a la fila.</p>
+      <p>El nombre corresponde a lo ingresado en la reserva y puede ser del bebé o del apoderado. Recepción puede confirmar el bebé y vincular la reserva a su inscripción al registrar la llegada.</p>
       <p className="text-sm">Los cambios de Calendly se reflejan al actualizar la consulta. No se envían correos ni se modifican reservas.</p>
     </section>
     <form className="grid gap-4 rounded-2xl border p-5 sm:grid-cols-2" onSubmit={event => { event.preventDefault(); void consult() }}>
@@ -57,7 +60,7 @@ export function CalendlyAgenda({ initialDate }: { initialDate: string }) {
       {(data.siguiente || data.participantesPendientes) && <p className="rounded-xl border border-amber-300 p-4">{data.siguiente ? "Hay más citas para consultar: la lista todavía no está completa." : ""} {data.participantesPendientes ? "Calendly devolvió más de 100 participantes para una cita. Esa cita requiere revisión; no se presenta como completa." : ""}</p>}
       {!!data.turnosSinParticipantes && <p>{data.turnosSinParticipantes} citas de esta página no devolvieron participantes. Revisa Calendly antes de considerar libre ese horario.</p>}
       {!rows.length && <p>{search ? "No hay coincidencias entre las reservas cargadas." : data.siguiente ? "Esta página no contiene reservas de Expo Bebé para los filtros elegidos. Consulta la siguiente." : "No hay reservas en las páginas cargadas para este día y estado."}</p>}
-      <ul className="space-y-3" aria-label="Citas de Calendly">{rows.map(row => <li key={row.reservaId + ":" + row.id} className="rounded-2xl border p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xl font-semibold">{time(row.inicio)}–{time(row.fin)}</p><h3 className="mt-2 text-lg">{row.nombreReserva}</h3>{row.correo && <p className="break-all text-sm">{row.correo}</p>}</div><span className="rounded-full border px-3 py-1 text-sm">{row.estado === "ACTIVA" ? "Confirmada en Calendly" : row.estado === "REPROGRAMADA" ? "Reprogramada · horario anterior" : "Cancelada"}</span></div><p className="mt-3 text-sm">Referencia Calendly: {row.id}</p></li>)}</ul>
+      <ul className="space-y-3" aria-label="Citas de Calendly">{rows.map(row => <li key={row.reservaId + ":" + row.id} className="rounded-2xl border p-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xl font-semibold">{time(row.inicio)}–{time(row.fin)}</p><h3 className="mt-2 text-lg">{row.nombreReserva}</h3>{row.correo && <p className="break-all text-sm">{row.correo}</p>}</div><span className="rounded-full border px-3 py-1 text-sm">{row.estado === "ACTIVA" ? "Confirmada en Calendly" : row.estado === "REPROGRAMADA" ? "Reprogramada · horario anterior" : "Cancelada"}</span></div><p className="mt-3 text-sm">Referencia Calendly: {row.id}</p>{row.vinculacion && <p className="mt-3">Inscripción N.º {String(row.vinculacion.numero).padStart(3, "0")} · {arrivalState[row.vinculacion.estado] || "Revisar en recepción"}. Gestiona la atención o el regreso desde Recepción.</p>}{canReceive && !row.vinculacion && row.estado === "ACTIVA" && <><button type="button" className="mt-4 rounded-full border px-5 py-2" onClick={() => setConfirming(row.reservaId + ":" + row.id)}>Confirmar bebé y llegada</button>{confirming === row.reservaId + ":" + row.id && <CalendlyArrival key={confirming} cita={row} onClose={() => setConfirming(null)} />}</>}</li>)}</ul>
       {data.siguiente && <button className="rounded-full border px-5 py-3 disabled:opacity-50" disabled={busy} onClick={() => void consult(data.siguiente!)}>Cargar más citas</button>}
     </section>}
   </main>

@@ -233,6 +233,11 @@ model Inscripcion {
   revisionContacto Int @default(1)
   id             String @id @db.Uuid
   solicitudHash  String
+  calendlyReservaId String?
+  calendlyInvitadoId String? @unique
+  citaInicio DateTime?
+  citaFin DateTime?
+  citaConfirmadaAt DateTime?
   eventoId       String @db.Uuid
   evento         Evento @relation(fields: [eventoId], references: [id], onDelete: Restrict)
   pacienteId     String
@@ -253,6 +258,7 @@ model Inscripcion {
   @@unique([id, eventoId])
   @@unique([eventoId, numero])
   @@unique([eventoId, pacienteId])
+  @@index([eventoId, citaInicio])
   @@index([apoderadoId, createdAt])
 }
 

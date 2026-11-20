@@ -1,3 +1,4 @@
+import { prisma } from "@/lib/prisma"
 import { getTeamUser } from "@/lib/access"
 import { teamResponse } from "@/lib/team/http"
 import { calendlyStatus, CalendlyUnavailable } from "@/lib/calendly/client"
@@ -14,7 +15,13 @@ export async function GET(request: Request) {
   try {
     const result = await listCalendlyAgenda({ fecha: parseAgendaDate(query.get("fecha")), estado: parseAgendaStatus(query.get("estado")), cursor: query.get("cursor"), signal: request.signal })
     // El equipo clínico necesita la cita y su nombre de reserva, no los datos de contacto.
-    return teamResponse(agendaForRole(result, user.role))
+    const view = agendaForRole(result, user.role)
+    if (user.role !== "RECEPCION" || !result.citas.length) return teamResponse(view)
+    const linked = await prisma.inscripcion.findMany({ where: { calendlyInvitadoId: { in: result.citas.map(row => row.id) } }, select: { calendlyInvitadoId: true, calendlyReservaId: true, numero: true, fila: { select: { estado: true } }, cancelacion: { select: { id: true } } } })
+    return teamResponse({ ...view, citas: view.citas.map(row => {
+      const own = linked.find(item => item.calendlyInvitadoId === row.id && item.calendlyReservaId === row.reservaId)
+      return { ...row, vinculacion: own ? { numero: own.numero, estado: own.cancelacion ? "CANCELADO" : own.fila?.estado ?? "SIN_LLEGADA" } : null }
+    }) })
   } catch (error) {
     if (error instanceof AgendaInputError) return teamResponse({ error: error.message }, 400)
     const kind = error instanceof CalendlyUnavailable ? error.kind : "PROVEEDOR"

@@ -2,7 +2,7 @@
 
 ## Confirmaciones de operación
 
-La responsable confirmó que `https://calendly.com/contacto-casku/new-meeting` corresponde a las craneometrías de Expo Bebé y que la hora elegida representa una **cita con hora de atención**. No debe convertirse silenciosamente en un turno sin horario. La asignación de profesionales, tolerancia de atrasos y convivencia con inscripciones presenciales deben quedar definidas antes de automatizar la admisión a la fila.
+La responsable confirmó que `https://calendly.com/contacto-casku/new-meeting` corresponde a las craneometrías de Expo Bebé y que la hora elegida representa una **cita con hora de atención**. No debe convertirse silenciosamente en un turno sin horario. La admisión requiere confirmación de recepción. La convivencia con la fila está implementada en la sección de vinculación; no se asigna una profesional específica ni se aplica tolerancia automática de atrasos.
 
 ## Primera etapa implementada
 
@@ -12,7 +12,7 @@ La apertura del panel comprueba únicamente la configuración local. El botón *
 
 El cliente utiliza el origen fijo `https://api.calendly.com`, no sigue redirecciones y valida los identificadores y enlaces recibidos. Los enlaces de reserva deben pertenecer a `calendly.com`. Los cursores viajan únicamente al endpoint fijo; no se sigue `next_page` como una URL arbitraria. Las solicitudes tienen tiempo de espera limitado y los errores 401/403, 429, red y respuestas inválidas se presentan mediante mensajes propios, sin copiar el cuerpo del proveedor. El servidor y el navegador no guardan estas respuestas en caché.
 
-Esta etapa no modifica reservas de Calendly, inscripciones, bebés, cupos, consentimientos, eventos, selección del evento ni la fila de Casku. No envía correos. El token permanece en el servidor.
+El panel de configuración no modifica reservas de Calendly, inscripciones, bebés, cupos, consentimientos, eventos, selección del evento ni la fila de Casku. No envía correos. El token permanece en el servidor.
 
 ## Configuración privada
 
@@ -23,24 +23,23 @@ CALENDLY_ENABLED=0
 CALENDLY_API_TOKEN=
 ```
 
-Crear un token de acceso personal propio de la aplicación, con nombre `Casku - Sistema` y permisos `users:read` y `event_types:read`. Calendly indica la ruta **Perfil → Developer → Personal access tokens**; las cuentas que aún no tengan ese menú pueden acceder mediante **Integraciones → API y webhooks**. Guardar la clave solamente en `CALENDLY_API_TOKEN`; después cambiar `CALENDLY_ENABLED=1` y reiniciar el servidor si no recarga el archivo. Nunca usar el prefijo `NEXT_PUBLIC_`, subir `.env.local` ni enviar el token por el chat.
+Crear un token de acceso personal propio de la aplicación, con nombre `Casku - Sistema` y permisos `users:read`, `event_types:read` y `scheduled_events:read`. Calendly indica la ruta **Perfil → Developer → Personal access tokens**; las cuentas que aún no tengan ese menú pueden acceder mediante **Integraciones → API y webhooks**. Guardar la clave solamente en `CALENDLY_API_TOKEN`; después cambiar `CALENDLY_ENABLED=1` y reiniciar el servidor si no recarga el archivo. Nunca usar el prefijo `NEXT_PUBLIC_`, subir `.env.local` ni enviar el token por el chat.
 
-Con la cuenta conectada, localizar el tipo de cita de Expo Bebé y revisar sus preguntas reales. En esta fase no se solicita acceso de escritura ni permisos de cancelación. La consulta futura de reservas necesitará además `scheduled_events:read`.
+Con la cuenta conectada, localizar el tipo de cita de Expo Bebé y revisar sus preguntas reales. En esta fase no se solicita acceso de escritura ni permisos de cancelación. La agenda y la comprobación de reservas necesitan `scheduled_events:read`.
 
-## Siguientes etapas pendientes
+## Pendientes de sincronización automática
 
-1. Vincular explícitamente el tipo de cita de Calendly con el evento o jornada de Casku, respetando la fecha y la zona horaria. No asignarlo por coincidencia del nombre.
-2. Revisar cómo se capturan nombre del bebé, fecha de nacimiento, apoderado, contacto y posibles reservas para más de un bebé. Un correo no identifica por sí solo una ficha infantil.
-3. Preparar una importación con vista previa, identidad externa estable por invitado y controles de duplicados. Las reservas incompletas deben quedar en revisión. No inferir consentimientos ni propiedad de una cuenta familiar a partir de una reserva externa.
-4. Conservar la hora de la cita y adaptar recepción y fila para respetarla. No aplicar automáticamente las reglas actuales de intercalado y espera máxima a reservas con horario sin definir su convivencia con las llegadas presenciales.
-5. Integrar altas, cancelaciones y reprogramaciones mediante notificaciones autenticadas y una conciliación de reservas anteriores. Una reprogramación genera tanto creación como cancelación; deben manejarse duplicados y llegada fuera de orden sin perder la inscripción ni su historia clínica.
-6. Configurar el endpoint público HTTPS, verificar la suscripción y ejecutar las pruebas con reservas ficticias. Mantener los correos de Brevo limitados a las dos direcciones autorizadas durante estas pruebas.
+1. Configurar un vínculo administrativo persistente entre tipo de cita y evento/jornada. En esta etapa recepción selecciona explícitamente el evento y el servidor exige que su fecha coincida con la cita en Santiago.
+2. Confirmar con Casku el formulario definitivo de Calendly y el caso de más de un bebé por reserva. Mientras tanto, recepción confirma expresamente un bebé por invitado; no se infiere desde el nombre reservado.
+3. Importación masiva previa con vista de revisión: la vinculación individual y la protección de duplicados ya están implementadas, sin inferir consentimiento ni propiedad de una cuenta familiar.
+4. Conciliar altas, cancelaciones y reprogramaciones posteriores a una llegada mediante notificaciones autenticadas y recuperación histórica. Una reprogramación debe conservar la inscripción y el historial; actualizar la agenda por sí solo no modifica una atención ya admitida.
+5. Configurar y verificar el endpoint público HTTPS y la suscripción cuando se implemente esa sincronización. La vinculación actual mediante lectura de API funciona también en el dominio de Vercel y no requiere webhooks.
 
 ## Pruebas
 
 - `npm test`: configuración, consultas propias de solo lectura, minimización de datos, paginación, límites, credenciales rechazadas, red, respuestas inválidas y enlaces ajenos.
 - `node tests/production-http.mjs --calendly-only`: compilación aislada, recursos, permisos por perfil y administración en Chrome, Android, WebKit, iPad y pantalla pequeña. La vista de Calendly usa datos interceptados exclusivamente dentro del navegador de prueba para comprobar consulta manual, preguntas, paginación y recuperación después de un límite del proveedor.
-- Los procesos de pruebas y GitHub Actions fuerzan `CALENDLY_ENABLED=0` y una clave vacía. No usan credenciales reales ni consultan Calendly. La simulación del navegador no forma parte del código de la aplicación.
+- GitHub Actions parte con `CALENDLY_ENABLED=0` y una clave vacía. Solo el proceso específico de pruebas de vinculación habilita una clave ficticia con un interceptor explícito de pruebas hacia un servidor local. Nunca consulta el proveedor externo. Los interceptores no forman parte del código de la aplicación.
 
 ## Referencias oficiales
 
@@ -83,3 +82,26 @@ Esta agenda muestra horarios, pero no convierte reservas en inscripciones, no cr
 Las pruebas unitarias utilizan un proveedor simulado y comprueban selección del tipo, fecha chilena/invierno/verano/salto de medianoche, paginación, cancelación/reprogramación, datos ajenos, privacidad por perfil, credenciales y límites. Las pruebas HTTP verifican rechazo anónimo y acceso del equipo sin token real. Las pruebas de navegador cubren horario, páginas, búsqueda, estados y errores conservando los datos anteriores, con interceptación ficticia del proveedor. Ninguna prueba automática usa las credenciales de Calendly o Neon reales.
 
 Referencias: [citas](https://developer.calendly.com/api-docs/calendly-api/scheduled-events/list-scheduled-events), [participantes](https://developer.calendly.com/api-docs/calendly-api/scheduled-events/list-event-invitees).
+
+
+## Vinculación y llegada desde recepción (19 de noviembre)
+
+Recepción entra a **Agenda de citas**, consulta el día y pulsa **Confirmar bebé y llegada** en una reserva activa. Selecciona explícitamente el evento de la misma fecha de Santiago; confirma nombre y nacimiento del bebé, apoderado y contacto. El nombre de Calendly nunca se interpreta automáticamente como nombre del bebé. El apoderado presente marca la autorización de datos. Esta operación no habilita correos ni verifica la propiedad de una cuenta familiar.
+
+Si ya existe una inscripción del bebé, recepción ingresa su número: se conservan paciente, número, QR, contacto y autorizaciones. Una posible ficha repetida, un apoderado distinto, un permiso retirado o una reserva ya vinculada a otro bebé detienen la operación para revisión. No se fusionan fichas por correo. Una ficha de otro evento requiere revisión; este flujo no la duplica ni cambia su propietario.
+
+El servidor relee la cita y su invitado, comprueba el tipo Expo y la cuenta propietaria, estado activo y horario. Solo registra llegadas el día de la cita. La transacción bloquea el evento y verifica la cuenta de recepción; el invitado tiene una referencia única. Los reintentos y dos recepcionistas no crean dos números ni dos entradas. No se superan cupos locales ni se adelanta la lista de espera: administración debe configurar los eventos diarios y su capacidad considerando las reservas de Calendly.
+
+La entrada conserva inicio y fin UTC y los muestra en Santiago. Antes del inicio queda esperando su horario; desde la hora puede ser llamada, en orden de cita. Se conserva la protección de 30 minutos de las familias sin cita y la alternancia 3:1 entre los grupos sin cita. Una familia marcada ausente debe reincorporarse por el flujo existente: su espera vuelve a contar desde el regreso y no recupera prioridad por la hora perdida. No se promete una hora exacta ni se interrumpe una atención.
+
+Las inscripciones creadas desde Calendly pueden usar después la invitación familiar verificada existente. No se asocian cuentas ni se activan correos automáticamente. La nueva operación no crea `CorreoInscripcion` ni llama a Brevo.
+
+**Alcance de sincronización:** Calendly se comprueba al confirmar la llegada. Una cancelación o reprogramación posterior a esa llegada requiere revisión operativa; actualizar la agenda no cancela ni mueve una atención ya iniciada. La edición/reconciliación automática de citas vinculadas queda fuera de esta etapa.
+
+### Base y despliegue
+
+Migración aditiva: `20261119000200_vincular_citas_calendly`. Agrega campos opcionales y unicidad de invitado, sin cambiar evaluaciones ni registros anteriores. Amplía la restricción de contacto exclusivamente para reservas previas verificadas en recepción, conservando contacto y responsable obligatorios. Aplicar primero en la base de ensayo, con su conexión explícita y verificada; nunca usar `migrate dev`, `reset` ni `db push` sobre datos reales. Después desplegar el código. No se ejecutan migraciones automáticamente durante la compilación de Vercel.
+
+### Pruebas
+
+`npm run test:production` incluye las pruebas de vinculación HTTP con proveedor simulado y base temporal, además de los recorridos existentes. Focalizado: `node tests/production-http.mjs --calendly-link-only`. PostgreSQL real aislado: `npm run test:postgres -- --calendly-link-only`; requiere la conexión administrativa de pruebas habitual y crea/elimina únicamente una base marcada temporal. Nunca usa reservas, credenciales ni mensajes reales.

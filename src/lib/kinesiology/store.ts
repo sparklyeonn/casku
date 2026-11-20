@@ -11,11 +11,11 @@ import { queuePolicy } from "@/lib/queue/policy"
 const attentionSelect = {
   id: true, eventoId: true, estado: true, profesionalId: true, reservaId: true, llamadaAt: true,
   evento: { select: { nombre: true, fecha: true, lugar: true } },
-  inscripcion: { select: { numero: true, origen: true, contactoNombre: true, contactoCorreo: true, paciente: { select: { id: true, nombre: true, rut: true, fechaNacimiento: true } }, apoderado: { select: { nombre: true, correo: true } } } },
+  inscripcion: { select: { citaInicio: true, numero: true, origen: true, contactoNombre: true, contactoCorreo: true, paciente: { select: { id: true, nombre: true, rut: true, fechaNacimiento: true } }, apoderado: { select: { nombre: true, correo: true } } } },
 } satisfies Prisma.EntradaFilaSelect
 type AttentionRow = Prisma.EntradaFilaGetPayload<{ select: typeof attentionSelect }>
 function summary(row: AttentionRow) {
-  return { id: row.id, eventoId: row.eventoId, estado: row.estado, reservaId: row.reservaId!, llamadaAt: row.llamadaAt?.toISOString() ?? null,
+  return { citaInicio: row.inscripcion.citaInicio?.toISOString() ?? null, id: row.id, eventoId: row.eventoId, estado: row.estado, reservaId: row.reservaId!, llamadaAt: row.llamadaAt?.toISOString() ?? null,
     evento: { ...row.evento, fecha: row.evento.fecha.toISOString().slice(0, 10) }, numero: row.inscripcion.numero, origen: row.inscripcion.origen,
     bebe: { nombre: row.inscripcion.paciente.nombre, rut: row.inscripcion.paciente.rut || "", fnac: row.inscripcion.paciente.fechaNacimiento.toISOString().slice(0, 10) }, apoderado: row.inscripcion.apoderado?.nombre || row.inscripcion.contactoNombre || "Apoderado", correo: row.inscripcion.apoderado?.correo || row.inscripcion.contactoCorreo || "" }
 }

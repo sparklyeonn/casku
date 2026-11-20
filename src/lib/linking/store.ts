@@ -22,11 +22,11 @@ async function source(tx: Prisma.TransactionClient, eventoId: string, inscripcio
   return tx.inscripcion.findFirst({ where: { id: inscripcionId, eventoId }, include: { paciente: true, cancelacion: true } })
 }
 export async function linkStatus(staffId: string, eventoId: string, inscripcionId: string) {
-  const row = await prisma.inscripcion.findFirst({ where: { id: inscripcionId, eventoId }, select: { cancelacion: { select: { id: true } }, apoderadoId: true, registradoPorId: true, origen: true, contactoCorreo: true, paciente: { select: { apoderadoId: true } } } })
+  const row = await prisma.inscripcion.findFirst({ where: { id: inscripcionId, eventoId }, select: { cancelacion: { select: { id: true } }, apoderadoId: true, registradoPorId: true, origen: true, calendlyInvitadoId: true, contactoCorreo: true, paciente: { select: { apoderadoId: true } } } })
   if (!row) return null
   const invitation = await prisma.vinculacionPresencial.findFirst({ where: { inscripcionId, revocadaAt: null, consumidaAt: null }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] })
     || await prisma.vinculacionPresencial.findFirst({ where: { inscripcionId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] })
-  return { cancelada: !!row.cancelacion, vinculada: !!row.apoderadoId && row.apoderadoId === row.paciente.apoderadoId, disponible: !row.cancelacion && row.origen === "PRESENCIAL" && !!row.registradoPorId && !row.apoderadoId && !row.paciente.apoderadoId, correoSugerido: row.contactoCorreo || "", vinculacion: invitation ? invitationSummary(invitation, staffId) : null }
+  return { cancelada: !!row.cancelacion, vinculada: !!row.apoderadoId && row.apoderadoId === row.paciente.apoderadoId, disponible: !row.cancelacion && (row.origen === "PRESENCIAL" || !!row.calendlyInvitadoId) && !!row.registradoPorId && !row.apoderadoId && !row.paciente.apoderadoId, correoSugerido: row.contactoCorreo || "", vinculacion: invitation ? invitationSummary(invitation, staffId) : null }
 }
 export async function createInvitation(staffId: string, input: ReturnType<typeof invitationInput>) {
   return prisma.$transaction(async tx => {
@@ -41,7 +41,7 @@ export async function createInvitation(staffId: string, input: ReturnType<typeof
       if (codeHash(code) !== existing.codigoHash) throw new ReceptionConflict("El código requiere renovación. Genera una invitación nueva.")
       return { vinculacion: invitationSummary(existing, staffId), codigo: code }
     }
-    if (row.origen !== "PRESENCIAL" || !row.registradoPorId) throw new ReceptionConflict("Esta operación corresponde a inscripciones creadas en recepción.")
+    if ((row.origen !== "PRESENCIAL" && !row.calendlyInvitadoId) || !row.registradoPorId) throw new ReceptionConflict("Esta operación corresponde a inscripciones creadas en recepción.")
     if (row.apoderadoId || row.paciente.apoderadoId) throw new ReceptionConflict("La inscripción o la ficha ya tiene una cuenta asignada. No se cambió su propietario.")
     const now = new Date(), code = secretFor(input.id)
     await tx.vinculacionPresencial.updateMany({ where: { inscripcionId: row.id, revocadaAt: null, consumidaAt: null }, data: { revocadaAt: now, revocadaPorId: staffId } })

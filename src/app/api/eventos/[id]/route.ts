@@ -12,7 +12,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const id = parseEventId((await params).id)
     const result = await editEvent(user, parseEventEdit(id, await readEventJson(request)))
     if (result) { try { await processAvailable(id, "EDICION_CAPACIDAD") } catch { /* Configuración guardada; procesamiento recuperable. */ } }
-    if (result) result.evento = summarizeEvent(await prisma.evento.findUniqueOrThrow({ where: { id } }))
+    if (result) result.evento = summarizeEvent(await prisma.evento.findUniqueOrThrow({ where: { id }, include: { jornadaCalendly: { select: { eventoId: true } } } }))
     return result ? eventResponse(result) : eventResponse({ error: "Evento no disponible." }, 404)
   } catch (error) { return eventFailure(error) }
 }

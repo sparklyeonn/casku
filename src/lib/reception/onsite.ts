@@ -1,3 +1,4 @@
+import { calendlyCapacity } from "@/lib/calendly/capacity"
 import { parsePrivacy, paperDeclaration, PrivacyInputError } from "@/lib/privacy/policy"
 import { recordConsent } from "@/lib/privacy/store"
 import { mailFamily } from "@/lib/families/identity-snapshot"
@@ -30,7 +31,7 @@ export async function registerOnsite(staffId: string, input: OnsiteInput) {
       return { ...await ensureArrival(tx, known, staffId), nuevaInscripcion: false }
     }
     if (await tx.listaEspera.findFirst({ where: { eventoId: event.id, estado: "PENDIENTE" }, select: { id: true } })) throw new ReceptionConflict("Los cupos liberados corresponden primero a la lista de espera. No se adelantó un registro presencial.")
-    if (event.inscritos >= event.cupos) throw new ReceptionConflict("No quedan cupos. Las inscripciones previas conservan su reserva aunque aún no hayan llegado.")
+    if ((await calendlyCapacity(tx, event)).disponibles < 1) throw new ReceptionConflict("No hay cupos libres o falta actualizar Calendly. Las citas protegidas conservan su cupo aunque las familias no hayan llegado.")
     if (input.bebe.rut) {
       const [body, digit] = input.bebe.rut.split("-"), formatted = `${body.replace(/\B(?=(\d{3})+(?!\d))/g, ".")}-${digit}`
       if (await tx.paciente.findFirst({ where: { rut: { in: [input.bebe.rut, formatted] } }, select: { id: true } })) throw new ReceptionConflict("El RUT ya está registrado. Busca su inscripción o solicita revisión a Casku; no se vinculó otro paciente.")

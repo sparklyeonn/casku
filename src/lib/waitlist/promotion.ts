@@ -1,3 +1,4 @@
+import { calendlyCapacity } from "@/lib/calendly/capacity"
 import { PRIVACY_VERSION } from "@/lib/privacy/policy"
 import { randomBytes } from "node:crypto"
 import type { Prisma } from "@prisma/client"
@@ -9,8 +10,10 @@ import { mailFamily } from "@/lib/families/identity-snapshot"
 export async function promoteLocked(tx: Prisma.TransactionClient, eventoId: string, origen: string, limit = 20) {
   let event = await tx.evento.findUniqueOrThrow({ where: { id: eventoId } })
   const ids: string[] = []
+  const capacity = await calendlyCapacity(tx, event)
+  if (capacity.bloqueada) return ids
   if (event.fecha.toISOString().slice(0, 10) < chileToday()) return ids
-  for (let reviewed = 0; reviewed < limit && event.inscritos < event.cupos; reviewed++) {
+  for (let reviewed = 0; reviewed < limit && event.inscritos + capacity.protegidos < event.cupos; reviewed++) {
     const head = await tx.listaEspera.findFirst({ where: { eventoId, estado: "PENDIENTE" }, orderBy: { orden: "asc" } })
     if (!head) break
     const existing = await tx.inscripcion.findUnique({ where: { eventoId_pacienteId: { eventoId, pacienteId: head.pacienteId } }, select: { id: true } })

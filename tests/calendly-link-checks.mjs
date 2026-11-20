@@ -4,17 +4,29 @@ import { randomUUID } from "node:crypto"
 import { createServer } from "node:http"
 const user = "https://api.calendly.com/users/qa", type = "https://api.calendly.com/event_types/expo"
 export const bookingFixtures = new Map()
-export const calendlyFixtureServer = createServer((request, response) => {
+export const calendlyFixtureState = { delayMs: 0, pausedRequests: 0, fail: false, pageSize: 10, failPage2: false, incomplete: false, omit: new Set() }
+export const calendlyFixtureServer = createServer(async (request, response) => {
   assert.equal(request.method, "GET"); assert.equal(request.headers.authorization, "Bearer calendly_fixture_only")
-  const path = new URL(request.url, "http://127.0.0.1").pathname
+  if (calendlyFixtureState.delayMs) { calendlyFixtureState.pausedRequests++; await new Promise(resolve => setTimeout(resolve, calendlyFixtureState.delayMs)); calendlyFixtureState.pausedRequests-- }
+  const url = new URL(request.url, "http://127.0.0.1"), path = url.pathname
   const json = value => { response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify(value)) }
+  if (calendlyFixtureState.fail) { response.statusCode = 503; return json({ error: "Fallo ficticio" }) }
   if (path === "/users/me") return json({ resource: { uri: user } })
   if (path === "/event_types") return json({ collection: [{ uri: type, name: "Expo QA", scheduling_url: "https://calendly.com/contacto-casku/new-meeting" }], pagination: {} })
-  const [, , id, , guest] = path.split("/"), booking = bookingFixtures.get(id)
+  const event = (id, booking) => ({ uri: `https://api.calendly.com/scheduled_events/${id}`, event_type: type, event_memberships: [{ user }], status: booking.status ?? "active", start_time: booking.inicio.toISOString(), end_time: booking.fin.toISOString() })
+  if (path === "/scheduled_events") {
+    if (calendlyFixtureState.failPage2 && url.searchParams.has("page_token")) { response.statusCode = 503; return json({ error: "Página ficticia fallida" }) }
+    const rows = [...bookingFixtures.entries()].filter(([id, row]) => !calendlyFixtureState.omit.has(id) && row.inicio >= new Date(url.searchParams.get("min_start_time")) && row.inicio < new Date(url.searchParams.get("max_start_time"))).sort((a, b) => a[1].inicio - b[1].inicio)
+    const offset = Number(url.searchParams.get("page_token") || 0), size = calendlyFixtureState.pageSize
+    return json({ collection: rows.slice(offset, offset + size).map(([id, row]) => event(id, row)), pagination: { next_page_token: offset + size < rows.length ? String(offset + size) : null } })
+  }
+  const [, , id, section, guest] = path.split("/"), booking = bookingFixtures.get(id)
   if (!booking) { response.statusCode = 404; return json({ error: "Ficticio" }) }
   const uri = `https://api.calendly.com/scheduled_events/${id}`
-  if (guest) return json({ resource: { uri: `${uri}/invitees/${guest}`, event: uri, status: booking.status ?? "active", rescheduled: booking.rescheduled ?? false } })
-  return json({ resource: { uri, event_type: type, event_memberships: [{ user }], status: booking.status ?? "active", start_time: booking.inicio.toISOString(), end_time: booking.fin.toISOString() } })
+  const participant = value => ({ uri: `${uri}/invitees/${value}`, event: uri, status: booking.status ?? "active", rescheduled: booking.rescheduled ?? false, name: "Reserva ficticia QA", email: "qa@example.test" })
+  if (guest) return json({ resource: participant(guest) })
+  if (section === "invitees") return json({ collection: [participant(booking.invitadoId)], pagination: { next_page_token: calendlyFixtureState.incomplete ? "more" : null } })
+  return json({ resource: event(id, booking) })
 })
 const chileDate = date => new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Santiago" }).format(date)
 export async function calendlyLinkChecks({ db, client, signIn, password, accounts, admin, post, mails, secondaryBase, base, browsers = true }) {
@@ -28,7 +40,7 @@ export async function calendlyLinkChecks({ db, client, signIn, password, account
   const url = "/api/recepcion/calendly", privacy = { version: "2026-11-11.1", datos: true, correoResultados: false, seguimiento: false }
   function payload(changes = {}) {
     const id = randomUUID(), reservaId = "event-" + randomUUID(), invitadoId = "guest-" + randomUUID()
-    bookingFixtures.set(reservaId, { inicio: new Date(now), fin: new Date(now.getTime() + 10 * 60000) })
+    bookingFixtures.set(reservaId, { invitadoId, inicio: new Date(now), fin: new Date(now.getTime() + 10 * 60000) })
     return { id, eventoId: eventId, reservaId, invitadoId, nombreBebe: "Bebé " + id, fechaNacimiento: "2026-01-01", nombreApoderado: "Apoderado QA", telefono: "", correo: "qa@example.test", autorizado: true, confirmado: true, privacidad: privacy, ...changes }
   }
   const mailBefore = mails.length, first = payload()

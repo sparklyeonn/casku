@@ -1,3 +1,4 @@
+import { calendlyCapacity } from "@/lib/calendly/capacity"
 import { cancellationSelect, cancellationSummary } from "@/lib/cancellations/store"
 import { mailFamily } from "./identity-snapshot"
 import { prepareRegistrationFamily } from "./registration-data"
@@ -38,7 +39,7 @@ export async function createRegistration(familyId: string, input: RegistrationIn
     if (!event.inscripcionesAbiertas || event.fecha.toISOString().slice(0, 10) < today) throw new RegistrationConflict("Las inscripciones de este evento están cerradas.")
     if (await tx.listaEspera.findUnique({ where: { id: input.id } })) throw new RegistrationConflict("Este envío corresponde a una lista de espera. Consulta su estado en tu cuenta.")
     if (await tx.listaEspera.findFirst({ where: { eventoId: event.id, estado: "PENDIENTE" }, select: { id: true } })) throw new RegistrationConflict("Los cupos disponibles corresponden primero a la lista de espera. No se adelantó esta inscripción.")
-    if (event.inscritos >= event.cupos) throw new RegistrationConflict("Este evento ya no tiene cupos disponibles.")
+    if ((await calendlyCapacity(tx, event)).disponibles < 1) throw new RegistrationConflict("No hay cupos libres para nuevas inscripciones o es necesario actualizar la protección de Calendly.")
     const prepared = await prepareRegistrationFamily(tx, familyId, input, baby)
     baby = prepared.baby
     const family = prepared.family

@@ -1,3 +1,4 @@
+import { calendlyCapacity } from "@/lib/calendly/capacity"
 import { createHash } from "node:crypto"
 import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
@@ -37,7 +38,7 @@ export async function joinWaitlist(familyId: string, input: RegistrationInput) {
       if (pending) return entrySummary(tx, pending)
     }
     const waiting = await tx.listaEspera.count({ where: { eventoId: event.id, estado: "PENDIENTE" } })
-    if (event.inscritos < event.cupos && waiting === 0) throw new RegistrationConflict("Hay cupos disponibles. Confirma una inscripción en lugar de entrar a la lista de espera.")
+    if ((await calendlyCapacity(tx, event)).disponibles > 0 && waiting === 0) throw new RegistrationConflict("Hay cupos disponibles. Confirma una inscripción en lugar de entrar a la lista de espera.")
     const prepared = await prepareRegistrationFamily(tx, familyId, input, baby)
     if (!prepared.family.activo) throw new RegistrationConflict("La cuenta familiar no está disponible.")
     const updated = await tx.evento.update({ where: { id: event.id }, data: { ultimoOrdenEspera: { increment: 1 } } })
@@ -63,7 +64,7 @@ export async function staffWaitlist(eventoId: string, page: number) {
     const event = await tx.evento.findUnique({ where: { id: eventoId }, select: { id: true, nombre: true, cupos: true, inscritos: true } })
     if (!event) return null
     const [pending, rows] = await Promise.all([tx.listaEspera.count({ where: { eventoId, estado: "PENDIENTE" } }), tx.listaEspera.findMany({ where: { eventoId }, orderBy: { orden: "asc" }, skip: (page - 1) * 20, take: 21, include: { ...include, apoderado: { select: { nombre: true, correo: true } } } })])
-    return { evento: event, pendientes: pending, pagina: page, hayMas: rows.length > 20, solicitudes: await Promise.all(rows.slice(0, 20).map(async row => ({ ...await entrySummary(tx, row), apoderado: row.apoderado.nombre || "Familia", correo: row.apoderado.correo }))) }
+    return { evento: { ...event, calendly: await calendlyCapacity(tx, event) }, pendientes: pending, pagina: page, hayMas: rows.length > 20, solicitudes: await Promise.all(rows.slice(0, 20).map(async row => ({ ...await entrySummary(tx, row), apoderado: row.apoderado.nombre || "Familia", correo: row.apoderado.correo }))) }
   }, { isolationLevel: "RepeatableRead" })
 }
 export type StaffWaitlist = NonNullable<Awaited<ReturnType<typeof staffWaitlist>>>

@@ -1,3 +1,4 @@
+import { calendlyCapacity } from "@/lib/calendly/capacity"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import type { EventInput, parseEventEdit } from "./input"
@@ -7,8 +8,8 @@ export class EventConflict extends Error {}
 export class EventEditConflict extends Error {}
 
 // La fecha es un día calendario: siempre se serializa y muestra sin conversión horaria.
-export function summarizeEvent(event: { id: string; nombre: string; fecha: Date; lugar: string; cupos: number; inscritos: number; inscripcionesAbiertas: boolean; revision: number; ultimoNumero: number; ultimoOrdenEspera?: number }) {
-  return { fechaProtegida: event.ultimoNumero > 0 || event.inscritos > 0 || (event.ultimoOrdenEspera ?? 0) > 0, id: event.id, nombre: event.nombre, fecha: event.fecha.toISOString().slice(0, 10), lugar: event.lugar, cupos: event.cupos, inscritos: event.inscritos, inscripcionesAbiertas: event.inscripcionesAbiertas, revision: event.revision }
+export function summarizeEvent(event: { id: string; nombre: string; fecha: Date; lugar: string; cupos: number; inscritos: number; inscripcionesAbiertas: boolean; revision: number; ultimoNumero: number; ultimoOrdenEspera?: number; jornadaCalendly?: { eventoId: string } | null }) {
+  return { fechaProtegida: !!event.jornadaCalendly || event.ultimoNumero > 0 || event.inscritos > 0 || (event.ultimoOrdenEspera ?? 0) > 0, id: event.id, nombre: event.nombre, fecha: event.fecha.toISOString().slice(0, 10), lugar: event.lugar, cupos: event.cupos, inscritos: event.inscritos, inscripcionesAbiertas: event.inscripcionesAbiertas, revision: event.revision }
 }
 
 export async function editEvent(actor: { id: string; version: number }, input: ReturnType<typeof parseEventEdit>) {
@@ -22,9 +23,10 @@ export async function editEvent(actor: { id: string; version: number }, input: R
     // Una respuesta perdida se recupera sin volver a editar ni duplicar la auditoría.
     if (same) return { evento: summarizeEvent(event), actualizado: false }
     if (event.revision !== input.revision) throw new EventEditConflict("El evento cambió en otra pantalla. Recarga sus datos antes de guardar.")
-    const occupied = Math.max(event.inscritos, await tx.inscripcion.count({ where: { eventoId: event.id, cancelacion: { is: null } } }))
+    const occupied = Math.max(event.inscritos, await tx.inscripcion.count({ where: { eventoId: event.id, cancelacion: { is: null } } })) + (await calendlyCapacity(tx, event)).protegidos
     if (input.cupos < occupied) throw new EventEditConflict(`No puedes reducir los cupos por debajo de las ${occupied} inscripciones reservadas.`)
     if (event.fecha.getTime() !== input.fecha.getTime()) {
+      if (await tx.jornadaCalendly.findUnique({ where: { eventoId: event.id } })) throw new EventEditConflict("No puedes cambiar la fecha de una jornada vinculada a Calendly, aunque todavía no hayan llegado familias.")
       if (await tx.inscripcion.count({ where: { eventoId: event.id } }) > 0 || await tx.listaEspera.count({ where: { eventoId: event.id } }) > 0) throw new EventEditConflict("No puedes cambiar la fecha de un evento que ya tiene inscripciones o solicitudes de lista de espera.")
       if (event.inscripcionesAbiertas) throw new EventEditConflict("Cierra las inscripciones antes de cambiar la fecha.")
       if (input.fecha.toISOString().slice(0, 10) < chileToday()) throw new EventEditConflict("La nueva fecha no puede ser anterior a hoy en Chile.")
@@ -37,7 +39,7 @@ export async function editEvent(actor: { id: string; version: number }, input: R
 
 export async function listEventsFor(userId: string) {
   const [events, selected] = await prisma.$transaction([
-    prisma.evento.findMany({ orderBy: [{ fecha: "desc" }, { createdAt: "desc" }] }),
+    prisma.evento.findMany({ include: { jornadaCalendly: { select: { eventoId: true } } }, orderBy: [{ fecha: "desc" }, { createdAt: "desc" }] }),
     prisma.eventoSeleccionado.findUnique({ where: { usuarioId: userId } }),
   ])
   return { eventos: events.map(summarizeEvent), seleccionadoId: selected?.eventoId ?? null }

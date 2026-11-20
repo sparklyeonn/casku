@@ -29,9 +29,9 @@ Con la cuenta conectada, localizar el tipo de cita de Expo Bebé y revisar sus p
 
 ## Pendientes de sincronización automática
 
-1. Configurar un vínculo administrativo persistente entre tipo de cita y evento/jornada. En esta etapa recepción selecciona explícitamente el evento y el servidor exige que su fecha coincida con la cita en Santiago.
+1. La jornada ya puede vincularse de forma persistente a la agenda Expo de ese día, con una sola jornada por fecha. Queda pendiente ampliar a otros tipos de cita si Casku los necesita.
 2. Confirmar con Casku el formulario definitivo de Calendly y el caso de más de un bebé por reserva. Mientras tanto, recepción confirma expresamente un bebé por invitado; no se infiere desde el nombre reservado.
-3. Importación masiva previa con vista de revisión: la vinculación individual y la protección de duplicados ya están implementadas, sin inferir consentimiento ni propiedad de una cuenta familiar.
+3. La reserva logística anticipada ya importa las referencias y horarios sin crear bebés ni cuentas. Sigue pendiente un eventual formulario definitivo de inscripción previo en Calendly; la identidad y la autorización se confirman en recepción.
 4. Conciliar altas, cancelaciones y reprogramaciones posteriores a una llegada mediante notificaciones autenticadas y recuperación histórica. Una reprogramación debe conservar la inscripción y el historial; actualizar la agenda por sí solo no modifica una atención ya admitida.
 5. Configurar y verificar el endpoint público HTTPS y la suscripción cuando se implemente esa sincronización. La vinculación actual mediante lectura de API funciona también en el dominio de Vercel y no requiere webhooks.
 
@@ -105,3 +105,22 @@ Migración aditiva: `20261119000200_vincular_citas_calendly`. Agrega campos opci
 ### Pruebas
 
 `npm run test:production` incluye las pruebas de vinculación HTTP con proveedor simulado y base temporal, además de los recorridos existentes. Focalizado: `node tests/production-http.mjs --calendly-link-only`. PostgreSQL real aislado: `npm run test:postgres -- --calendly-link-only`; requiere la conexión administrativa de pruebas habitual y crea/elimina únicamente una base marcada temporal. Nunca usa reservas, credenciales ni mensajes reales.
+
+
+## Protección anticipada de cupos
+
+En **Agenda de citas → Cupos reservados en Calendly**, administración o recepción elige la jornada de la misma fecha, confirma que corresponde a Expo y pulsa **Activar protección de cupos**. Un día solo puede quedar asociado a una jornada. La fecha queda protegida aunque todavía no existan inscripciones locales. No se activa esta vinculación solo por visitar la agenda.
+
+La sincronización recorre todas las páginas, guarda únicamente referencias externas, horario y estado en `ReservaCupoCalendly` y registra la acción del funcionario. No crea bebés, cuentas, números, consentimientos ni correos. Una página incompleta, repetida o fallida nunca publica media actualización. Las reservas ausentes de una consulta conservan su protección: solo un estado cancelado explícito libera ese cupo logístico.
+
+**Disponibilidad compartida:** capacidad del evento menos inscripciones vigentes menos reservas activas de Calendly todavía no cubiertas por una inscripción vigente. El mismo cálculo protege la web, la recepción presencial, las promociones FIFO, la disponibilidad pública, los resúmenes y la reducción de cupos. Si las reservas superan la capacidad local, se conservan todas y se bloquean nuevas admisiones hasta que administración revise los cupos; no se descartan reservas para hacerlas encajar.
+
+Al confirmar el bebé y su llegada, una referencia única vincula el cupo con su inscripción dentro de la transacción del evento. No se consume un segundo cupo; una cita protegida conserva su reserva aunque haya lista de espera. Los reintentos y dos recepcionistas simultáneas mantienen una sola inscripción y fila. Una inscripción previa ya vinculada se reconoce al sincronizar y no se cuenta por duplicado.
+
+Cancelar una inscripción local no libera una cita que sigue activa en Calendly: el cupo se mantiene protegido hasta que se confirme su cancelación externa. Si Calendly cancela una cita que ya tiene inscripción, la sincronización conserva la ficha, inscripción y atención; su gestión sigue requiriendo revisión local. No se promueve la lista de espera ni se llama a Brevo desde esta sincronización.
+
+**Actualización y límites:** se actualiza cada dos minutos únicamente mientras este panel esté abierto y visible. La disponibilidad general se bloquea tras cinco minutos desde el inicio de la última consulta completa correcta, durante una sincronización pendiente o ante un fallo. Las reservas ya protegidas pueden confirmar la llegada mediante su comprobación individual vigente. Un proceso vencido puede reintentarse sin permitir que su respuesta tardía sobrescriba la actualización posterior. No se ha configurado todavía un webhook o una tarea de servidor permanente; el panel debe mantenerse abierto durante recepción o actualizarse manualmente. Las nuevas reservas externas hechas entre consultas solo se incorporan en la siguiente consulta; esta integración no modifica los límites ni la disponibilidad del Calendly externo.
+
+Migración aditiva: `20261119000300_reserva_cupos_calendly`, con dos tablas nuevas, sin modificar filas anteriores. Probar y aplicar exclusivamente en ensayo antes del despliegue; la activación por jornada es una acción posterior y separada.
+
+Prueba focalizada: `node tests/production-http.mjs --calendly-holds-only`. PostgreSQL real aislado y dos servidores: `npm run test:postgres -- --calendly-holds-only`. El recorrido normal de producción también incluye estas pruebas. Los cinco perfiles de navegador comprueban activación, cupos antes de la llegada, actualización sin duplicación y ausencia de desbordamiento. Las pruebas nunca usan Neon ni envían correos reales.

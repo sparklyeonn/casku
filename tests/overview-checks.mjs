@@ -44,7 +44,7 @@ export async function overviewChecks({ db, client, signIn, password, accounts, a
   const before = (await db.query('SELECT to_jsonb(i) AS row FROM "Inscripcion" i WHERE "eventoId"=$1 UNION ALL SELECT to_jsonb(f) FROM "EntradaFila" f WHERE "eventoId"=$1', [event.id])).rows
   const response = await admin(path(event.id)); assert.equal(response.status, 200); assert(response.headers.get("cache-control").includes("no-store"))
   const result = await response.json()
-  assert.deepEqual(Object.keys(result).sort(), ["consultadoAt", "evento", "totales"])
+  assert.deepEqual(Object.keys(result).sort(), ["calendly", "consultadoAt", "evento", "totales"])
   assert.deepEqual(result.evento, { id: event.id, nombre: event.nombre, cupos: 20 })
   assert(Number.isFinite(Date.parse(result.consultadoAt)))
   assert.deepEqual(result.totales, { inscritos: 8, canceladas: 0, enEspera: 3, enAtencion: 1, atendidos: 2, ausentes: 1, sinLlegada: 1, resultadosPendientes: 1, resultadosPublicados: 1, resultadosRetirados: 0 })

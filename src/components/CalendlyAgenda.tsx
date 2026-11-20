@@ -1,5 +1,6 @@
 "use client"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { CalendlyProtection } from "./CalendlyProtection"
 import { CalendlyArrival } from "./CalendlyArrival"
 import type { CalendlyAgendaListing } from "@/lib/calendly/agenda"
 type Row = Omit<CalendlyAgendaListing["citas"][number], "correo"> & { correo?: string; vinculacion?: { numero: number; estado: string } | null }
@@ -7,7 +8,7 @@ type Listing = Omit<CalendlyAgendaListing, "citas"> & { citas: Row[] }
 const time = (value: string) => new Intl.DateTimeFormat("es-CL", { timeZone: "America/Santiago", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(value))
 const arrivalState: Record<string, string> = { EN_ESPERA: "En espera", EN_ATENCION: "En atención", ATENDIDO: "Atención finalizada", AUSENTE: "Ausente", CANCELADO: "Inscripción cancelada", SIN_LLEGADA: "Sin llegada confirmada" }
 const day = (value: string) => new Intl.DateTimeFormat("es-CL", { timeZone: "America/Santiago", dateStyle: "full" }).format(new Date(value + "T12:00:00Z"))
-export function CalendlyAgenda({ initialDate, canReceive = false }: { initialDate: string; canReceive?: boolean }) {
+export function CalendlyAgenda({ initialDate, canReceive = false, canProtect = false }: { initialDate: string; canReceive?: boolean; canProtect?: boolean }) {
   const [fecha, setFecha] = useState(initialDate), [estado, setEstado] = useState("active")
   const [data, setData] = useState<Listing | null>(null), [status, setStatus] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(false), [search, setSearch] = useState("")
   const [confirming, setConfirming] = useState<string | null>(null)
@@ -55,6 +56,7 @@ export function CalendlyAgenda({ initialDate, canReceive = false }: { initialDat
     </form>
     <p role="status">{busy ? "Consultando citas y participantes…" : status === "PENDIENTE_CONFIGURACION" ? "Falta configurar la clave privada de Calendly en el alojamiento." : status === "DESACTIVADO" ? "La conexión con Calendly está desactivada." : data ? "Agenda consultada." : "Selecciona el día y consulta la agenda."}</p>
     {error && <p role="alert" className="rounded-xl border border-red-300 p-4">{error}{data ? " Se conservan los datos de la última consulta correcta." : ""}</p>}
+    {canProtect && <CalendlyProtection key={fecha} fecha={fecha} reception={canReceive} />}
     {data && <section className="space-y-4" aria-labelledby="agenda-day"><h2 id="agenda-day" className="text-xl font-semibold">{day(data.fecha)}</h2><p>{data.tipoCita} · {data.citas.length} reservas cargadas · Última consulta: {time(data.consultadoAt)}.</p>
       <label className="block">Buscar entre las reservas cargadas<input className="mt-2 block w-full rounded-lg border p-3" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Nombre o correo, si tu perfil lo permite" /></label>
       {(data.siguiente || data.participantesPendientes) && <p className="rounded-xl border border-amber-300 p-4">{data.siguiente ? "Hay más citas para consultar: la lista todavía no está completa." : ""} {data.participantesPendientes ? "Calendly devolvió más de 100 participantes para una cita. Esa cita requiere revisión; no se presenta como completa." : ""}</p>}

@@ -62,6 +62,7 @@ model Evento {
   previosConsecutivos Int @default(0)
   revision Int @default(1)
   cambios CambioEvento[]
+  jornadaCalendly JornadaCalendly?
 
   @@index([fecha, createdAt])
 }
@@ -229,6 +230,7 @@ model Inscripcion {
   autorizacionId String? @db.Uuid
   autorizacion AutorizacionPrivacidad? @relation(fields: [autorizacionId], references: [id], onDelete: Restrict)
   esperaOrigen ListaEspera?
+  cupoCalendly ReservaCupoCalendly?
   cancelacion CancelacionInscripcion?
   revisionContacto Int @default(1)
   id             String @id @db.Uuid
@@ -685,4 +687,30 @@ model CambioGestionCorreo {
  createdAt DateTime @default(now()) @db.Timestamptz(3)
  @@unique([tipo, destinoId, revision])
  @@index([tipo, destinoId, createdAt])
+}
+
+model JornadaCalendly {
+  eventoId String @id @db.Uuid
+  evento Evento @relation(fields: [eventoId], references: [id], onDelete: Restrict)
+  fecha DateTime @unique @db.Date
+  sincronizadaAt DateTime?
+  bloqueoToken String? @db.Uuid
+  bloqueoHasta DateTime?
+  errorSincronizacion Boolean @default(false)
+  reservas ReservaCupoCalendly[]
+}
+
+model ReservaCupoCalendly {
+  invitadoId String @id
+  reservaId String
+  eventoId String @db.Uuid
+  jornada JornadaCalendly @relation(fields: [eventoId], references: [eventoId], onDelete: Restrict)
+  inicio DateTime
+  fin DateTime
+  estado String
+  inscripcionId String? @unique @db.Uuid
+  inscripcion Inscripcion? @relation(fields: [inscripcionId, eventoId], references: [id, eventoId], onDelete: Restrict)
+  verificadaAt DateTime
+  @@index([eventoId, estado])
+  @@unique([inscripcionId, eventoId])
 }

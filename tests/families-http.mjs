@@ -1,3 +1,4 @@
+import { calendlyHoldsChecks } from "./calendly-holds-checks.mjs"
 import { calendlyFixtureServer, calendlyLinkChecks } from "./calendly-link-checks.mjs"
 import { browserTeamAdminChecks } from "./browser-team-admin.mjs"
 import { browserFamilyChecks } from "./browser-families.mjs"
@@ -45,7 +46,8 @@ import { cancellationChecks } from "./cancellations-checks.mjs"
 import { seedBeforeCancellationMigration } from "./cancellations-migration.mjs"
 
 const production = process.argv.includes("--production")
-const calendlyLinkOnly = process.argv.includes("--calendly-link-only")
+const calendlyHoldsOnly = process.argv.includes("--calendly-holds-only")
+const calendlyLinkOnly = process.argv.includes("--calendly-link-only") || calendlyHoldsOnly
 const realPostgres = process.argv.includes("--postgres")
 const browserTests = realPostgres || process.argv.includes("--devices") || process.argv.includes("--team-visual-only")
 assert(!realPostgres || production, "PostgreSQL real se comprueba con --production")
@@ -175,7 +177,9 @@ try {
     assert(secondaryReady)
   }
   const admin = client(); assert.equal((await signIn(admin, "equipo", { email: adminAccount.email, password })).role, "ADMIN")
-  if (calendlyLinkOnly) {
+  if (calendlyHoldsOnly) {
+    await calendlyHoldsChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, post, mails, family, secondaryBase: realPostgres ? secondaryBase : undefined, base })
+  } else if (calendlyLinkOnly) {
     await calendlyLinkChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, post, mails, secondaryBase: realPostgres ? secondaryBase : undefined, base })
   } else if(process.argv.includes("--calendly-only")) {
     await browserTeamAdminChecks({db,base,password})

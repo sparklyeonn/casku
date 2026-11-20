@@ -1,3 +1,4 @@
+import { calendlyCapacity } from "@/lib/calendly/capacity"
 import { requireDataConsent } from "@/lib/privacy/store"
 import { cancellationSelect, cancellationSummary } from "@/lib/cancellations/store"
 import { ReceptionConflict } from "./http"
@@ -55,6 +56,7 @@ export async function waitingQueue(eventoId: string, after: number, absentAfter 
     const entries = await tx.entradaFila.findMany({ where: { eventoId, estado: "EN_ESPERA", orden: { gt: after } }, orderBy: { orden: "asc" }, take: 51, select: { orden: true, inscripcion: { select: receptionSelect } } })
     const absentTotal = await tx.entradaFila.count({ where: { eventoId, estado: "AUSENTE" } })
     const absents = absentTotal ? await tx.entradaFila.findMany({ where: { eventoId, estado: "AUSENTE", orden: { gt: absentAfter } }, orderBy: { orden: "asc" }, take: 51, select: { orden: true, inscripcion: { select: receptionSelect } } }) : []
-    return { total, ausentes: { total: absentTotal, inscripciones: absents.slice(0, 50).map(entry => receptionSummary(entry.inscripcion)), siguiente: absents.length > 50 ? absents[49].orden : null }, disponibles: event.cupos - event.inscritos, presencialHabilitada: event.fecha.toISOString().slice(0, 10) === chileToday(now), previas: total - presenciales, presenciales, politica: queuePolicy, proximo: next && choice ? { ...receptionSummary(next.inscripcion), motivo: choice.motivo } : null, inscripciones: entries.slice(0, 50).map(entry => receptionSummary(entry.inscripcion)), siguiente: entries.length > 50 ? entries[49].orden : null, actualizadaAt: now.toISOString() }
+    const capacity = await calendlyCapacity(tx, event)
+    return { calendly: capacity, total, ausentes: { total: absentTotal, inscripciones: absents.slice(0, 50).map(entry => receptionSummary(entry.inscripcion)), siguiente: absents.length > 50 ? absents[49].orden : null }, disponibles: capacity.disponibles, presencialHabilitada: event.fecha.toISOString().slice(0, 10) === chileToday(now), previas: total - presenciales, presenciales, politica: queuePolicy, proximo: next && choice ? { ...receptionSummary(next.inscripcion), motivo: choice.motivo } : null, inscripciones: entries.slice(0, 50).map(entry => receptionSummary(entry.inscripcion)), siguiente: entries.length > 50 ? entries[49].orden : null, actualizadaAt: now.toISOString() }
   }, { isolationLevel: "RepeatableRead" })
 }

@@ -1,3 +1,4 @@
+import { calendlyCapacity } from "@/lib/calendly/capacity"
 import { randomBytes, createHash } from "node:crypto"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
@@ -20,6 +21,10 @@ export async function registerCalendlyArrival(actor: { id: string; version: numb
     if (!event || event.fecha.toISOString().slice(0, 10) !== booking.fecha) throw new ReceptionConflict("El evento debe tener la misma fecha de la cita en Santiago. Selecciona el evento correcto.")
     if (booking.fecha !== chileToday()) throw new ReceptionConflict("La llegada se confirma el día de la cita, según la fecha de Santiago.")
     if (booking.reservaId !== input.reservaId || booking.invitadoId !== input.invitadoId) throw new ReceptionConflict("La referencia de la cita cambió. Actualiza la agenda.")
+    const hold = await tx.reservaCupoCalendly.findUnique({ where: { invitadoId: booking.invitadoId } })
+    if (hold && (hold.eventoId !== event.id || hold.reservaId !== booking.reservaId)) throw new ReceptionConflict("El cupo de Calendly está protegido en otra jornada. No se movió ni duplicó.")
+    const capacity = await calendlyCapacity(tx, event)
+    const ownsHold = !!hold && hold.estado === "ACTIVA"
     const linked = await tx.inscripcion.findUnique({ where: { calendlyInvitadoId: booking.invitadoId }, include: { paciente: true } })
     const retry = await tx.inscripcion.findUnique({ where: { id: input.id } })
     if (retry && retry.solicitudHash !== hash && retry.id !== linked?.id) throw new ReceptionConflict("Este envío corresponde a otro registro. Busca su inscripción.")
@@ -42,8 +47,10 @@ export async function registerCalendlyArrival(actor: { id: string; version: numb
         ...(input.bebe.rut ? [{ rut: { in: [input.bebe.rut, input.bebe.rut.replace(/(\d)(?=(\d{3})+-)/g, "$1.")] } }] : []),
       ] }, take: 2 })
       if (candidates.length) throw new ReceptionConflict("Ya existe una ficha con estos datos. Busca su inscripción y usa su número; si pertenece a otro evento, solicita revisión a Casku. No se duplicó el bebé.")
-      if (event.inscritos >= event.cupos) throw new ReceptionConflict("El evento no tiene cupos locales disponibles. Administración debe revisar los cupos y las reservas de Calendly; no se aumentaron automáticamente.")
-      if (await tx.listaEspera.findFirst({ where: { eventoId: event.id, estado: "PENDIENTE" }, select: { id: true } })) throw new ReceptionConflict("Hay una lista de espera pendiente. Administración debe revisar los cupos reservados para Calendly antes de incorporar otra inscripción.")
+      if (capacity.configurada && !ownsHold) throw new ReceptionConflict("Actualiza la protección de cupos de Calendly para incorporar esta reserva antes de confirmar la llegada.")
+      if (capacity.exceso > 0) throw new ReceptionConflict("Las reservas superan los cupos configurados. Administración debe revisar la capacidad antes de admitir otra familia.")
+      if (event.inscritos >= event.cupos || (!ownsHold && capacity.disponibles < 1)) throw new ReceptionConflict("El evento no tiene cupos locales disponibles. Administración debe revisar los cupos y las reservas de Calendly; no se aumentaron automáticamente.")
+      if (!ownsHold && await tx.listaEspera.findFirst({ where: { eventoId: event.id, estado: "PENDIENTE" }, select: { id: true } })) throw new ReceptionConflict("Hay una lista de espera pendiente. Administración debe revisar los cupos reservados para Calendly antes de incorporar otra inscripción.")
       // Serializes identical confirmed babies across different events as well.
       await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${input.bebe.nombreNormalizado + ":" + input.bebe.fechaNacimiento.toISOString()}, 0))`
       if (await tx.paciente.findFirst({ where: { nombreNormalizado: input.bebe.nombreNormalizado, fechaNacimiento: input.bebe.fechaNacimiento }, select: { id: true } })) throw new ReceptionConflict("Otra recepción acaba de registrar esta ficha. Busca su inscripción antes de continuar.")
@@ -55,6 +62,10 @@ export async function registerCalendlyArrival(actor: { id: string; version: numb
     if (!linked) {
       await tx.inscripcion.update({ where: { id: row.id }, data: { calendlyReservaId: booking.reservaId, calendlyInvitadoId: booking.invitadoId, citaInicio: booking.inicio, citaFin: booking.fin, citaConfirmadaAt: new Date() } })
       await trace(tx, { id: actor.id, role: "RECEPCION" }, "VINCULAR_CITA_CALENDLY", "INSCRIPCION", row.id)
+    }
+    if (hold) {
+      if (hold.inscripcionId && hold.inscripcionId !== row.id) throw new ReceptionConflict("La reserva ya está asociada a otra inscripción. No se duplicó.")
+      await tx.reservaCupoCalendly.update({ where: { invitadoId: hold.invitadoId }, data: { inscripcionId: row.id, inicio: booking.inicio, fin: booking.fin, verificadaAt: new Date() } })
     }
     const result = await ensureArrival(tx, await tx.inscripcion.findUniqueOrThrow({ where: { id: row.id }, select: receptionSelect }), actor.id)
     if (result.nueva) await trace(tx, { id: actor.id, role: "RECEPCION" }, "CONFIRMAR_LLEGADA_CALENDLY", "INSCRIPCION", row.id)

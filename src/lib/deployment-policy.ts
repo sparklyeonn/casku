@@ -52,7 +52,14 @@ export function checkDeploymentEnvironment(env: Environment, stage: DeploymentSt
     if (env.VERCEL === "1" && !token(env.CRON_SECRET)) fail("CRON_SECRET", "Configura el token privado independiente del cron de Vercel.")
     warn("CASKU_PASSWORD_RECOVERY_WORKER_SECRET", "Verifica en el hosting que el procesador privado se ejecute periódicamente; las variables no programan el trabajo.")
   } else warn("CASKU_PASSWORD_RECOVERY_ENABLED", "La recuperación por correo permanece desactivada.")
-  const secrets = ["CRON_SECRET", "AUTH_SECRET", "CASKU_MAIL_DELIVERY_SECRET", "CASKU_MAIL_SUPPRESSION_SECRET", "CASKU_PASSWORD_RECOVERY_QUEUE_KEY", "CASKU_PASSWORD_RECOVERY_WORKER_SECRET", "BREVO_WEBHOOK_SECRET"]
+  if(env.CALENDLY_WEBHOOK_ENABLED==="1") {
+    if(env.CALENDLY_ENABLED!=="1")fail("CALENDLY_WEBHOOK_ENABLED","Los avisos requieren la conexión privada con Calendly.")
+    if(!token(env.CALENDLY_WEBHOOK_SIGNING_KEY))fail("CALENDLY_WEBHOOK_SIGNING_KEY","Configura una clave de firma privada independiente.")
+    if(!/^[A-Za-z0-9_-]{1,128}$/.test(env.CALENDLY_WEBHOOK_SUBSCRIPTION_ID||""))fail("CALENDLY_WEBHOOK_SUBSCRIPTION_ID","Configura la referencia de la suscripción de esta cuenta.")
+    if(!token(env.CRON_SECRET))fail("CRON_SECRET","Configura el token de las tareas diarias de recuperación.")
+    warn("CALENDLY_WEBHOOK_ENABLED","Verifica la suscripción activa y actualiza la protección inicial de cada jornada; las variables no acreditan entregas reales.")
+  }
+  const secrets = ["CALENDLY_WEBHOOK_SIGNING_KEY","CRON_SECRET", "AUTH_SECRET", "CASKU_MAIL_DELIVERY_SECRET", "CASKU_MAIL_SUPPRESSION_SECRET", "CASKU_PASSWORD_RECOVERY_QUEUE_KEY", "CASKU_PASSWORD_RECOVERY_WORKER_SECRET", "BREVO_WEBHOOK_SECRET"]
   const used = new Set<string>()
   for (const name of secrets) if (env[name]) { if (used.has(env[name]!)) fail(name, "Los secretos de distintos módulos deben ser independientes."); used.add(env[name]!) }
   warn("DATABASE_URL", "Confirma el destino y el aislamiento entre ensayo y producción. Esta comprobación no conecta a la base ni acredita migraciones, cuentas o respaldos.")

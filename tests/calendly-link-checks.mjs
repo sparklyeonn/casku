@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto"
 import { createServer } from "node:http"
 const user = "https://api.calendly.com/users/qa", type = "https://api.calendly.com/event_types/expo"
 export const bookingFixtures = new Map()
-export const calendlyFixtureState = { delayMs: 0, pausedRequests: 0, fail: false, pageSize: 10, failPage2: false, incomplete: false, omit: new Set() }
+export const calendlyFixtureState = { retryAt: null, callback: "", subscriptionState: "active", delayMs: 0, pausedRequests: 0, fail: false, pageSize: 10, failPage2: false, incomplete: false, omit: new Set() }
 export const calendlyFixtureServer = createServer(async (request, response) => {
   assert.equal(request.method, "GET"); assert.equal(request.headers.authorization, "Bearer calendly_fixture_only")
   if (calendlyFixtureState.delayMs) { calendlyFixtureState.pausedRequests++; await new Promise(resolve => setTimeout(resolve, calendlyFixtureState.delayMs)); calendlyFixtureState.pausedRequests-- }
@@ -12,8 +12,9 @@ export const calendlyFixtureServer = createServer(async (request, response) => {
   const json = value => { response.setHeader("Content-Type", "application/json"); response.end(JSON.stringify(value)) }
   if (calendlyFixtureState.fail) { response.statusCode = 503; return json({ error: "Fallo ficticio" }) }
   if (path === "/users/me") return json({ resource: { uri: user } })
+  if (path === "/webhook_subscriptions/fixture-hook") return json({ resource: { uri: "https://api.calendly.com/webhook_subscriptions/fixture-hook", callback_url: calendlyFixtureState.callback, state: calendlyFixtureState.subscriptionState, scope:"user", user, events:["invitee.created","invitee.canceled"], retry_started_at:calendlyFixtureState.retryAt } })
   if (path === "/event_types") return json({ collection: [{ uri: type, name: "Expo QA", scheduling_url: "https://calendly.com/contacto-casku/new-meeting" }], pagination: {} })
-  const event = (id, booking) => ({ uri: `https://api.calendly.com/scheduled_events/${id}`, event_type: type, event_memberships: [{ user }], status: booking.status ?? "active", start_time: booking.inicio.toISOString(), end_time: booking.fin.toISOString() })
+  const event = (id, booking) => ({ uri: `https://api.calendly.com/scheduled_events/${id}`, event_type: booking.foreign ? "https://api.calendly.com/event_types/other" : type, event_memberships: [{ user }], status: booking.status ?? "active", start_time: booking.inicio.toISOString(), end_time: booking.fin.toISOString() })
   if (path === "/scheduled_events") {
     if (calendlyFixtureState.failPage2 && url.searchParams.has("page_token")) { response.statusCode = 503; return json({ error: "Página ficticia fallida" }) }
     const rows = [...bookingFixtures.entries()].filter(([id, row]) => !calendlyFixtureState.omit.has(id) && row.inicio >= new Date(url.searchParams.get("min_start_time")) && row.inicio < new Date(url.searchParams.get("max_start_time"))).sort((a, b) => a[1].inicio - b[1].inicio)
@@ -23,7 +24,7 @@ export const calendlyFixtureServer = createServer(async (request, response) => {
   const [, , id, section, guest] = path.split("/"), booking = bookingFixtures.get(id)
   if (!booking) { response.statusCode = 404; return json({ error: "Ficticio" }) }
   const uri = `https://api.calendly.com/scheduled_events/${id}`
-  const participant = value => ({ uri: `${uri}/invitees/${value}`, event: uri, status: booking.status ?? "active", rescheduled: booking.rescheduled ?? false, name: "Reserva ficticia QA", email: "qa@example.test" })
+  const participant = value => ({ uri: `${uri}/invitees/${value}`, event: uri, status: booking.status ?? "active", rescheduled: booking.rescheduled ?? false, old_invitee: booking.oldUri ?? null, new_invitee: booking.newUri ?? null, name: "Reserva ficticia QA", email: "qa@example.test" })
   if (guest) return json({ resource: participant(guest) })
   if (section === "invitees") return json({ collection: [participant(booking.invitadoId)], pagination: { next_page_token: calendlyFixtureState.incomplete ? "more" : null } })
   return json({ resource: event(id, booking) })

@@ -33,7 +33,8 @@
     "db:backup": "node scripts/respaldo-base.mjs backup",
     "db:restore": "node scripts/respaldo-base.mjs restore",
     "test:backup": "node tests/backup-restore.mjs",
-    "deploy:check": "node --experimental-strip-types scripts/verificar-despliegue.mjs"
+    "deploy:check": "node --experimental-strip-types scripts/verificar-despliegue.mjs",
+    "calendly:webhook": "node scripts/calendly-webhook.mjs"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

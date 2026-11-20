@@ -32,8 +32,8 @@ Con la cuenta conectada, localizar el tipo de cita de Expo Bebé y revisar sus p
 1. La jornada ya puede vincularse de forma persistente a la agenda Expo de ese día, con una sola jornada por fecha. Queda pendiente ampliar a otros tipos de cita si Casku los necesita.
 2. Confirmar con Casku el formulario definitivo de Calendly y el caso de más de un bebé por reserva. Mientras tanto, recepción confirma expresamente un bebé por invitado; no se infiere desde el nombre reservado.
 3. La reserva logística anticipada ya importa las referencias y horarios sin crear bebés ni cuentas. Sigue pendiente un eventual formulario definitivo de inscripción previo en Calendly; la identidad y la autorización se confirman en recepción.
-4. Conciliar altas, cancelaciones y reprogramaciones posteriores a una llegada mediante notificaciones autenticadas y recuperación histórica. Una reprogramación debe conservar la inscripción y el historial; actualizar la agenda por sí solo no modifica una atención ya admitida.
-5. Configurar y verificar el endpoint público HTTPS y la suscripción cuando se implemente esa sincronización. La vinculación actual mediante lectura de API funciona también en el dominio de Vercel y no requiere webhooks.
+4. Los avisos autenticados, la cola duradera y la conciliación diaria ya están implementados. La reprogramación dentro de la misma jornada conserva la inscripción si aún no hay atención iniciada. Los cambios entre jornadas y la atención en curso requieren revisión; no se trasladan ni se borran evaluaciones.
+5. Activar y verificar en el despliegue la suscripción al receptor HTTPS, después de configurar las variables privadas. El dominio actual de Vercel sirve; no es necesario esperar el subdominio de Wix.
 
 ## Pruebas
 
@@ -96,7 +96,7 @@ La entrada conserva inicio y fin UTC y los muestra en Santiago. Antes del inicio
 
 Las inscripciones creadas desde Calendly pueden usar después la invitación familiar verificada existente. No se asocian cuentas ni se activan correos automáticamente. La nueva operación no crea `CorreoInscripcion` ni llama a Brevo.
 
-**Alcance de sincronización:** Calendly se comprueba al confirmar la llegada. Una cancelación o reprogramación posterior a esa llegada requiere revisión operativa; actualizar la agenda no cancela ni mueve una atención ya iniciada. La edición/reconciliación automática de citas vinculadas queda fuera de esta etapa.
+**Alcance de sincronización:** Calendly se comprueba al confirmar la llegada. Una cancelación o reprogramación posterior a esa llegada requiere revisión operativa; actualizar la agenda no cancela ni mueve una atención ya iniciada. La ampliación de webhooks descrita más abajo actualiza los casos seguros y señala para revisión los que ya tienen atención o cambian de jornada.
 
 ### Base y despliegue
 
@@ -119,8 +119,56 @@ Al confirmar el bebé y su llegada, una referencia única vincula el cupo con su
 
 Cancelar una inscripción local no libera una cita que sigue activa en Calendly: el cupo se mantiene protegido hasta que se confirme su cancelación externa. Si Calendly cancela una cita que ya tiene inscripción, la sincronización conserva la ficha, inscripción y atención; su gestión sigue requiriendo revisión local. No se promueve la lista de espera ni se llama a Brevo desde esta sincronización.
 
-**Actualización y límites:** se actualiza cada dos minutos únicamente mientras este panel esté abierto y visible. La disponibilidad general se bloquea tras cinco minutos desde el inicio de la última consulta completa correcta, durante una sincronización pendiente o ante un fallo. Las reservas ya protegidas pueden confirmar la llegada mediante su comprobación individual vigente. Un proceso vencido puede reintentarse sin permitir que su respuesta tardía sobrescriba la actualización posterior. No se ha configurado todavía un webhook o una tarea de servidor permanente; el panel debe mantenerse abierto durante recepción o actualizarse manualmente. Las nuevas reservas externas hechas entre consultas solo se incorporan en la siguiente consulta; esta integración no modifica los límites ni la disponibilidad del Calendly externo.
+**Actualización y límites:** se actualiza cada dos minutos únicamente mientras este panel esté abierto y visible. La disponibilidad general se bloquea tras cinco minutos desde el inicio de la última consulta completa correcta, durante una sincronización pendiente o ante un fallo. Las reservas ya protegidas pueden confirmar la llegada mediante su comprobación individual vigente. Un proceso vencido puede reintentarse sin permitir que su respuesta tardía sobrescriba la actualización posterior. Este es el modo de respaldo cuando los webhooks aún no están verificados. Con la conexión automática verificada y una protección inicial posterior, ya no hace falta mantener el panel abierto. Las nuevas reservas externas hechas entre consultas solo se incorporan en la siguiente consulta; esta integración no modifica los límites ni la disponibilidad del Calendly externo.
 
 Migración aditiva: `20261119000300_reserva_cupos_calendly`, con dos tablas nuevas, sin modificar filas anteriores. Probar y aplicar exclusivamente en ensayo antes del despliegue; la activación por jornada es una acción posterior y separada.
 
 Prueba focalizada: `node tests/production-http.mjs --calendly-holds-only`. PostgreSQL real aislado y dos servidores: `npm run test:postgres -- --calendly-holds-only`. El recorrido normal de producción también incluye estas pruebas. Los cinco perfiles de navegador comprueban activación, cupos antes de la llegada, actualización sin duplicación y ausencia de desbordamiento. Las pruebas nunca usan Neon ni envían correos reales.
+
+
+## Webhooks y funcionamiento con el panel cerrado (20 de noviembre)
+
+### Qué se implementó
+
+- `POST /api/calendly/webhook` público, con firma HMAC SHA-256 del cuerpo original y timestamp, ventana de tres minutos, límite de 128 KiB y sin aceptar claves en la URL. Los eventos admitidos son `invitee.created` e `invitee.canceled`. No hay autenticación de usuario porque Calendly no inicia sesión: la autenticación es la firma privada.
+- El servidor guarda el aviso mínimo antes de responder 202: tipo, fecha y referencia del invitado. Nunca conserva el cuerpo completo, nombres, correo, teléfono, notas ni respuestas del formulario. Duplicados se reconocen por tipo, referencia y fecha del aviso.
+- `after` de Next.js ejecuta el procesamiento después de responder, dentro de la duración de la función de Vercel. Cada aviso tiene un bloqueo compartido con vencimiento, contador y espera de reintento. Si el proceso se interrumpe, el aviso permanece en PostgreSQL y puede recuperarse. Una notificación no se considera procesada solo por haber respondido 202.
+- La API se consulta de nuevo para confirmar cuenta, tipo Expo, estado y horarios vigentes. Una creación antigua no reactiva una reserva que ya está cancelada. Las referencias `old_invitee` y `new_invitee` de una reprogramación se comprueban en ambos sentidos; la pareja se actualiza en una transacción.
+- Para una inscripción aún sin atención iniciada y dentro de la misma jornada, la reprogramación conserva paciente, número, QR, fila y cuenta, y guarda hora y referencias anteriores/nuevas en `CambioCitaCalendly`. Una familia ausente sigue ausente hasta que recepción confirme su regreso.
+- No se reasignan automáticamente jornadas, números entre eventos, evaluaciones ni atenciones iniciadas. Esos casos se marcan `revisionCalendlyPendiente`; la atención en curso puede conservarse y finalizar, pero la inscripción modificada no participa de nuevos llamados hasta la revisión. Una cancelación de Calendly no borra ni cancela por sí sola una ficha o evaluación local.
+- Una revisión global compartida impide que una consulta completa anterior sobrescriba avisos posteriores. Las llegadas, los cupos y las notificaciones se serializan con los mismos bloqueos de evento. No se crean bebés, consentimientos, cuentas ni correos desde el webhook.
+
+### Activación después del commit y despliegue
+
+1. Desplegar el código nuevo con la base de **ensayo** ya migrada y `AUTH_URL=https://casku-craneometrias.vercel.app`. Mantener `CASKU_MAIL_ENABLED=0` y `CASKU_MAIL_AUTOMATION=0`. No usar datos clínicos reales para ensayar.
+2. El token privado `CALENDLY_API_TOKEN` debe tener `users:read`, `event_types:read`, `scheduled_events:read`, `webhooks:read` y `webhooks:write`. Nunca copiarlo al navegador ni al chat.
+3. Ejecutar una sola vez `npm run calendly:webhook -- --prepare`. Crea `.env.calendly-webhook` con permisos 600, dos claves independientes y la referencia vacía. No sobrescribe claves existentes ni modifica Calendly. El archivo está excluido de Git y del despliegue; abrirlo localmente para copiar sus valores sin compartirlos.
+4. Con el receptor ya desplegado, ejecutar:
+
+   ```sh
+   npm run calendly:webhook -- --create --url https://casku-craneometrias.vercel.app/api/calendly/webhook
+   ```
+
+   Este es el único comando de configuración que crea una suscripción externa. Comprueba antes que el receptor exista públicamente y busca suscripciones activas con el mismo destino para evitar duplicarlas. No crea reservas ni envía correos. La referencia nueva queda escrita en el archivo privado. Si ya existe una suscripción desconocida para ese destino, no se cambia su firma ni se crea otra: revisar la referencia y la clave conocida antes de continuar.
+5. Copiar desde el archivo privado a Vercel, sin publicarlo: `CALENDLY_WEBHOOK_SIGNING_KEY`, `CALENDLY_WEBHOOK_SUBSCRIPTION_ID`, `CALENDLY_WEBHOOK_ENABLED=1` y `CRON_SECRET`. Mantener `CALENDLY_ENABLED=1`. Guardar en el entorno correcto y volver a desplegar. Antes de configurar estos valores el receptor devuelve 503 y Calendly puede reintentar; la consulta completa inicial también recupera reservas anteriores.
+6. En **Administración → Calendly → Avisos automáticos**, pulsar **Verificar conexión y reintentar**. El servidor verifica por API una suscripción activa de la cuenta, con alcance de usuario, el receptor exacto y ambos eventos. Las variables por sí solas no acreditan esta verificación.
+7. Actualizar una vez la protección de cada jornada después de verificar la conexión. Esto fija el punto de partida completo para las citas previas. El panel indicará el modo automático y podrá cerrarse. Los días sin jornada vinculada quedan en revisión; no se elige un evento por el nombre ni se crean jornadas automáticamente.
+8. Realizar después una prueba funcional autorizada de entrega real. Las pruebas automáticas del repositorio usan firma y transporte simulados; no acreditan que Calendly alcance el despliegue real. Crear una cita desde Calendly puede activar sus propios correos: acordar esa prueba antes de usar destinatarios reales.
+
+### Recuperación y límites
+
+`vercel.json` incorpora dos tareas **diarias**: `/api/interno/calendly/procesar` para avisos pendientes y `/api/interno/calendly/conciliar` para comprobar la suscripción y consultar por completo la jornada de hoy o la próxima. Ambas exigen `Authorization: Bearer <CRON_SECRET>`; si el módulo está desactivado no consultan Calendly. No invocan los procesadores de correo ni cambian el plan de Vercel. El cron de Hobby solo permite una ejecución diaria por tarea y tiene precisión por hora; no se configuró un cron por minuto.
+
+Hay reintentos cortos dentro del procesamiento posterior a la recepción y recuperación cuando llegan nuevos avisos. Si una caída persiste, la cola se conserva para la tarea diaria o el botón administrativo; no se promete recuperación instantánea de una interrupción prolongada. La salud de la suscripción vence a las 26 horas sin verificación correcta. Ante avisos pendientes, fallos, bloqueos de sincronización o una protección inicial que falta, se conserva el cierre de nuevas inscripciones sin reserva. Los cupos existentes no se liberan por perder conectividad.
+
+Si cambia el dominio, la clave o la suscripción, se debe volver a verificar el receptor y actualizar las protecciones iniciales. No se adopta silenciosamente una suscripción que apunta a otro dominio. No se elimina automáticamente ninguna suscripción anterior.
+
+### Verificación técnica
+
+- `npm run check` incluye el recorrido de avisos y todos los recorridos anteriores.
+- Focalizado: `node tests/production-http.mjs --calendly-hooks-only`.
+- PostgreSQL real aislado y dos servidores: `npm run test:postgres -- --calendly-hooks-only`.
+- Los casos cubren firma incorrecta/cuerpo modificado, vencimiento, tamaño, duplicados entre servidores, lectura posterior desde la API, cancelaciones fuera de orden, reprogramación dentro de una jornada y entre días, atención activa preservada, exclusión de nuevos llamados, revisión, recuperación privada, funcionamiento sin heartbeat del navegador y cero correos.
+- La migración `20261120000100_webhooks_calendly` agrega la cola, el estado de conexión, el historial logístico y una marca de revisión falsa por defecto. No cambia medidas, reglas clínicas ni contenido anterior.
+
+Fuentes oficiales: [firmas de Calendly](https://developer.calendly.com/api-docs/overview/webhooks/webhook-signatures), [reprogramaciones](https://developer.calendly.com/docs/api-guides/see-how-webhook-payloads-change-when-invitees-reschedule-events), [creación de suscripción y permisos](https://developer.calendly.com/api-docs/calendly-api/webhooks/create-webhook-subscription), [timeouts](https://developer.calendly.com/api-docs/overview/webhooks/webhook-timeouts), [reintentos del proveedor](https://developer.calendly.com/api-docs/overview/webhooks/webhook-errors), [límites de cron en Vercel](https://vercel.com/docs/schedules/cron-jobs/usage-and-pricing).

@@ -13,15 +13,16 @@ import { chileToday } from "@/lib/families/input"
 export const receptionFilaSelect = { orden: true, llegadaAt: true, esperaDesde: true, ausenciaId: true, ausenteAt: true, reincorporadaAt: true, estado: true } as const
 export const receptionSelect = {
   cancelacion: { select: cancellationSelect },
-  id: true, numero: true, eventoId: true, origen: true, contactoNombre: true, citaInicio: true, citaFin: true,
+  id: true, numero: true, eventoId: true, origen: true, contactoNombre: true, revisionCalendlyPendiente: true, citaInicio: true, citaFin: true,
   paciente: { select: { nombre: true } }, apoderado: { select: { nombre: true } },
   fila: { select: receptionFilaSelect },
 } satisfies Prisma.InscripcionSelect
 export type ReceptionRow = Prisma.InscripcionGetPayload<{ select: typeof receptionSelect }>
 export function receptionSummary(row: ReceptionRow) {
-  return { citaInicio: row.citaInicio?.toISOString() ?? null, citaFin: row.citaFin?.toISOString() ?? null, esCalendly: !!row.citaInicio, cancelacion: row.cancelacion ? cancellationSummary(row.cancelacion) : null, id: row.id, numero: row.numero, eventoId: row.eventoId, origen: row.origen, bebe: row.paciente.nombre, apoderado: row.apoderado?.nombre || row.contactoNombre || "Apoderado", llegada: row.fila ? { ...row.fila, llegadaAt: row.fila.llegadaAt.toISOString(), esperaDesde: row.fila.esperaDesde.toISOString(), ausenteAt: row.fila.ausenteAt?.toISOString() ?? null, reincorporadaAt: row.fila.reincorporadaAt?.toISOString() ?? null } : null }
+  return { revisionCalendlyPendiente: row.revisionCalendlyPendiente, citaInicio: row.citaInicio?.toISOString() ?? null, citaFin: row.citaFin?.toISOString() ?? null, esCalendly: !!row.citaInicio, cancelacion: row.cancelacion ? cancellationSummary(row.cancelacion) : null, id: row.id, numero: row.numero, eventoId: row.eventoId, origen: row.origen, bebe: row.paciente.nombre, apoderado: row.apoderado?.nombre || row.contactoNombre || "Apoderado", llegada: row.fila ? { ...row.fila, llegadaAt: row.fila.llegadaAt.toISOString(), esperaDesde: row.fila.esperaDesde.toISOString(), ausenteAt: row.fila.ausenteAt?.toISOString() ?? null, reincorporadaAt: row.fila.reincorporadaAt?.toISOString() ?? null } : null }
 }
 export async function ensureArrival(tx: Prisma.TransactionClient, row: ReceptionRow, staffId: string) {
+  if (row.revisionCalendlyPendiente) throw new ReceptionConflict("Calendly cambió o canceló esta cita. Revisa su inscripción antes de confirmar o reincorporar la llegada.")
   if (row.cancelacion) throw new ReceptionConflict("La inscripción está cancelada. No puede volver a la fila ni reservar un cupo con este comprobante.")
   const permission = await tx.inscripcion.findUniqueOrThrow({ where: { id: row.id }, select: { autorizacionId: true, pacienteId: true, apoderadoId: true } })
   await requireDataConsent(tx, permission.autorizacionId, permission.pacienteId, permission.apoderadoId)

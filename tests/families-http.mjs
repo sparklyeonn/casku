@@ -1,5 +1,6 @@
+import { calendlyHooksChecks } from "./calendly-hooks-checks.mjs"
 import { calendlyHoldsChecks } from "./calendly-holds-checks.mjs"
-import { calendlyFixtureServer, calendlyLinkChecks } from "./calendly-link-checks.mjs"
+import { calendlyFixtureServer, calendlyLinkChecks, calendlyFixtureState } from "./calendly-link-checks.mjs"
 import { browserTeamAdminChecks } from "./browser-team-admin.mjs"
 import { browserFamilyChecks } from "./browser-families.mjs"
 import { browserMailAdminChecks } from "./browser-mail-admin.mjs"
@@ -46,8 +47,9 @@ import { cancellationChecks } from "./cancellations-checks.mjs"
 import { seedBeforeCancellationMigration } from "./cancellations-migration.mjs"
 
 const production = process.argv.includes("--production")
+const calendlyHooksOnly = process.argv.includes("--calendly-hooks-only")
 const calendlyHoldsOnly = process.argv.includes("--calendly-holds-only")
-const calendlyLinkOnly = process.argv.includes("--calendly-link-only") || calendlyHoldsOnly
+const calendlyLinkOnly = process.argv.includes("--calendly-link-only") || calendlyHoldsOnly || calendlyHooksOnly
 const realPostgres = process.argv.includes("--postgres")
 const browserTests = realPostgres || process.argv.includes("--devices") || process.argv.includes("--team-visual-only")
 assert(!realPostgres || production, "PostgreSQL real se comprueba con --production")
@@ -156,7 +158,8 @@ try {
   const receptionAccounts = await Promise.all(["RECEPCION", "RECEPCION", "KINESIOLOGO", "KINESIOLOGO"].map(async (role, i) => ({ id: `reception-test-${i}`, email: `reception-${i}@example.com`, name: `Equipo ficticio ${i}`, role, active: true, passwordHash: await hashPassword(password) })))
   const extraAccounts = browserTests ? await Promise.all(Array.from({length: 16}, async (_,i) => ({id:`real-pg-team-${i}`,email:`real-pg-${i}@example.com`,name:`Equipo de prueba ${i}`,role:i%2===0?"RECEPCION":"KINESIOLOGO",active:true,passwordHash:await hashPassword(password)}))) : []
   if (calendlyLinkOnly) await new Promise(resolve => calendlyFixtureServer.listen(0, "127.0.0.1", resolve))
-  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), ...(calendlyLinkOnly ? ["--import", new URL("./calendly-link-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", String(basePort)], { cwd: process.cwd(), env: { ...process.env, CALENDLY_ENABLED: calendlyLinkOnly ? "1" : "0", CALENDLY_API_TOKEN: calendlyLinkOnly ? "calendly_fixture_only" : "", ...(calendlyLinkOnly ? { CASKU_TEST_CALENDLY_URL: `http://127.0.0.1:${calendlyFixtureServer.address().port}` } : {}), NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_PASSWORD_RECOVERY_ENABLED:"1", CASKU_PASSWORD_RECOVERY_QUEUE_KEY:authSecret, CASKU_PASSWORD_RECOVERY_WORKER_SECRET:authSecret, CASKU_MAIL_AUTOMATION: "0",  CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts, ...extraAccounts]), AUTH_SECRET: authSecret, AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", BREVO_API_KEY: "brevo_local_test_only", BREVO_SENDER_EMAIL: "test@example.com", BREVO_SENDER_NAME: "Casku", BREVO_SENDER_VERIFIED: "1", CASKU_MAIL_ENABLED: "1", CASKU_MAIL_DELIVERY_SECRET: authSecret, CASKU_MAIL_SUPPRESSION_SECRET: authSecret, CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: databaseUrl }, stdio: ["ignore", "pipe", "pipe"] })
+  if(calendlyHooksOnly)calendlyFixtureState.callback=base+"/api/calendly/webhook"
+  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), ...(calendlyLinkOnly ? ["--import", new URL("./calendly-link-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", String(basePort)], { cwd: process.cwd(), env: { ...process.env, CALENDLY_WEBHOOK_ENABLED:calendlyHooksOnly?"1":"0",CALENDLY_WEBHOOK_SIGNING_KEY:calendlyHooksOnly?authSecret:"",CALENDLY_WEBHOOK_SUBSCRIPTION_ID:calendlyHooksOnly?"fixture-hook":"",CRON_SECRET:calendlyHooksOnly?authSecret:"",CALENDLY_ENABLED: calendlyLinkOnly ? "1" : "0", CALENDLY_API_TOKEN: calendlyLinkOnly ? "calendly_fixture_only" : "", ...(calendlyLinkOnly ? { CASKU_TEST_CALENDLY_URL: `http://127.0.0.1:${calendlyFixtureServer.address().port}` } : {}), NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_PASSWORD_RECOVERY_ENABLED:"1", CASKU_PASSWORD_RECOVERY_QUEUE_KEY:authSecret, CASKU_PASSWORD_RECOVERY_WORKER_SECRET:authSecret, CASKU_MAIL_AUTOMATION: "0",  CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts, ...extraAccounts]), AUTH_SECRET: authSecret, AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", BREVO_API_KEY: "brevo_local_test_only", BREVO_SENDER_EMAIL: "test@example.com", BREVO_SENDER_NAME: "Casku", BREVO_SENDER_VERIFIED: "1", CASKU_MAIL_ENABLED: "1", CASKU_MAIL_DELIVERY_SECRET: authSecret, CASKU_MAIL_SUPPRESSION_SECRET: authSecret, CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: databaseUrl }, stdio: ["ignore", "pipe", "pipe"] })
   child.stdout.on("data", recordLog); child.stderr.on("data", recordLog); child.on("exit", () => { exited = true })
   let ready = false
   for (const started = Date.now(); Date.now() - started < 180000;) {
@@ -166,7 +169,7 @@ try {
   }
   assert(ready)
   if (realPostgres) {
-    secondary = spawn(process.execPath, ["--import",new URL("./production-mail-preload.mjs",import.meta.url).href,...(calendlyLinkOnly ? ["--import",new URL("./calendly-link-preload.mjs",import.meta.url).href] : []),"node_modules/next/dist/bin/next","start","--port",String(basePort+1)], {cwd:process.cwd(),env:{...process.env,CALENDLY_ENABLED:calendlyLinkOnly?"1":"0",CALENDLY_API_TOKEN:calendlyLinkOnly?"calendly_fixture_only":"",...(calendlyLinkOnly?{CASKU_TEST_CALENDLY_URL:`http://127.0.0.1:${calendlyFixtureServer.address().port}`} : {}),NODE_ENV:"production",CASKU_PRODUCTION_TEST:"1",CASKU_TEST_MODE:"0",CASKU_PASSWORD_RECOVERY_ENABLED:"1",CASKU_PASSWORD_RECOVERY_QUEUE_KEY:authSecret,CASKU_PASSWORD_RECOVERY_WORKER_SECRET:authSecret,CASKU_MAIL_AUTOMATION:"0",CASKU_TEAM_ACCOUNTS:JSON.stringify([adminAccount,...receptionAccounts,...extraAccounts]),AUTH_SECRET:authSecret,AUTH_URL:base,NEXTAUTH_URL:base,AUTH_TRUST_HOST:"true",BREVO_API_KEY:"brevo_local_test_only",BREVO_SENDER_EMAIL:"test@example.com",BREVO_SENDER_NAME:"Casku",BREVO_SENDER_VERIFIED:"1",CASKU_MAIL_ENABLED:"1",CASKU_MAIL_DELIVERY_SECRET:authSecret,CASKU_MAIL_SUPPRESSION_SECRET:authSecret,CASKU_TEST_MAIL_URL:`http://127.0.0.1:${mailServer.address().port}`,DATABASE_URL:databaseUrl},stdio:["ignore","pipe","pipe"]})
+    secondary = spawn(process.execPath, ["--import",new URL("./production-mail-preload.mjs",import.meta.url).href,...(calendlyLinkOnly ? ["--import",new URL("./calendly-link-preload.mjs",import.meta.url).href] : []),"node_modules/next/dist/bin/next","start","--port",String(basePort+1)], {cwd:process.cwd(),env:{...process.env,CALENDLY_WEBHOOK_ENABLED:calendlyHooksOnly?"1":"0",CALENDLY_WEBHOOK_SIGNING_KEY:calendlyHooksOnly?authSecret:"",CALENDLY_WEBHOOK_SUBSCRIPTION_ID:calendlyHooksOnly?"fixture-hook":"",CRON_SECRET:calendlyHooksOnly?authSecret:"",CALENDLY_ENABLED:calendlyLinkOnly?"1":"0",CALENDLY_API_TOKEN:calendlyLinkOnly?"calendly_fixture_only":"",...(calendlyLinkOnly?{CASKU_TEST_CALENDLY_URL:`http://127.0.0.1:${calendlyFixtureServer.address().port}`} : {}),NODE_ENV:"production",CASKU_PRODUCTION_TEST:"1",CASKU_TEST_MODE:"0",CASKU_PASSWORD_RECOVERY_ENABLED:"1",CASKU_PASSWORD_RECOVERY_QUEUE_KEY:authSecret,CASKU_PASSWORD_RECOVERY_WORKER_SECRET:authSecret,CASKU_MAIL_AUTOMATION:"0",CASKU_TEAM_ACCOUNTS:JSON.stringify([adminAccount,...receptionAccounts,...extraAccounts]),AUTH_SECRET:authSecret,AUTH_URL:base,NEXTAUTH_URL:base,AUTH_TRUST_HOST:"true",BREVO_API_KEY:"brevo_local_test_only",BREVO_SENDER_EMAIL:"test@example.com",BREVO_SENDER_NAME:"Casku",BREVO_SENDER_VERIFIED:"1",CASKU_MAIL_ENABLED:"1",CASKU_MAIL_DELIVERY_SECRET:authSecret,CASKU_MAIL_SUPPRESSION_SECRET:authSecret,CASKU_TEST_MAIL_URL:`http://127.0.0.1:${mailServer.address().port}`,DATABASE_URL:databaseUrl},stdio:["ignore","pipe","pipe"]})
     secondary.stdout.on("data",recordLog);secondary.stderr.on("data",recordLog);secondary.on("exit",()=>{secondaryExited=true})
     let secondaryReady=false
     for(const started=Date.now();Date.now()-started<60000;){
@@ -177,7 +180,9 @@ try {
     assert(secondaryReady)
   }
   const admin = client(); assert.equal((await signIn(admin, "equipo", { email: adminAccount.email, password })).role, "ADMIN")
-  if (calendlyHoldsOnly) {
+  if (calendlyHooksOnly) {
+    await calendlyHooksChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, post, mails, secret: authSecret, secondaryBase: realPostgres ? secondaryBase : undefined, base, adminAccount })
+  } else if (calendlyHoldsOnly) {
     await calendlyHoldsChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, post, mails, family, secondaryBase: realPostgres ? secondaryBase : undefined, base })
   } else if (calendlyLinkOnly) {
     await calendlyLinkChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, post, mails, secondaryBase: realPostgres ? secondaryBase : undefined, base })

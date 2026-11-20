@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
+import { CalendlyWebhookConnection } from "./CalendlyWebhookConnection"
 import Link from "next/link"
 import type { CalendlyListing } from "@/lib/calendly/client"
 type Status = "PENDIENTE_CONFIGURACION" | "DESACTIVADO" | "LISTO_PARA_CONSULTAR" | "CONECTADO"
@@ -40,6 +41,7 @@ export function CalendlyConnection() {
       {<button className="rounded-lg border px-4 py-3 disabled:opacity-50" disabled={busy} onClick={() => void consult()}>{busy ? "Consultando…" : status === "LISTO_PARA_CONSULTAR" || status === "CONECTADO" ? "Consultar tipos de cita" : "Comprobar conexión"}</button>}
       {listing && <p>Cuenta: {listing.cuenta.nombre} · Zona horaria: {listing.cuenta.zonaHoraria}</p>}
     </section>
+    <CalendlyWebhookConnection />
     {listing && <section className="space-y-4" aria-labelledby="calendly-types"><h2 id="calendly-types" className="text-xl font-semibold">Tipos de cita disponibles</h2>
       {!listing.tipos.length && <p>No hay tipos de cita disponibles para esta cuenta.</p>}
       {listing.tipos.map(type => <article key={type.id} className="space-y-3 rounded-xl border p-5"><h3 className="text-lg font-semibold">{type.nombre}</h3><p>{type.duracion} minutos · {type.activo ? "Activo" : "Inactivo"}</p>

@@ -5,12 +5,12 @@ import { chooseWithAppointment, type Origin } from "./policy"
 // Invocar bajo bloqueo del evento al reservar; una lectura de recepción solo anticipa.
 export async function nextWaiting(tx: Prisma.TransactionClient, eventoId: string, streak: number, now: Date) {
   const head = async (origen: Origin) => {
-    const row = await tx.entradaFila.findFirst({ where: { eventoId, estado: "EN_ESPERA", AND: [{ OR: [{ inscripcion: { citaInicio: null } }, { reincorporadaAt: { not: null }, inscripcion: { citaInicio: { lte: now } } }] }], inscripcion: { origen, autorizacion: { is: { datos: true, versionTexto: PRIVACY_VERSION } } } }, orderBy: [{ esperaDesde: "asc" }, { orden: "asc" }], select: { id: true, orden: true, esperaDesde: true } })
+    const row = await tx.entradaFila.findFirst({ where: { eventoId, estado: "EN_ESPERA", AND: [{ OR: [{ inscripcion: { citaInicio: null } }, { reincorporadaAt: { not: null }, inscripcion: { citaInicio: { lte: now } } }] }], inscripcion: { origen, revisionCalendlyPendiente: false, autorizacion: { is: { datos: true, versionTexto: PRIVACY_VERSION } } } }, orderBy: [{ esperaDesde: "asc" }, { orden: "asc" }], select: { id: true, orden: true, esperaDesde: true } })
     return row ? { ...row, origen } : null
   }
   const previous = await head("PREVIA"), walkin = await head("PRESENCIAL")
   const due = await tx.entradaFila.findFirst({
-    where: { eventoId, estado: "EN_ESPERA", reincorporadaAt: null, inscripcion: { citaInicio: { lte: now }, autorizacion: { is: { datos: true, versionTexto: PRIVACY_VERSION } } } },
+    where: { eventoId, estado: "EN_ESPERA", reincorporadaAt: null, inscripcion: { citaInicio: { lte: now }, revisionCalendlyPendiente: false, autorizacion: { is: { datos: true, versionTexto: PRIVACY_VERSION } } } },
     orderBy: [{ inscripcion: { citaInicio: "asc" } }, { esperaDesde: "asc" }, { orden: "asc" }],
     select: { id: true, orden: true, esperaDesde: true, inscripcion: { select: { origen: true, citaInicio: true } } },
   })

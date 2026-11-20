@@ -231,6 +231,8 @@ model Inscripcion {
   autorizacion AutorizacionPrivacidad? @relation(fields: [autorizacionId], references: [id], onDelete: Restrict)
   esperaOrigen ListaEspera?
   cupoCalendly ReservaCupoCalendly?
+  cambiosCita CambioCitaCalendly[]
+  revisionCalendlyPendiente Boolean @default(false)
   cancelacion CancelacionInscripcion?
   revisionContacto Int @default(1)
   id             String @id @db.Uuid
@@ -713,4 +715,39 @@ model ReservaCupoCalendly {
   verificadaAt DateTime
   @@index([eventoId, estado])
   @@unique([inscripcionId, eventoId])
+}
+
+model EstadoWebhookCalendly {
+ id String @id
+ revision Int @default(0)
+ huella String?
+ conectadaAt DateTime?
+ verificadaAt DateTime?
+ fallo Boolean @default(false)
+}
+model AvisoCalendly {
+ id String @id
+ tipo String
+ invitadoUri String
+ creadoAt DateTime
+ estado String @default("PENDIENTE")
+ intentos Int @default(0)
+ disponibleAt DateTime @default(now())
+ bloqueoToken String? @db.Uuid
+ bloqueoHasta DateTime?
+ resultado String?
+ recibidoAt DateTime @default(now())
+ procesadoAt DateTime?
+ @@index([estado, disponibleAt])
+}
+
+model CambioCitaCalendly {
+ id String @id @default(uuid()) @db.Uuid
+ inscripcionId String @db.Uuid
+ inscripcion Inscripcion @relation(fields:[inscripcionId],references:[id],onDelete:Restrict)
+ invitadoNuevo String
+ anterior Json
+ nueva Json
+ createdAt DateTime @default(now())
+ @@unique([inscripcionId, invitadoNuevo])
 }

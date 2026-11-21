@@ -7,6 +7,7 @@ datasource db {
 }
 
 model CuentaEquipo {
+  resultadosContacto ResultadoContacto[]
   mustChangePassword Boolean @default(false)
   recuperaciones RecuperacionClave[]
   sesiones SesionEquipo[]
@@ -132,6 +133,7 @@ model Evaluacion {
   revision        Int @default(1)
   publicacion     ResultadoPublicado?
   revisiones      RevisionEvaluacion[]
+  contactosResultado ResultadoContacto[]
 
   @@index([autorId, createdAt])
 }
@@ -465,6 +467,7 @@ model SesionEquipo {
 }
 
 model AutorizacionPrivacidad {
+  resultadosContacto ResultadoContacto[]
   id String @id @default(uuid()) @db.Uuid
   ambito String @unique
   pacienteId String
@@ -750,4 +753,42 @@ model CambioCitaCalendly {
  nueva Json
  createdAt DateTime @default(now())
  @@unique([inscripcionId, invitadoNuevo])
+}
+
+// Envío presencial independiente de la publicación en una cuenta familiar.
+model ResultadoContacto {
+ id String @id @db.Uuid
+ evaluacionId String
+ evaluacion Evaluacion @relation(fields: [evaluacionId], references: [id], onDelete: Restrict)
+ revision Int
+ protocolo String
+ destinatario String
+ nombreApoderado String
+ datos Json
+ hashDatos String
+ mensaje Json
+ consentimientoVersion String
+ consentimientoTextos Json
+ confirmarApoderado Boolean
+ autorizarCorreo Boolean
+ canal String @default("PRESENCIAL")
+ actorId String
+ actor CuentaEquipo @relation(fields: [actorId], references: [id], onDelete: Restrict)
+ autorizacionId String @db.Uuid
+ autorizacion AutorizacionPrivacidad @relation(fields: [autorizacionId], references: [id], onDelete: Restrict)
+ autorizacionRevision Int
+ contexto String
+ solicitudHash String
+ claveEnvio String @unique
+ motivo String?
+ anteriorId String? @db.Uuid
+ anterior ResultadoContacto? @relation("CopiasContacto", fields: [anteriorId], references: [id], onDelete: Restrict)
+ posteriores ResultadoContacto[] @relation("CopiasContacto")
+ estado String @default("PENDIENTE")
+ proveedorId String?
+ ultimoError String?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ @@unique([evaluacionId, revision, contexto])
+ @@index([actorId, createdAt])
 }

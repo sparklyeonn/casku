@@ -9,6 +9,7 @@ import type { EventSummary } from "@/lib/events/input"
 import { EventOverview } from "./EventOverview"
 import { CalendlyProtection } from "./CalendlyProtection"
 import Link from "next/link"
+import { AdminOnsiteRegistration } from "./AdminOnsiteRegistration"
 import { EventEditor } from "./EventEditor"
 
 type EventsState = { eventos: EventSummary[]; seleccionadoId: string | null }
@@ -109,6 +110,7 @@ export function EventManager() {
     </section>
     {selected && <CalendlyProtection key={`calendly:${selected.id}:${selected.revision}`} fecha={selected.fecha} reception={false} evento={selected} />}
     {selected && <p><Link className="underline" href="/agenda">Ver nombres y horarios en la agenda de Calendly</Link></p>}
+    {selected && <details className="team-support"><summary>Inscribir presencialmente</summary><AdminOnsiteRegistration key={`presencial:${selected.id}`} event={selected} disabled={disabled} onStart={() => { if (inFlight.current) return false; inFlight.current = true; setBusy("onsite"); return true }} onFinish={() => { inFlight.current = false; setBusy(null) }} onRegistered={async () => { try { setData(await responseData(await fetch("/api/eventos", { cache: "no-store" }))) } catch (cause) { setError(cause instanceof Error ? cause.message : "No pudimos actualizar los eventos.") } }} /></details>}
     {selected && <EventOverview key={`${selected.id}:${selected.revision}`} eventoId={selected.id} />}
     {selected && <details className="team-support"><summary>Correos de resultados y seguimiento</summary><MailQueueSummary key={`correo:${selected.id}`} eventoId={selected.id} /></details>}
     {selected && <details className="team-support"><summary>Gestionar lista de espera de cupos</summary><WaitlistPanel key={selected.id} eventoId={selected.id} disabled={disabled} onStart={() => { if (inFlight.current) return false; inFlight.current = true; setBusy("waitlist"); return true }} onFinish={() => { inFlight.current = false; setBusy(null) }} /></details>}

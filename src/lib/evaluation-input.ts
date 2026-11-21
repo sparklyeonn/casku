@@ -1,4 +1,4 @@
-import { calcularReferencia } from "./craneometry-reference.ts"
+import { calcularReferencia, REFERENCE_VERSION } from "./craneometry-reference.ts"
 import { calcularDiagnostico } from "./craneometria.ts"
 export class InvalidEvaluation extends Error {}
 export function parseEvaluation(input: unknown) {
@@ -29,14 +29,15 @@ export function parseMeasurements(input: unknown): import("./measurement-fields"
     return value
   }
   const ap = measure("ap"), bp = measure("bp"), di = measure("di"), dd = measure("dd")
-  const extraKeys = ["perimetro", "desviacionDer", "desviacionIzq"] as const
+  if (raw.desviacionDer!==undefined || raw.desviacionIzq!==undefined || (raw.protocolo!==undefined && raw.protocolo!==REFERENCE_VERSION)) throw new InvalidEvaluation("Registro histórico: recaptura ambas distancias POE–trago para el protocolo v2.")
+  const extraKeys = ["perimetro", "distanciaPOEtragusDer", "distanciaPOEtragusIzq", "protocolo"] as const
   if (extraKeys.some(key => raw[key] !== undefined)) {
-    const perimetro = raw.perimetro, desviacionDer = raw.desviacionDer, desviacionIzq = raw.desviacionIzq
-    if ((perimetro !== undefined && (typeof perimetro !== "number" || !Number.isFinite(perimetro) || perimetro <= 0)) || ![desviacionDer, desviacionIzq].every(v=>typeof v==="number"&&Number.isFinite(v)&&v>=0)) throw new InvalidEvaluation("Completa las dos desviaciones occipitales mayores o iguales a cero, en milímetros.")
-    const measurements = { ap, bp, di, dd, ...(perimetro===undefined?{}:{perimetro:perimetro as number}), desviacionDer: desviacionDer as number, desviacionIzq: desviacionIzq as number }
+    const perimetro = raw.perimetro, der=raw.distanciaPOEtragusDer, izq=raw.distanciaPOEtragusIzq
+    if (raw.protocolo!==REFERENCE_VERSION || (perimetro!==undefined&&(typeof perimetro!=="number"||!Number.isFinite(perimetro)||perimetro<=0)) || ![der,izq].every(v=>typeof v==="number"&&Number.isFinite(v)&&v>0)) throw new InvalidEvaluation("Recaptura las dos distancias completas POE–trago, positivas y en milímetros, para el protocolo v2.")
+    const measurements = {ap,bp,di,dd,...(perimetro===undefined?{}:{perimetro:perimetro as number}),protocolo:REFERENCE_VERSION,distanciaPOEtragusDer:der as number,distanciaPOEtragusIzq:izq as number}
     let result
     try { result = calcularReferencia(measurements) } catch { throw new InvalidEvaluation("Las mediciones no permiten calcular el resultado.") }
-    return { ...measurements, indiceCraneal: result.ci, indiceAsimetria: result.cva, diagnostico: result.diagnostico, recomendacion: result.recomendacion }
+    return {...measurements,indiceCraneal:result.ci,indiceAsimetria:result.cva,diagnostico:result.diagnostico,recomendacion:result.recomendacion}
   }
   const result = calcularDiagnostico(ap, bp, di, dd)
   if (!Number.isFinite(result.indiceCraneal) || !Number.isFinite(result.indiceAsimetria)) throw new InvalidEvaluation("Las mediciones no permiten calcular el resultado.")

@@ -1,3 +1,4 @@
+import { resultMeasurements } from "./results-input-fixtures.mjs"
 import { familyConsent } from "./privacy-fixtures.mjs"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
@@ -15,7 +16,7 @@ export async function resultsChecks({ db, client, signIn, password, accounts, ad
     assert.equal(response.status, 201); const row = (await response.json()).inscripcion; registrations.push(row)
     assert.equal((await reception("/api/recepcion/llegadas", post({ eventoId: event.id, inscripcionId: row.id }))).status, 201)
   }
-  const measures = { ap: 140, bp: 120, di: 135, dd: 138, desviacionDer: 5, desviacionIzq: 8 }
+  const measures = resultMeasurements()
   async function evaluate() {
     const called = await kine("/api/kinesiologia/llamar", post({ id: randomUUID(), eventoId: event.id })); assert.equal(called.status, 200)
     const attention = (await called.json()).atencion
@@ -43,13 +44,13 @@ export async function resultsChecks({ db, client, signIn, password, accounts, ad
   assert.equal(previewPage.status, 200); assert((await previewPage.text()).includes("Revisar resultado"))
   assert.equal((await kine(detail, { ...post({ revision: 1, ...measures, ap: -1 }), method: "PATCH" })).status, 400)
   assert(!Object.hasOwn(owned.resultado.datos.medidas,"perimetro"))
-  assert.equal(owned.resultado.datos.medidas.desviacionIzq,8)
+  assert.equal(owned.resultado.datos.medidas.distanciaPOEtragusIzq,128)
   assert.equal((await kine(detail, { ...post({revision:1,ap:140,bp:120,di:135,dd:138}),method:"PATCH" })).status,400,"No perder las mediciones complementarias al editar desde un cliente anterior")
-  const changedMeasures = { ...measures, ap: 141, desviacionIzq: 9 }
+  const changedMeasures = { ...measures, ap: 141, distanciaPOEtragusIzq: 134 }
   const changed = await kine(detail, { ...post({ revision: 1, ...changedMeasures, diagnostico: "falso", correo: "intruso@example.com" }), method: "PATCH" })
   assert.equal(changed.status, 200)
   const corrected = (await changed.json()).resultado
-  assert.equal(corrected.datos.medidas.desviacionIzq,9); assert.equal(corrected.revision, 2); assert.equal(corrected.datos.indiceCraneal, 120 / 141 * 100); assert.notEqual(corrected.datos.diagnostico, "falso")
+  assert.equal(corrected.datos.medidas.distanciaPOEtragusIzq,134); assert.equal(corrected.revision, 2); assert.equal(corrected.datos.indiceCraneal, 120 / 141 * 100); assert.notEqual(corrected.datos.diagnostico, "falso")
   assert.equal((await db.query('SELECT count(*)::int n FROM "RevisionEvaluacion" WHERE "evaluacionId"=$1', [first])).rows[0].n, 1)
   assert.equal((await kine(detail, { ...post({ revision: 1, ...measures }), method: "PATCH" })).status, 409)
   assert.equal((await kine(`${detail}/publicar`, post({ revision: 1 }))).status, 409)

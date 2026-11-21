@@ -121,7 +121,7 @@ export async function privacyChecks({db,client,signIn,password,accounts,admin,an
  assert.equal((await f1.request("/familias/privacidad")).status,200);assert.equal((await admin("/administracion/privacidad")).status,200)
  await json(f1.request,permissions+"?pagina=0",undefined,400)
  // Casilla presencial en evaluación: aceptación expresa, auditoría diferenciada y sin correos.
- const presencial={nombre:"Bebé consentimiento presencial",rut:"17888999-1",fnac:"2026-01-01",correo:"presencial-consent@example.com",ap:140,bp:120,di:135,dd:138,desviacionDer:0,desviacionIzq:8,privacidad:{...noMail},autorizacionPresencial:true}
+ const presencial={nombre:"Bebé consentimiento presencial",rut:"17888999-1",fnac:"2026-01-01",correo:"presencial-consent@example.com",ap:140,bp:120,di:135,dd:138,protocolo:"casku-craneometria-v2",distanciaPOEtragusDer:100,distanciaPOEtragusIzq:108,privacidad:{...noMail},autorizacionPresencial:true}
  for(const value of [false,"true",null])await json(kine,"/api/evaluaciones",post({...presencial,autorizacionPresencial:value}),400)
  await json(kine,"/api/evaluaciones",post({...presencial,privacidad:all}),400)
  const firstPresencial=await json(kine,"/api/evaluaciones",post(presencial),201)

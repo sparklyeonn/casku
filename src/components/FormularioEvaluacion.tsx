@@ -2,7 +2,7 @@
 
 import { EvaluationConsent } from "./PrivacyFields"
 import { PRIVACY_VERSION } from "@/lib/privacy/policy"
-import { useId, useRef, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import Link from "next/link"
 
 import { MeasurementFields } from "./MeasurementFields"
@@ -20,6 +20,8 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
   const [guardando, setGuardando] = useState(false)
   const [guardada, setGuardada] = useState(false)
   const [savedId, setSavedId] = useState<string | null>(null)
+  const savedResultRef = useRef<HTMLElement>(null)
+  useEffect(() => { if (savedId) savedResultRef.current?.focus() }, [savedId])
   const inFlight = useRef(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -34,7 +36,7 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
   }
 
   async function guardar() {
-    if (!medidasOk) return mostrarToast("Completa las seis mediciones válidas en milímetros. Las desviaciones pueden ser cero.")
+    if (!medidasOk) return mostrarToast("Completa las seis mediciones válidas en milímetros. Las distancias POE–trago deben ser positivas.")
     if (inFlight.current || guardada) return
     if (!atencion && !authorized) return mostrarToast("El apoderado debe marcar la autorización antes de guardar.")
     if (!form.fnac) return mostrarToast("Ingresa la fecha de nacimiento")
@@ -69,7 +71,7 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
 
   return (
     <main className="team-evaluation craneometry-page max-w-5xl mx-auto px-4 py-7">
-      {savedId && <section className="mb-5 space-y-3 rounded-xl border border-teal-300 p-4"><p role="status">Borrador guardado. Revisa el resultado antes de publicarlo para la familia.</p><Link href={`/kinesiologia/resultados/${savedId}`} className="inline-block rounded-lg bg-teal-700 px-5 py-3 text-white">Revisar y publicar resultado</Link></section>}
+      {savedId && <section ref={savedResultRef} tabIndex={-1} aria-label="Borrador guardado: siguientes pasos" className="mb-5 space-y-3 rounded-xl border border-teal-300 p-4"><p role="status">Borrador guardado. Revisa el resultado antes de publicarlo para la familia.</p><Link href={`/kinesiologia/resultados/${savedId}`} className="inline-block rounded-lg bg-teal-700 px-5 py-3 text-white">Editar borrador y revisar publicación</Link><Link href="/kinesiologia/resultados" className="ml-3 inline-block rounded-lg border px-5 py-3">Ir a mis resultados</Link></section>}
       {atencion && <section className="mb-6 space-y-3 rounded-xl border border-teal-300 p-4"><h1 className="text-xl font-semibold">Craneometría · Inscripción N.º {String(atencion.numero).padStart(3, "0")}</h1><p>{atencion.evento.nombre}</p><p className="text-sm">Datos recuperados de la inscripción. Verifica el nombre del bebé antes de medir.</p>{guardada && <p role="status" className="font-medium text-teal-700 dark:text-teal-300">Evaluación guardada y atención finalizada.</p>}<Link href="/kinesiologia" className="inline-block underline">{guardada ? "Volver y llamar al siguiente bebé" : "Volver a mi atención"}</Link></section>}
       <fieldset disabled={guardando || guardada} className="min-w-0">
 
@@ -104,7 +106,7 @@ export default function FormularioEvaluacion({ profesional, atencion }: { profes
       <MeasurementFields value={form} onChange={set} required />
       <section className="craneometry-professional"><p className="casku-eyebrow">Profesional responsable</p><p>{profesional}</p></section>
       <CraneometryReference measurements={measures} />
-      {!medidasOk && <p className="craneometry-help">Cada indicador aparece al completar sus medidas. Para guardar, completa las seis mediciones; las desviaciones pueden ser cero.</p>}
+      {!medidasOk && <p className="craneometry-help">Cada indicador aparece al completar sus medidas. Para guardar, completa las seis mediciones; las distancias POE–trago deben ser positivas.</p>}
 
       {/* Botones */}
       <div className="team-evaluation-actions flex flex-wrap gap-3">

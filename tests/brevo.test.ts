@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { mailConfig, brevoPayload, providerKey, postBrevo, MailUnavailable } from "../src/lib/mail/brevo.ts"
-const settings={CASKU_MAIL_MODE:"produccion",CASKU_MAIL_TEST_RECIPIENTS:"",NODE_ENV:"production",CASKU_TEST_MODE:"0",CASKU_PRODUCTION_TEST:"0",CASKU_MAIL_ENABLED:"1",BREVO_SENDER_VERIFIED:"1",BREVO_API_KEY:"clave-ficticia-no-utilizable",BREVO_SENDER_EMAIL:"contacto@example.com",BREVO_SENDER_NAME:"Casku",CASKU_MAIL_DELIVERY_SECRET:"secreto-estable-ficticio-de-32-caracteres",CASKU_MAIL_SUPPRESSION_SECRET:"supresion-estable-ficticia-de-32-caracteres",CASKU_TEST_MAIL_URL:"http://127.0.0.1:9999"}
+const settings={BREVO_WEBHOOK_ENABLED:"1",BREVO_WEBHOOK_SECRET:"webhook-ficticio-independiente-32-caracteres",CASKU_CLINICAL_MAIL_ENABLED:"0",CASKU_MAIL_MODE:"produccion",CASKU_MAIL_TEST_RECIPIENTS:"",NODE_ENV:"production",CASKU_TEST_MODE:"0",CASKU_PRODUCTION_TEST:"0",CASKU_MAIL_ENABLED:"1",BREVO_SENDER_VERIFIED:"1",BREVO_API_KEY:"clave-ficticia-no-utilizable",BREVO_SENDER_EMAIL:"contacto@example.com",BREVO_SENDER_NAME:"Casku",CASKU_MAIL_DELIVERY_SECRET:"secreto-estable-ficticio-de-32-caracteres",CASKU_MAIL_SUPPRESSION_SECRET:"supresion-estable-ficticia-de-32-caracteres",CASKU_TEST_MAIL_URL:"http://127.0.0.1:9999"}
 function environment<T>(values:Record<string,string>,run:()=>T) {
   const saved=Object.fromEntries(Object.keys(values).map(key=>[key,process.env[key]]))
   Object.assign(process.env,values)
@@ -74,4 +74,16 @@ test("Brevo: programación explícita hasta 72 horas, sin convertir fechas venci
   assert.throws(()=>brevoPayload({...message,scheduledAt:future,batchId:"incorrecto"},config,"reminder-test"),MailUnavailable)
   const limited=environment({...settings,CASKU_MAIL_MODE:"pruebas",CASKU_MAIL_TEST_RECIPIENTS:"familia@example.com"},()=>mailConfig("RECORDATORIO_EVENTO"))
   assert.throws(()=>brevoPayload({...message,to:"otra@example.com",scheduledAt:future,batchId},limited,"reminder-test"),MailUnavailable)
+})
+
+test("Brevo: resultados requieren activación independiente y conservan la lista de pruebas",()=>{
+  environment({...settings,CASKU_CLINICAL_MAIL_ENABLED:"1"},()=>assert.equal(mailConfig("RESULTADO").sender.email,"contacto@example.com"))
+  const cfg=environment({...settings,CASKU_CLINICAL_MAIL_ENABLED:"1",CASKU_MAIL_MODE:"pruebas",CASKU_MAIL_TEST_RECIPIENTS:"familia@example.com"},()=>mailConfig("RESULTADO"))
+  assert.throws(()=>brevoPayload({...message,to:"otro@example.com"},cfg,"clinical-denied"),MailUnavailable)
+  assert.deepEqual(brevoPayload(message,cfg,"clinical-approved").to,[{email:"familia@example.com",contactPixelTrackingConsent:false}])
+  environment({...settings,CASKU_CLINICAL_MAIL_ENABLED:"1",CASKU_MAIL_ENABLED:"0"},()=>assert.throws(()=>mailConfig("RESULTADO"),MailUnavailable))
+})
+
+test("Brevo: correo clínico real necesita configuración de entregas y supresiones",()=>{
+ for(const change of [{BREVO_WEBHOOK_ENABLED:"0"},{BREVO_WEBHOOK_SECRET:""},{BREVO_WEBHOOK_SECRET:"corto"}])environment({...settings,CASKU_CLINICAL_MAIL_ENABLED:"1",...change},()=>assert.throws(()=>mailConfig("RESULTADO"),MailUnavailable))
 })

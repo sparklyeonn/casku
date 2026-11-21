@@ -7,7 +7,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const id = evaluationId((await params).id), data = await clinicalJson(request)
     const published = await publishResult(access.user.id, id, resultRevision(data.revision))
-    await deliverResult(published.id)
-    return clinicalResponse({ resultado: await ownedReview(access.user.id, id) }, published.nueva ? 201 : 200)
+    let aviso: string | undefined
+    // Publication has committed already. A mail failure must not report it as an unsaved draft.
+    try { await deliverResult(published.id) }
+    catch { aviso = "Resultado publicado. No pudimos confirmar el procesamiento del correo; consulta su estado antes de reintentar." }
+    return clinicalResponse({ resultado: await ownedReview(access.user.id, id), ...(aviso ? { aviso } : {}) }, published.nueva ? 201 : 200)
   } catch (error) { return clinicalFailure(error) }
 }

@@ -33,8 +33,8 @@ export function mailConfig(purpose: MailPurpose = "ACCESO") {
       if (!testRecipients.length || testRecipients.some(value => !validEmail(value))) throw new MailUnavailable()
     }
   }
-  // La integración clínica real conserva su aprobación y activación pendientes.
-  if (purpose === "RESULTADO" && !simulated) throw new MailUnavailable()
+  // La publicación clínica se activa por separado; nunca abre seguimientos automáticamente.
+  if (purpose === "RESULTADO" && !simulated && (process.env.CASKU_CLINICAL_MAIL_ENABLED !== "1" || process.env.BREVO_WEBHOOK_ENABLED !== "1" || !/^[A-Za-z0-9_-]{32,256}$/.test(process.env.BREVO_WEBHOOK_SECRET || ""))) throw new MailUnavailable()
   return { key, sender: { email, name }, secret, suppressionSecret, baseUrl, testRecipients }
 }
 export type BrevoConfig = ReturnType<typeof mailConfig>

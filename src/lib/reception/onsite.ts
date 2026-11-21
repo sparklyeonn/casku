@@ -9,12 +9,25 @@ import { prisma } from "@/lib/prisma"
 import { chileToday } from "@/lib/families/input"
 import { ensureArrival, receptionSelect } from "./store"
 import { ReceptionConflict } from "./http"
+import { canRegisterOnsite } from "./onsite-access"
 import type { OnsiteInput } from "./onsite-input"
 
-export async function registerOnsite(staffId: string, input: OnsiteInput) {
+export async function onsiteAvailability(eventoId: string) {
+  return prisma.$transaction(async tx => {
+    const event = await tx.evento.findUnique({ where: { id: eventoId } })
+    if (!event) return null
+    const capacity = await calendlyCapacity(tx, event)
+    return { disponibles: capacity.disponibles, presencialHabilitada: event.fecha.toISOString().slice(0, 10) === chileToday() }
+  }, { isolationLevel: "RepeatableRead" })
+}
+
+export async function registerOnsite(actor: { id: string; role: string; version: number }, input: OnsiteInput) {
+  const staffId = actor.id
   const hash = createHash("sha256").update(JSON.stringify({ staffId, ...input })).digest("hex")
   const save = () => prisma.$transaction(async tx => {
     await tx.$queryRaw`SELECT "id" FROM "Evento" WHERE "id" = ${input.eventoId}::uuid FOR UPDATE`
+    const staff = await tx.cuentaEquipo.findUnique({ where: { id: staffId } })
+    if (!staff?.active || staff.mustChangePassword || !canRegisterOnsite(staff.role) || staff.role !== actor.role || staff.version !== actor.version) throw new ReceptionConflict("Tu acceso cambió. Vuelve a iniciar sesión.")
     const replay = await tx.inscripcion.findUnique({ where: { id: input.id }, select: { ...receptionSelect, registradoPorId: true, solicitudHash: true } })
     if (replay) {
       if (replay.registradoPorId !== staffId || replay.solicitudHash !== hash) throw new ReceptionConflict("Este envío ya corresponde a otro registro. Busca la inscripción antes de continuar.")
@@ -39,7 +52,7 @@ export async function registerOnsite(staffId: string, input: OnsiteInput) {
     const choice = parsePrivacy(input.privacidad), declaration = paperDeclaration(input.declaracion)
     if (choice.correoResultados || choice.seguimiento) throw new PrivacyInputError("Los permisos de correo clínico deben confirmarse desde la cuenta familiar verificada.")
     const baby = await tx.paciente.create({ data: input.bebe })
-    const authorization = await recordConsent(tx, { pacienteId: baby.id, eventoId: event.id, apoderadoId: null }, choice, { id: staffId, role: "RECEPCION" }, declaration)
+    const authorization = await recordConsent(tx, { pacienteId: baby.id, eventoId: event.id, apoderadoId: null }, choice, { id: staffId, role: staff.role }, declaration)
     const updated = await tx.evento.update({ where: { id: event.id }, data: { inscritos: { increment: 1 }, ultimoNumero: { increment: 1 } } })
     const row = await tx.inscripcion.create({ data: { id: input.id, autorizacionId: authorization.id, solicitudHash: hash, eventoId: event.id, pacienteId: baby.id, numero: updated.ultimoNumero, qrToken: randomBytes(24).toString("base64url"), origen: "PRESENCIAL", registradoPorId: staffId, contactoNombre: input.nombreApoderado, contactoCorreo: input.correo, contactoTelefono: input.telefono || null, ...(input.correo ? { correo: { create: { datosEvento: mailEvent(event), datosFamilia: mailFamily(baby.nombre, input.correo, false) } } } : {}) }, select: receptionSelect })
     return { ...await ensureArrival(tx, row, staffId), nuevaInscripcion: true }

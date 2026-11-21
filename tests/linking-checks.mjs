@@ -65,7 +65,11 @@ export async function linkingChecks({ db, client, signIn, password, accounts, ad
   const verifiedEnvelope = (await db.query('SELECT "datosFamilia","revisionContenido",estado FROM "CorreoInscripcion" WHERE "inscripcionId"=$1', [sourceId])).rows[0]
   assert.equal(verifiedEnvelope.datosFamilia.correo, owner.user.email); assert.equal(verifiedEnvelope.datosFamilia.conCuenta, true)
   assert.equal(verifiedEnvelope.estado, "PENDIENTE")
-  assert.equal((await (await kine(detail)).json()).resultado.publicable, true)
+  const linkedResponse = await kine(detail), linkedBody = await linkedResponse.json()
+  assert.equal(linkedResponse.status, 200, `Consulta posterior a vinculación: ${JSON.stringify(linkedBody)}`)
+  assert.equal(linkedBody.resultado.publicable, true, `Vinculación verificada; motivoBloqueo: ${linkedBody.resultado.motivoBloqueo}`)
+  assert.equal(linkedBody.resultado.motivoBloqueo, null)
+  assert.deepEqual(linkedBody.resultado.datos.medidas, { ap: 140, bp: 120, di: 135, dd: 138 }, "Vincular conserva las cuatro medidas originales, sin adoptar protocolo ni inventar DPOE")
   const published = await kine(`${detail}/publicar`, post({ revision: 1 })); assert.equal(published.status, 201)
   const publication = (await published.json()).resultado.publicacion
   assert.equal((await owner.request(`/api/familias/resultados/${publication.id}`)).status, 200)

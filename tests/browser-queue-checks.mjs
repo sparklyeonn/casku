@@ -55,7 +55,7 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
         const original=window.fetch
         let fail=true
         window.fetch=function(input,init){
-          if(fail&&String(input).startsWith("/api/kinesiologia/atencion")){fail=false;throw new TypeError("Fallo síncrono de prueba")}
+          if(fail&&String(input).startsWith("/api/kinesiologia/atencion")){fail=false;window.fetch=original;throw new TypeError("Fallo síncrono de prueba")}
           return original.call(this,input,init)
         }
       })
@@ -89,7 +89,7 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
       await reception.getByRole("button",{name:"Buscar inscripción",exact:true}).click()
       const arrival=reception.getByRole("button",{name:"Confirmar llegada y agregar a la fila",exact:true})
       // El servidor confirma, pero se pierde la respuesta: reintentar no duplica.
-      await reception.route("**/api/recepcion/llegadas",async route=>{await route.fetch();await route.abort("failed")},{times:1})
+      await loseNextPostResponse(reception,"/api/recepcion/llegadas")
       await arrival.click();await expect(reception.locator("main").getByRole("alert")).toBeVisible()
       await arrival.click();await expect(reception.getByRole("status")).toContainText("ya estaba confirmada")
       assert.equal((await db.query('SELECT count(*)::int n FROM "EntradaFila" WHERE "inscripcionId"=$1',[row.id])).rows[0].n,1)
@@ -99,13 +99,16 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
       await kine.getByRole("button",{name:"Actualizar mi atención",exact:true}).click()
       const call=kine.getByRole("button",{name:"Llamar al siguiente",exact:true})
       await expect(call).toBeEnabled()
-      await kine.route("**/api/kinesiologia/llamar",async route=>{await route.fetch();await route.abort("failed")},{times:1})
+      await loseNextPostResponse(kine,"/api/kinesiologia/llamar")
       await call.click()
       // La consulta posterior recupera la atención asignada a pesar de la pérdida.
       await expect(kine.getByRole("link",{name:"Abrir formulario de craneometría",exact:true})).toBeVisible()
       await kine.reload()
+      await kine.waitForLoadState("networkidle")
       await expect(kine.getByRole("heading",{name:new RegExp(row.bebe.nombre)})).toBeVisible()
+      const absentResponse=kine.waitForResponse(response=>new URL(response.url()).pathname==="/api/kinesiologia/ausente"&&response.request().method()==="POST")
       await kine.getByRole("button",{name:"No respondió al llamado",exact:true}).click()
+      assert.equal((await absentResponse).status(),200)
       await expect(kine.getByRole("status")).toContainText("marcada ausente")
       await reception.getByRole("button",{name:"Buscar otra inscripción",exact:true}).click()
       await lookup.fill(String(row.numero));await reception.getByRole("button",{name:"Buscar inscripción",exact:true}).click()
@@ -124,15 +127,18 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
       assert.equal(await kine.locator("main:visible").locator('input[name="perimetro"]').count(),0)
       await kine.locator("main:visible").locator('input[name="ap"]').fill("140")
       await kine.locator("main:visible").locator('input[name="bp"]').fill("120")
-      await expect(kine.locator("main:visible").locator(".craneometry-number").first()).toHaveText("85,71 %")
+      await expect(kine.locator("main:visible").locator(".craneometry-number").first()).toHaveText("85,7 %")
       await expect(kine.locator("main:visible").locator(".craneometry-number").last()).toHaveText("Faltan medidas")
-      for(const [key,value] of Object.entries({ap:"140",bp:"120",di:"135",dd:"138",desviacionDer:"5",desviacionIzq:"8"})) await kine.locator("main:visible").locator(`input[name="${key}"]`).fill(value)
+      for(const [key,value] of Object.entries({ap:"140",bp:"120",di:"135",dd:"138",distanciaPOEtragusDer:"100",distanciaPOEtragusIzq:"108"})) await kine.locator("main:visible").locator(`input[name="${key}"]`).fill(value)
       await expect(kine.getByRole("heading",{name:"Indicadores craneométricos",exact:true})).toBeVisible()
       await expect(kine.locator("main:visible").locator(".craneometry-number").last()).toHaveText("8 mm")
       await kine.screenshot({path:`test-results/devices/${profile.name}-mediciones.png`,fullPage:true})
       await noOverflow(kine,profile.name+" formulario")
       await kine.getByRole("button",{name:"Guardar evaluación",exact:true}).click()
       await expect(kine.getByRole("status").filter({hasText:"Evaluación guardada y atención finalizada"})).toBeVisible()
+      await expect(kine.getByRole("region",{name:"Borrador guardado: siguientes pasos",exact:true})).toBeFocused()
+      await expect(kine.getByRole("link",{name:"Editar borrador y revisar publicación",exact:true})).toHaveAttribute("href",/^\/kinesiologia\/resultados\//)
+      await expect(kine.getByRole("link",{name:"Ir a mis resultados",exact:true})).toHaveAttribute("href","/kinesiologia/resultados")
       assert.equal((await db.query('SELECT count(*)::int n FROM "Evaluacion" e JOIN "EntradaFila" f ON f.id=e."filaId" WHERE f."inscripcionId"=$1',[row.id])).rows[0].n,1)
       await kine.evaluate(()=>window.scrollTo(0,0))
       await kine.screenshot({path:`test-results/devices/${profile.name}-evaluacion.png`,fullPage:true})
@@ -141,8 +147,8 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
       await expect(kine.getByRole("button",{name:"Llamar al siguiente",exact:true})).toBeDisabled()
       await kine.waitForLoadState("networkidle")
       await teamNavigate(kine,"Mis resultados")
-      await expect(kine.getByRole("link",{name:"Revisar resultado",exact:true})).toBeVisible()
-      await kine.getByRole("link",{name:"Revisar resultado",exact:true}).click()
+      await expect(kine.getByRole("link",{name:"Editar borrador y revisar publicación",exact:true})).toBeVisible()
+      await kine.getByRole("link",{name:"Editar borrador y revisar publicación",exact:true}).click()
       await expect(kine.getByRole("heading",{name:"Revisar resultado",exact:true})).toBeVisible()
       await noOverflow(kine,profile.name+" revisión de resultado")
       await kine.evaluate(()=>window.scrollTo(0,0))
@@ -158,7 +164,7 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
       await kine.getByPlaceholder("12.345.678-9",{exact:true}).fill(`${11000000+index}-1`)
       await kine.locator("main:visible").locator('input[type="date"]').fill("2026-01-01")
       await kine.locator("main:visible").locator('input[type="email"]').fill(`presencial-${index}@example.com`)
-      for(const [key,value]of Object.entries({ap:"140",bp:"120",di:"135",dd:"138",desviacionDer:"0",desviacionIzq:"8"}))await kine.locator("main:visible").locator(`input[name="${key}"]`).fill(value)
+      for(const [key,value]of Object.entries({ap:"140",bp:"120",di:"135",dd:"138",distanciaPOEtragusDer:"100",distanciaPOEtragusIzq:"108"}))await kine.locator("main:visible").locator(`input[name="${key}"]`).fill(value)
       await kine.getByRole("button",{name:"Guardar evaluación",exact:true}).click()
       await expect(kine.getByRole("status")).toContainText("El apoderado debe marcar")
       await kine.getByRole("checkbox").check()
@@ -180,4 +186,25 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
 async function noOverflow(page,description) {
   const dimensions=await page.evaluate(()=>({width:document.documentElement.clientWidth,scroll:document.documentElement.scrollWidth}))
   assert(dimensions.scroll<=dimensions.width+1,`${description}: desborde horizontal ${dimensions.scroll}/${dimensions.width}`)
+}
+
+// Ejecutar el POST real y perder solo su respuesta para la aplicación. Evita
+// activar la interceptación global de WebKit, que también altera prefetch/RSC.
+async function loseNextPostResponse(page,path) {
+  await page.evaluate(path=>{
+    const original=window.fetch
+    let pending=true
+    window.fetch=function(input,init) {
+      const url=new URL(typeof input==="string"?input:input instanceof URL?input.href:input.url,location.href)
+      const method=(init?.method||(input instanceof Request?input.method:"GET")).toUpperCase()
+      const lose=pending&&url.pathname===path&&method==="POST"
+      if(!lose) return original.call(this,input,init)
+      pending=false
+      window.fetch=original
+      return original.call(this,input,init).then(async response=>{
+        await response.arrayBuffer()
+        throw new TypeError("Respuesta perdida de prueba")
+      })
+    }
+  },path)
 }

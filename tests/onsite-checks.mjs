@@ -50,12 +50,63 @@ export async function onsiteChecks({ db, client, signIn, password, accounts, adm
     return { attention, saved: await saved.json() }
   }
 
+  // Evento independiente: las inscripciones ADMIN no alteran la secuencia mixta 3:1.
+  const adminEvent = await currentEvent("Presencial administración ficticia", 3)
+  const adminPayload = input(adminEvent, "Bebé presencial de administración", { perfilActor: "RECEPCION", registradoPorId: "intruso" })
+  for (const request of [admin, reception]) {
+    const availability = await request(`/api/recepcion/presencial?eventoId=${adminEvent.id}`)
+    assert.equal(availability.status, 200)
+    assert(availability.headers.get("cache-control").includes("no-store"))
+    assert.deepEqual(await availability.json(), { disponibles: 3, presencialHabilitada: true })
+    // La sesión válida no basta: se exige el origen configurado, incluso con JSON.
+    for (const origin of [undefined, "https://ajeno.example", "null"]) {
+      const options = post(adminPayload), headers = new Headers(options.headers)
+      headers.delete("origin")
+      if (origin !== undefined) headers.set("origin", origin)
+      assert.equal((await request("/api/recepcion/presencial", { ...options, headers: Object.fromEntries(headers) })).status, 403, `CSRF presencial: ${origin ?? "sin origen"}`)
+    }
+  }
+  assert.equal((await db.query('SELECT count(*)::int n FROM "Inscripcion" WHERE "eventoId"=$1', [adminEvent.id])).rows[0].n, 0, "CSRF no reserva cupos ni crea inscripciones")
+  const adminResponse = await admin("/api/recepcion/presencial", post(adminPayload))
+  assert.equal(adminResponse.status, 201)
+  const registeredByAdmin = await adminResponse.json()
+  assert.equal(registeredByAdmin.nuevaInscripcion, true)
+  assert.equal(registeredByAdmin.inscripcion.numero, 1)
+  assert.equal(registeredByAdmin.inscripcion.origen, "PRESENCIAL")
+  assert.equal(registeredByAdmin.inscripcion.llegada.estado, "EN_ESPERA")
+  assert.equal(registeredByAdmin.correo, "SIN_CORREO")
+  const adminReplay = await admin("/api/recepcion/presencial", post(adminPayload))
+  assert.equal(adminReplay.status, 200)
+  assert.equal((await adminReplay.json()).inscripcion.id, registeredByAdmin.inscripcion.id)
+  const adminId = (await (await admin("/api/auth/session")).json()).user.id
+  const ledger = (await db.query('SELECT i."registradoPorId",f."confirmadoPorId",c."actorId",c."perfilActor",a."correoResultados",a.seguimiento FROM "Inscripcion" i JOIN "EntradaFila" f ON f."inscripcionId"=i.id JOIN "AutorizacionPrivacidad" a ON a.id=i."autorizacionId" JOIN "CambioPrivacidad" c ON c."autorizacionId"=a.id WHERE i.id=$1', [registeredByAdmin.inscripcion.id])).rows[0]
+  assert.deepEqual(ledger, { registradoPorId: adminId, confirmadoPorId: adminId, actorId: adminId, perfilActor: "ADMIN", correoResultados: false, seguimiento: false })
+  assert.deepEqual((await db.query('SELECT inscritos,"ultimoNumero","ultimoOrdenFila" FROM "Evento" WHERE id=$1', [adminEvent.id])).rows[0], { inscritos: 1, ultimoNumero: 1, ultimoOrdenFila: 1 })
+  for (const [path, options] of [
+    ["/api/recepcion/buscar", post({ eventoId: adminEvent.id, consulta: "1" })],
+    [`/api/recepcion/fila?eventoId=${adminEvent.id}`],
+    ["/api/recepcion/llegadas", post({ eventoId: adminEvent.id, inscripcionId: registeredByAdmin.inscripcion.id })],
+    ["/api/recepcion/vinculaciones", post({ eventoId: adminEvent.id, inscripcionId: registeredByAdmin.inscripcion.id })],
+    ["/api/recepcion/correo", post({ eventoId: adminEvent.id, inscripcionId: registeredByAdmin.inscripcion.id })],
+    [`/api/recepcion/inscripciones/${registeredByAdmin.inscripcion.id}/qr?eventoId=${adminEvent.id}`],
+    [`/api/kinesiologia/atencion?eventoId=${adminEvent.id}`],
+    ["/api/kinesiologia/llamar", post({ id: randomUUID(), eventoId: adminEvent.id })],
+    ["/api/evaluaciones", post({ atencionId: randomUUID(), reservaId: randomUUID(), ...measures })],
+  ]) assert.equal((await admin(path, options)).status, 403, `ADMIN conserva restricción: ${path}`)
+  const adminQueue = await queue(adminEvent)
+  assert.equal(adminQueue.total, 1)
+  assert.equal(adminQueue.inscripciones[0].id, registeredByAdmin.inscripcion.id)
+  console.log("OK presencial ADMIN: evento aislado, alta y reintento, autoría real, CSRF y búsqueda/fila/clínica restringidas.")
+
   const mixed = await createEvent(admin, "Mixta ficticia", 20, true), prev = await previous(mixed, 6)
   const bad = input(mixed, "No habilitado")
   assert.equal((await reception("/api/recepcion/presencial", post(bad))).status, 409)
   await setToday(mixed)
   for (const [request, code] of [[anonymous, 401], [f1.request, 401], [admin, 403], [kine, 403]]) {
-    assert.equal((await request("/api/recepcion/presencial", post(input(mixed, "Sin permiso")))).status, code)
+    if (request !== admin) {
+      assert.equal((await request("/api/recepcion/presencial", post(input(mixed, "Sin permiso")))).status, code)
+      assert.equal((await request(`/api/recepcion/presencial?eventoId=${mixed.id}`)).status, code)
+    }
     assert.equal((await request("/api/recepcion/correo", post({ eventoId: mixed.id, inscripcionId: prev[0].id }))).status, code)
     assert.equal((await request(`/api/recepcion/inscripciones/${prev[0].id}/qr?eventoId=${mixed.id}`)).status, code)
   }

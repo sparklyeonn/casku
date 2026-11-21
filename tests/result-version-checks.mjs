@@ -1,3 +1,4 @@
+import {resultMeasurements} from "./results-input-fixtures.mjs"
 import assert from "node:assert/strict"
 import {randomUUID} from "node:crypto"
 import {familyConsent} from "./privacy-fixtures.mjs"
@@ -11,7 +12,7 @@ export async function resultVersionChecks({db,client,signIn,password,accounts,ad
  const receipt=(await json(f1.request,"/api/familias/inscripciones",post({...familyConsent,privacidad:{...familyConsent.privacidad,seguimiento:true},id:randomUUID(),eventoId:event.id,nombreBebe:"Bebé versiones <ficticio>",fechaNacimiento:"2026-01-01",nombreApoderado:profile.nombre,revisionApoderado:profile.revisionDatos,rutApoderado:profile.rut,telefono:profile.telefono}),201)).inscripcion
  await json(rec,"/api/recepcion/llegadas",post({eventoId:event.id,inscripcionId:receipt.id}),201)
  const attention=(await json(kine,"/api/kinesiologia/llamar",post({id:randomUUID(),eventoId:event.id}))).atencion
- const measures={ap:140,bp:120,di:150,dd:130,perimetro:440,desviacionDer:5,desviacionIzq:8}
+ const measures=resultMeasurements({di:150,dd:130,perimetro:440})
  const saved=await json(kine,"/api/evaluaciones",post({atencionId:attention.id,reservaId:attention.reservaId,...measures}),201),root=`/api/kinesiologia/resultados/${saved.evaluacionId}`
  setResultFailure(true)
  const initial=(await json(kine,root+"/publicar",post({revision:1}),201)).resultado
@@ -47,8 +48,8 @@ export async function resultVersionChecks({db,client,signIn,password,accounts,ad
  const replay=await json(kine,root+"/corregir",post(body));assert(replay.cambio.repetida);assert.equal(replay.resultado.publicacion.version,2)
  await json(kine,root+"/corregir",post({...body,motivo:"Otro motivo con el mismo identificador"}),409)
  await json(kine,root+"/retirar",post({...body,id:randomUUID()}),409)
- assert.equal(v2.datos.medidas.perimetro,440);assert.equal(v2.datos.medidas.desviacionDer,5);assert.equal(v2.datos.medidas.desviacionIzq,8)
- const history=await json(kine,root+"/historial");assert.equal(history.versiones.length,2);assert(history.versiones.every(v=>v.datos.medidas.perimetro===440&&v.datos.medidas.desviacionIzq===8));assert.equal(history.cambios[0].motivo,reason);assert.equal(history.cambios[0].actorId,accounts[2].id)
+ assert.equal(v2.datos.medidas.perimetro,440);assert.equal(v2.datos.medidas.distanciaPOEtragusDer,125);assert.equal(v2.datos.medidas.distanciaPOEtragusIzq,128)
+ const history=await json(kine,root+"/historial");assert.equal(history.versiones.length,2);assert(history.versiones.every(v=>v.datos.medidas.perimetro===440&&v.datos.medidas.distanciaPOEtragusIzq===128));assert.equal(history.cambios[0].motivo,reason);assert.equal(history.cambios[0].actorId,accounts[2].id)
  const retire={id:randomUUID(),revisionControl:2,motivo:"Retirar para revisar la toma de mediciones",confirmar:true}
  const withdrawn=(await json(kine,root+"/retirar",post(retire))).resultado
  assert.equal(withdrawn.publicacion.estado,"RETIRADO");assert.equal(withdrawn.publicacion.version,2);assert.equal(withdrawn.publicacion.revisionControl,3)

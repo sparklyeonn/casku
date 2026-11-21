@@ -34,6 +34,7 @@ import { absenceChecks } from "./absence-checks.mjs"
 import { seedBeforeAbsenceMigration } from "./absence-migration.mjs"
 import { seedBeforeResultsMigration } from "./results-migration.mjs"
 import { resultsChecks } from "./results-checks.mjs"
+import { resultContactChecks } from "./result-contact-checks.mjs"
 import { linkingChecks } from "./linking-checks.mjs"
 import { teamChecks } from "./team-checks.mjs"
 import { overviewChecks } from "./overview-checks.mjs"
@@ -61,6 +62,7 @@ const basePort = Number(process.env.CASKU_TEST_HTTP_PORT || (realPostgres ? proc
 assert(Number.isInteger(basePort) && basePort>=1024 && basePort<=65534)
 const secondaryBase = `http://localhost:${basePort+1}`
 const base = `http://localhost:${basePort}`, password = randomBytes(20).toString("base64url")
+const mailAttempts = []
 const mails = [], deduped = new Map(), sentPayloads = new Map()
 let failConfirmation = false, failResults = false, failAll = false, testFailed = false, child, exited = false, log = "", renderingFailure = false
 function recordLog(value) {
@@ -79,6 +81,7 @@ const mailServer = createServer(async (request, response) => {
   assert(/^[a-f0-9-]{14}5[a-f0-9-]{21}$/i.test(raw.headers.idempotencyKey))
   assert(Object.keys(raw).every(key=>["sender","to","subject","htmlContent","textContent","headers","attachment"].includes(key)))
   assert((raw.attachment||[]).every(file=>Object.keys(file).sort().join(",")==="content,name"))
+  mailAttempts.push({ key: raw.headers.idempotencyKey, to: raw.to.map(value => value.email), subject: raw.subject })
   const body={to:raw.to.map(value=>value.email),subject:raw.subject,html:raw.htmlContent,text:raw.textContent,attachments:(raw.attachment||[]).map(file=>({filename:file.name,content:file.content}))}
   response.setHeader("Content-Type", "application/json")
   if (failAll || (failResults && body.subject === "Tu resultado de craneometría en Casku") || (failConfirmation && body.subject?.startsWith("Inscripción"))) { response.setHeader("Retry-After","0"); response.writeHead(429); response.end(JSON.stringify({ code: "too_many_requests", message: "Fallo ficticio recuperable" })); return }
@@ -102,8 +105,10 @@ async function signIn(request, provider, values) {
   await request(`/api/auth/callback/${provider}`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Auth-Return-Redirect": "1", origin: base }, body: new URLSearchParams({ csrfToken, ...values, callbackUrl: base + "/panel" }) })
   return session(request)
 }
-async function challenge(request, correo) {
-  const response = await request("/api/familias/acceso", post({ correo }))
+async function challenge(request, correo, fixtureAddress) {
+  const options = post({ correo })
+  if (fixtureAddress) options.headers["x-forwarded-for"] = fixtureAddress
+  const response = await request("/api/familias/acceso", options)
   assert.equal(response.status, 200, "Solicitud de código")
   const value = await response.json()
   assert(!Object.hasOwn(value, "codigo"))
@@ -111,8 +116,12 @@ async function challenge(request, correo) {
   assert(mail)
   return { ...value, codigo: mail.text.match(/es (\d{6})\./)[1] }
 }
+// Cada familia ficticia representa un cliente independiente. Los escenarios
+// explícitos de límites siguen usando challenge sin dirección alternativa.
+let familyFixtureNumber = 0
 async function family(correo) {
-  const request = client(), access = await challenge(request, correo)
+  const fixtureAddress = `198.51.100.${++familyFixtureNumber}`
+  const request = client(), access = await challenge(request, correo, fixtureAddress)
   const user = await signIn(request, "familias", access)
   assert.equal(user?.role, "APODERADO")
   return { request, access, user }
@@ -159,7 +168,7 @@ try {
   const extraAccounts = browserTests ? await Promise.all(Array.from({length: 16}, async (_,i) => ({id:`real-pg-team-${i}`,email:`real-pg-${i}@example.com`,name:`Equipo de prueba ${i}`,role:i%2===0?"RECEPCION":"KINESIOLOGO",active:true,passwordHash:await hashPassword(password)}))) : []
   if (calendlyLinkOnly) await new Promise(resolve => calendlyFixtureServer.listen(0, "127.0.0.1", resolve))
   if(calendlyHooksOnly)calendlyFixtureState.callback=base+"/api/calendly/webhook"
-  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), ...(calendlyLinkOnly ? ["--import", new URL("./calendly-link-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", String(basePort)], { cwd: process.cwd(), env: { ...process.env, CALENDLY_WEBHOOK_ENABLED:calendlyHooksOnly?"1":"0",CALENDLY_WEBHOOK_SIGNING_KEY:calendlyHooksOnly?authSecret:"",CALENDLY_WEBHOOK_SUBSCRIPTION_ID:calendlyHooksOnly?"fixture-hook":"",CRON_SECRET:calendlyHooksOnly?authSecret:"",CALENDLY_ENABLED: calendlyLinkOnly ? "1" : "0", CALENDLY_API_TOKEN: calendlyLinkOnly ? "calendly_fixture_only" : "", ...(calendlyLinkOnly ? { CASKU_TEST_CALENDLY_URL: `http://127.0.0.1:${calendlyFixtureServer.address().port}` } : {}), NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_PASSWORD_RECOVERY_ENABLED:"1", CASKU_PASSWORD_RECOVERY_QUEUE_KEY:authSecret, CASKU_PASSWORD_RECOVERY_WORKER_SECRET:authSecret, CASKU_MAIL_AUTOMATION: "0",  CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts, ...extraAccounts]), AUTH_SECRET: authSecret, AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", BREVO_API_KEY: "brevo_local_test_only", BREVO_SENDER_EMAIL: "test@example.com", BREVO_SENDER_NAME: "Casku", BREVO_SENDER_VERIFIED: "1", CASKU_MAIL_ENABLED: "1", CASKU_MAIL_DELIVERY_SECRET: authSecret, CASKU_MAIL_SUPPRESSION_SECRET: authSecret, CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: databaseUrl }, stdio: ["ignore", "pipe", "pipe"] })
+  child = spawn(process.execPath, [...(production ? ["--import", new URL("./production-mail-preload.mjs", import.meta.url).href] : []), ...(calendlyLinkOnly ? ["--import", new URL("./calendly-link-preload.mjs", import.meta.url).href] : []), "node_modules/next/dist/bin/next", production ? "start" : "dev", "--port", String(basePort)], { cwd: process.cwd(), env: { ...process.env, CALENDLY_WEBHOOK_ENABLED:calendlyHooksOnly?"1":"0",CALENDLY_WEBHOOK_SIGNING_KEY:calendlyHooksOnly?authSecret:"",CALENDLY_WEBHOOK_SUBSCRIPTION_ID:calendlyHooksOnly?"fixture-hook":"",CRON_SECRET:calendlyHooksOnly?authSecret:"",CALENDLY_ENABLED: calendlyLinkOnly ? "1" : "0", CALENDLY_API_TOKEN: calendlyLinkOnly ? "calendly_fixture_only" : "", ...(calendlyLinkOnly ? { CASKU_TEST_CALENDLY_URL: `http://127.0.0.1:${calendlyFixtureServer.address().port}` } : {}), NODE_ENV: production ? "production" : "development", CASKU_PRODUCTION_TEST: production ? "1" : "0", NODE_DISABLE_COMPILE_CACHE: "1", CASKU_TEST_MODE: production ? "0" : "1", CASKU_PASSWORD_RECOVERY_ENABLED:"1", CASKU_PASSWORD_RECOVERY_QUEUE_KEY:authSecret, CASKU_PASSWORD_RECOVERY_WORKER_SECRET:authSecret, CASKU_MAIL_AUTOMATION: "0", CASKU_CLINICAL_MAIL_ENABLED: "1",  CASKU_TEAM_ACCOUNTS: JSON.stringify([adminAccount, ...receptionAccounts, ...extraAccounts]), AUTH_SECRET: authSecret, AUTH_URL: base, NEXTAUTH_URL: base, AUTH_TRUST_HOST: "true", BREVO_API_KEY: "brevo_local_test_only", BREVO_SENDER_EMAIL: "test@example.com", BREVO_SENDER_NAME: "Casku", BREVO_SENDER_VERIFIED: "1", CASKU_MAIL_ENABLED: "1", CASKU_MAIL_DELIVERY_SECRET: authSecret, CASKU_MAIL_SUPPRESSION_SECRET: authSecret, CASKU_TEST_MAIL_URL: `http://127.0.0.1:${mailServer.address().port}`, DATABASE_URL: databaseUrl }, stdio: ["ignore", "pipe", "pipe"] })
   child.stdout.on("data", recordLog); child.stderr.on("data", recordLog); child.on("exit", () => { exited = true })
   let ready = false
   for (const started = Date.now(); Date.now() - started < 180000;) {
@@ -169,7 +178,7 @@ try {
   }
   assert(ready)
   if (realPostgres) {
-    secondary = spawn(process.execPath, ["--import",new URL("./production-mail-preload.mjs",import.meta.url).href,...(calendlyLinkOnly ? ["--import",new URL("./calendly-link-preload.mjs",import.meta.url).href] : []),"node_modules/next/dist/bin/next","start","--port",String(basePort+1)], {cwd:process.cwd(),env:{...process.env,CALENDLY_WEBHOOK_ENABLED:calendlyHooksOnly?"1":"0",CALENDLY_WEBHOOK_SIGNING_KEY:calendlyHooksOnly?authSecret:"",CALENDLY_WEBHOOK_SUBSCRIPTION_ID:calendlyHooksOnly?"fixture-hook":"",CRON_SECRET:calendlyHooksOnly?authSecret:"",CALENDLY_ENABLED:calendlyLinkOnly?"1":"0",CALENDLY_API_TOKEN:calendlyLinkOnly?"calendly_fixture_only":"",...(calendlyLinkOnly?{CASKU_TEST_CALENDLY_URL:`http://127.0.0.1:${calendlyFixtureServer.address().port}`} : {}),NODE_ENV:"production",CASKU_PRODUCTION_TEST:"1",CASKU_TEST_MODE:"0",CASKU_PASSWORD_RECOVERY_ENABLED:"1",CASKU_PASSWORD_RECOVERY_QUEUE_KEY:authSecret,CASKU_PASSWORD_RECOVERY_WORKER_SECRET:authSecret,CASKU_MAIL_AUTOMATION:"0",CASKU_TEAM_ACCOUNTS:JSON.stringify([adminAccount,...receptionAccounts,...extraAccounts]),AUTH_SECRET:authSecret,AUTH_URL:base,NEXTAUTH_URL:base,AUTH_TRUST_HOST:"true",BREVO_API_KEY:"brevo_local_test_only",BREVO_SENDER_EMAIL:"test@example.com",BREVO_SENDER_NAME:"Casku",BREVO_SENDER_VERIFIED:"1",CASKU_MAIL_ENABLED:"1",CASKU_MAIL_DELIVERY_SECRET:authSecret,CASKU_MAIL_SUPPRESSION_SECRET:authSecret,CASKU_TEST_MAIL_URL:`http://127.0.0.1:${mailServer.address().port}`,DATABASE_URL:databaseUrl},stdio:["ignore","pipe","pipe"]})
+    secondary = spawn(process.execPath, ["--import",new URL("./production-mail-preload.mjs",import.meta.url).href,...(calendlyLinkOnly ? ["--import",new URL("./calendly-link-preload.mjs",import.meta.url).href] : []),"node_modules/next/dist/bin/next","start","--port",String(basePort+1)], {cwd:process.cwd(),env:{...process.env,CALENDLY_WEBHOOK_ENABLED:calendlyHooksOnly?"1":"0",CALENDLY_WEBHOOK_SIGNING_KEY:calendlyHooksOnly?authSecret:"",CALENDLY_WEBHOOK_SUBSCRIPTION_ID:calendlyHooksOnly?"fixture-hook":"",CRON_SECRET:calendlyHooksOnly?authSecret:"",CALENDLY_ENABLED:calendlyLinkOnly?"1":"0",CALENDLY_API_TOKEN:calendlyLinkOnly?"calendly_fixture_only":"",...(calendlyLinkOnly?{CASKU_TEST_CALENDLY_URL:`http://127.0.0.1:${calendlyFixtureServer.address().port}`} : {}),NODE_ENV:"production",CASKU_PRODUCTION_TEST:"1",CASKU_TEST_MODE:"0",CASKU_PASSWORD_RECOVERY_ENABLED:"1",CASKU_PASSWORD_RECOVERY_QUEUE_KEY:authSecret,CASKU_PASSWORD_RECOVERY_WORKER_SECRET:authSecret,CASKU_MAIL_AUTOMATION:"0",CASKU_CLINICAL_MAIL_ENABLED:"1",CASKU_TEAM_ACCOUNTS:JSON.stringify([adminAccount,...receptionAccounts,...extraAccounts]),AUTH_SECRET:authSecret,AUTH_URL:base,NEXTAUTH_URL:base,AUTH_TRUST_HOST:"true",BREVO_API_KEY:"brevo_local_test_only",BREVO_SENDER_EMAIL:"test@example.com",BREVO_SENDER_NAME:"Casku",BREVO_SENDER_VERIFIED:"1",CASKU_MAIL_ENABLED:"1",CASKU_MAIL_DELIVERY_SECRET:authSecret,CASKU_MAIL_SUPPRESSION_SECRET:authSecret,CASKU_TEST_MAIL_URL:`http://127.0.0.1:${mailServer.address().port}`,DATABASE_URL:databaseUrl},stdio:["ignore","pipe","pipe"]})
     secondary.stdout.on("data",recordLog);secondary.stderr.on("data",recordLog);secondary.on("exit",()=>{secondaryExited=true})
     let secondaryReady=false
     for(const started=Date.now();Date.now()-started<60000;){
@@ -180,7 +189,15 @@ try {
     assert(secondaryReady)
   }
   const admin = client(); assert.equal((await signIn(admin, "equipo", { email: adminAccount.email, password })).role, "ADMIN")
-  if (calendlyHooksOnly) {
+  if (process.argv.includes("--result-contact-only")) {
+    const anonymous=client(),f1=await family("contact-scope-family1@example.com"),f2=await family("contact-scope-family2@example.com")
+    await resultContactChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, post, createEvent, mails, mailAttempts, authSecret, base, browsers:production||browserTests,
+      resetGlobalLogin: async () => {
+        const key=createHmac("sha256",authSecret).update("team-auth:global").digest("hex")
+        await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[key])
+      }, setResultFailure: value => { failResults = value } })
+    console.log("OK resultados de contacto: comprobación focalizada sin cuenta, sin base ni correos reales.")
+  } else if (calendlyHooksOnly) {
     await calendlyHooksChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, post, mails, secret: authSecret, secondaryBase: realPostgres ? secondaryBase : undefined, base, adminAccount })
   } else if (calendlyHoldsOnly) {
     await calendlyHoldsChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, post, mails, family, secondaryBase: realPostgres ? secondaryBase : undefined, base })
@@ -336,6 +353,13 @@ try {
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   // Escenario independiente: test:security verifica la ventana global sin reiniciarla.
+  await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
+  await resultContactChecks({ db, base, browsers: production || browserTests,
+    resetGlobalLogin: async () => {
+      const key = createHmac("sha256", authSecret).update("team-auth:global").digest("hex")
+      await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`, [key])
+    }, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, post, createEvent, mails, mailAttempts, authSecret, setResultFailure: value => { failResults = value } })
+  assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`,[createHmac("sha256",authSecret).update("team-auth:global").digest("hex")])
   await linkingChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous, f1, f2, family, post, createEvent, mails })
   assert.deepEqual((await clinicalSnapshot()).rows, before.rows)

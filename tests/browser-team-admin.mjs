@@ -48,6 +48,49 @@ export async function browserTeamAdminChecks({ db, base, password }) {
       await expect(page.getByRole('heading', { name: 'Resumen del evento', exact: true })).toBeVisible(); await fits()
       await page.evaluate(()=>window.scrollTo(0,0))
       await page.screenshot({ path: `test-results/team-admin/${profile.name}-eventos.png`, fullPage: true })
+      // Otro evento, de hoy en Chile, para no cambiar la prueba de protección futura.
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
+      const part = type => today.find(value => value.type === type).value
+      const onsiteEventId = randomUUID(), onsiteName = `Presencial ADMIN · ${profile.name}`
+      const onsiteEventResponse = await context.request.post('/api/eventos', { headers: { origin: base }, data: { id: onsiteEventId, nombre: onsiteName, fecha: `${part('year')}-${part('month')}-${part('day')}`, lugar: 'Recinto presencial ficticio', cupos: 3 } })
+      assert.equal(onsiteEventResponse.status(), 201)
+      await page.reload()
+      const onsiteDetails = page.locator('details').filter({ has: page.locator('summary', { hasText: /^Inscribir presencialmente$/ }) })
+      await expect(onsiteDetails).not.toHaveAttribute('open')
+      await onsiteDetails.locator('summary').click()
+      await expect(onsiteDetails).toHaveAttribute('open', '')
+      await expect(onsiteDetails.getByRole('heading', { name: 'Inscripción presencial', exact: true })).toBeVisible()
+      await expect(onsiteDetails).toContainText('3 cupos disponibles.')
+      const onsiteRequests = []
+      const trackOnsite = request => { const url = new URL(request.url()); if (url.pathname.startsWith('/api/recepcion/')) onsiteRequests.push(url.pathname) }
+      page.on('request', trackOnsite)
+      await onsiteDetails.getByLabel('Nombre completo del bebé', { exact: true }).fill(`Bebé ficticio ADMIN ${profile.name}`)
+      await onsiteDetails.getByLabel('Fecha de nacimiento', { exact: true }).fill('2026-01-01')
+      await onsiteDetails.getByLabel('Nombre del apoderado', { exact: true }).fill('Apoderado ficticio ADMIN')
+      await onsiteDetails.getByLabel('Nombre del apoderado que autorizó', { exact: true }).fill('Apoderado ficticio ADMIN')
+      await onsiteDetails.getByLabel('Referencia interna del documento', { exact: true }).fill('DOC-ADMIN-FICTICIO')
+      await onsiteDetails.getByRole('checkbox', { name: /Revisé la autorización expresa documentada/ }).check()
+      const register = onsiteDetails.getByRole('button', { name: 'Registrar y confirmar llegada', exact: true })
+      await expect(register).toBeEnabled()
+      const onsiteCreated = page.waitForResponse(response => new URL(response.url()).pathname === '/api/recepcion/presencial' && response.request().method() === 'POST')
+      await register.click()
+      const onsiteResponse = await onsiteCreated
+      assert.equal(onsiteResponse.status(), 201)
+      const onsiteReceipt = await onsiteResponse.json()
+      assert.equal(onsiteReceipt.correo, 'SIN_CORREO')
+      await expect(onsiteDetails.getByRole('status')).toContainText('Inscripción registrada y llegada confirmada')
+      await expect(onsiteDetails.getByRole('heading', { name: /N.º 001/ })).toContainText(`Bebé ficticio ADMIN ${profile.name}`)
+      await expect(onsiteDetails).toContainText('2 cupos disponibles.')
+      await expect(onsiteDetails.getByRole('link', { name: 'Descargar QR del comprobante' })).toHaveCount(0)
+      await expect(onsiteDetails.getByRole('button', { name: 'Reintentar correo' })).toHaveCount(0)
+      page.off('request', trackOnsite)
+      assert(onsiteRequests.length > 0)
+      assert(onsiteRequests.every(path => path === '/api/recepcion/presencial'), 'El panel ADMIN no consulta otros endpoints de recepción')
+      assert.deepEqual((await db.query('SELECT inscritos,"ultimoNumero","ultimoOrdenFila" FROM "Evento" WHERE id=$1', [onsiteEventId])).rows[0], { inscritos: 1, ultimoNumero: 1, ultimoOrdenFila: 1 })
+      assert.equal((await context.request.post('/api/recepcion/buscar', { headers: { origin: base }, data: { eventoId: onsiteEventId, consulta: '1' } })).status(), 403)
+      assert.equal((await context.request.get(`/api/recepcion/fila?eventoId=${onsiteEventId}`)).status(), 403)
+      assert.equal((await context.request.get(`/api/kinesiologia/atencion?eventoId=${onsiteEventId}`)).status(), 403)
+      await fits(); await page.screenshot({ path: `test-results/team-admin/${profile.name}-presencial.png`, fullPage: true })
       await teamNavigate(page, 'Cuentas del equipo')
       await expect(page.getByRole('heading', { name: 'Cuentas del equipo', exact: true })).toBeVisible()
       await page.getByLabel('Nombre', { exact: true }).fill('Recepción visual de prueba')
@@ -77,7 +120,7 @@ export async function browserTeamAdminChecks({ db, base, password }) {
         await toggle.press('Enter'); await expect(toggle).toHaveAttribute('aria-expanded', 'false')
       }
       assert.deepEqual(errors, [])
-      console.log(`OK administración ${profile.name}: evento, apertura, resumen, cuenta temporal, navegación por perfil, teclado y sin desbordamiento.`)
+      console.log(`OK administración ${profile.name}: evento, apertura, resumen, inscripción presencial ADMIN, cuenta temporal, navegación por perfil, teclado y sin desbordamiento.`)
     } catch (error) { await page?.screenshot({ path: `test-results/team-admin/${profile.name}-error.png`, fullPage: true }); throw error }
     finally { await context.close(); await browser.close() }
   }

@@ -24,6 +24,9 @@ export function checkDeploymentEnvironment(env: Environment, stage: DeploymentSt
   } catch { fail("DATABASE_URL", "Configura una conexión PostgreSQL remota válida del entorno elegido.") }
   for (const name of ["CASKU_TEST_MODE", "CASKU_PRODUCTION_TEST"]) if (env[name] === "1") fail(name, "El alojamiento no debe ejecutar modos de simulación.")
   if (env.CASKU_TEST_MAIL_URL || /production-mail-preload/.test(env.NODE_OPTIONS || "")) fail("NODE_OPTIONS", "Retira el proveedor simulado de las pruebas técnicas.")
+  if (env.CASKU_CLINICAL_MAIL_ENABLED !== undefined && !["0", "1"].includes(env.CASKU_CLINICAL_MAIL_ENABLED)) fail("CASKU_CLINICAL_MAIL_ENABLED", "Selecciona explícitamente 0 o 1.")
+  if (env.CASKU_CLINICAL_MAIL_ENABLED === "1" && env.CASKU_MAIL_ENABLED !== "1") fail("CASKU_CLINICAL_MAIL_ENABLED", "La publicación por correo requiere el envío general habilitado.")
+  if (env.CASKU_CLINICAL_MAIL_ENABLED === "1" && (env.BREVO_WEBHOOK_ENABLED !== "1" || !token(env.BREVO_WEBHOOK_SECRET))) fail("CASKU_CLINICAL_MAIL_ENABLED", "El envío clínico requiere el receptor de entregas, rebotes y quejas configurado.")
   if (env.CASKU_MAIL_AUTOMATION !== "0") fail("CASKU_MAIL_AUTOMATION", "Mantén desactivado el seguimiento clínico mientras su protocolo y activación estén pendientes.")
   if (!["0", "1"].includes(env.CASKU_MAIL_ENABLED || "")) fail("CASKU_MAIL_ENABLED", "Selecciona explícitamente 0 o 1.")
   if (!["pruebas", "produccion"].includes(env.CASKU_MAIL_MODE || "")) fail("CASKU_MAIL_MODE", "Selecciona explícitamente pruebas o produccion.")

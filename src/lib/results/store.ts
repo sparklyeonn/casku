@@ -1,3 +1,5 @@
+import { previousContactMail } from "./contact-publication"
+import { publicationProblem, revisedMeasurements, sameMeasurements } from "./protocol"
 import { measurementExtras } from "@/lib/measurement-fields"
 import { complementaryData, complementaryValues } from "@/lib/measurement-storage"
 import { draftMailPlan } from "@/lib/mail-queue/store"
@@ -33,7 +35,8 @@ function publicationMail(publication:Publication) {
 }
 function reviewSummary(row:Review) {
  const family=recipient(row),publication=row.publicacion,current=publication?latest(publication):null
- return {id:row.id,revision:row.revision,datos:current?.datos??draftSnapshot(row),publicable:!!family,motivoBloqueo:family?null:"Pendiente de vinculación con una cuenta familiar verificada y activa.",correoDestino:family?.correo??publication?.correo?.destinatario??null,publicacion:publication?{id:publication.id,publicadoAt:current!.fecha.toISOString(),version:publication.versionActual,revisionControl:publication.revisionControl,estado:publication.estado,correo:publicationMail(publication)}:null}
+ const datos=current?.datos??draftSnapshot(row),problem=publication?null:publicationProblem(datos)
+ return {id:row.id,revision:row.revision,datos,publicable:!!family&&!problem,motivoBloqueo:!family?"Pendiente de vinculación con una cuenta familiar verificada y activa.":problem,correoDestino:family?.correo??publication?.correo?.destinatario??null,publicacion:publication?{id:publication.id,publicadoAt:current!.fecha.toISOString(),version:publication.versionActual,revisionControl:publication.revisionControl,estado:publication.estado,correo:publicationMail(publication)}:null}
 }
 export type ResultReview=ReturnType<typeof reviewSummary>
 export async function ownedReview(staffId:string,id:string) {
@@ -44,8 +47,11 @@ export async function ownedReview(staffId:string,id:string) {
 export async function ownResults(staffId:string,page:number,state:"TODOS"|"BORRADOR"|"PUBLICADO"|"RETIRADO",eventoId?:string) {
  const where:Prisma.EvaluacionWhereInput={autorId:staffId,...(eventoId?{fila:{is:{eventoId}}}:{}),...(state==="BORRADOR"?{publicacion:{is:null}}:state==="PUBLICADO"?{publicacion:{is:{estado:"VIGENTE"}}}:state==="RETIRADO"?{publicacion:{is:{estado:"RETIRADO"}}}:{})}
  const [total,rows]=await prisma.$transaction([prisma.evaluacion.count({where}),prisma.evaluacion.findMany({where,orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(page-1)*20,take:20,include:reviewInclude})])
+ const contacts=rows.length?await prisma.resultadoContacto.findMany({where:{evaluacionId:{in:rows.map(row=>row.id)}},distinct:["evaluacionId"],orderBy:[{evaluacionId:"asc"},{createdAt:"desc"}],select:{evaluacionId:true,revision:true,estado:true,claveEnvio:true}}):[]
+ const envelopes=contacts.length?await prisma.envioTransaccional.findMany({where:{clave:{in:contacts.map(copy=>copy.claveEnvio)}},select:{clave:true,estado:true}}):[]
+ const contactByEvaluation=new Map(contacts.map(copy=>[copy.evaluacionId,{estado:envelopes.find(mail=>mail.clave===copy.claveEnvio)?.estado??copy.estado,revision:copy.revision}]))
  await trace(prisma,{id:staffId,role:"KINESIOLOGO"},"CONSULTAR_LISTA","EVALUACIONES",`pagina:${page}`)
- return {total,pagina:page,hayMas:page*20<total,resultados:rows.map(row=>{const view=reviewSummary(row);return {id:row.id,revision:row.revision,nombreBebe:view.datos.nombreBebe,fecha:row.createdAt.toISOString(),evento:view.datos.evento,numero:view.datos.numero,estado:row.publicacion?(row.publicacion.estado==="RETIRADO"?"RETIRADO":"PUBLICADO"):"BORRADOR",version:row.publicacion?.versionActual??null,correo:view.publicacion?.correo.estado??null}})}
+ return {total,pagina:page,hayMas:page*20<total,resultados:rows.map(row=>{const view=reviewSummary(row),copy=contactByEvaluation.get(row.id);return {id:row.id,revision:row.revision,contacto:copy?{...copy,actual:copy.revision===row.revision}:null,nombreBebe:view.datos.nombreBebe,fecha:row.createdAt.toISOString(),evento:view.datos.evento,numero:view.datos.numero,estado:row.publicacion?(row.publicacion.estado==="RETIRADO"?"RETIRADO":"PUBLICADO"):"BORRADOR",version:row.publicacion?.versionActual??null,correo:view.publicacion?.correo.estado??null}})}
 }
 async function lockOwned(tx:Prisma.TransactionClient,staffId:string,id:string) {
  const rows=await tx.$queryRaw<Array<{id:string}>>`SELECT id FROM "Evaluacion" WHERE id=${id} AND "autorId"=${staffId} FOR UPDATE`
@@ -61,11 +67,10 @@ export async function reviseResult(staffId:string,id:string,revision:number,meas
   if(row.publicacion)throw new AttentionConflict("El resultado ya está publicado. Usa la corrección con motivo y nueva versión.")
   if(row.revision!==revision)throw new AttentionConflict("La evaluación cambió en otra pantalla. Actualiza antes de guardar.")
   await requireDataConsent(tx,row.autorizacionId??row.fila?.inscripcion.autorizacionId,row.pacienteId,row.paciente.apoderadoId)
-  if(row.medicionesComplementarias && measures.desviacionDer===undefined)throw new InvalidEvaluation("Conserva las dos desviaciones registradas.")
-  const historical=complementaryValues(row.medicionesComplementarias)
-  if(historical.perimetro!==undefined && measures.perimetro===undefined)measures={...measures,perimetro:historical.perimetro}
-  const anterior=draftSnapshot(row),data=measureData(measures)
-  if(Object.entries(data).every(([key,value])=>key==="medicionesComplementarias" ? ["perimetro","desviacionDer","desviacionIzq"].every(k=>complementaryValues(row.medicionesComplementarias)[k as "perimetro"]===complementaryValues(value===Prisma.DbNull?null:value)[k as "perimetro"]) : row[key as keyof typeof data]===value))return reviewSummary(row)
+  const anterior=draftSnapshot(row)
+  measures=revisedMeasurements(anterior.medidas,measures)
+  const data=measureData(measures)
+  if(sameMeasurements(anterior.medidas,measures)&&Object.entries(data).every(([key,value])=>key==="medicionesComplementarias"||row[key as keyof typeof data]===value))return reviewSummary(row)
   const updated=await tx.evaluacion.update({where:{id},data:{...data,revision:{increment:1}},include:reviewInclude})
   await tx.revisionEvaluacion.create({data:{evaluacionId:id,revision:updated.revision,autorId:staffId,anterior,nueva:draftSnapshot(updated)}})
   return reviewSummary(updated)
@@ -82,10 +87,15 @@ export async function publishResult(staffId:string,id:string,revision:number) {
   const family=recipient(row)
   if(!family)throw new AttentionConflict("Primero debe verificarse la vinculación del bebé con una cuenta familiar activa. No se envió el resultado al correo de contacto.")
   const authorization=await requireDataConsent(tx,row.autorizacionId??row.fila?.inscripcion.autorizacionId,row.pacienteId,family.id)
-  const snapshot=draftSnapshot(row),checked=parseMeasurements(snapshot.medidas)
-  if(snapshot.indiceCraneal!==checked.indiceCraneal||snapshot.indiceAsimetria!==checked.indiceAsimetria||snapshot.diagnostico!==checked.diagnostico||snapshot.recomendacion!==checked.recomendacion)throw new AttentionConflict("Revisa y guarda las medidas antes de publicar este resultado.")
+  const snapshot=draftSnapshot(row),problem=publicationProblem(snapshot)
+  if(problem)throw new AttentionConflict(problem)
+  const contact=await previousContactMail(tx,id,revision,family.correo,snapshot)
+  if(contact?.estado==="ENVIANDO")throw new AttentionConflict("Hay un envío de contacto en curso. Consulta su estado antes de publicar para la cuenta familiar.")
+  const priorMail:Partial<Prisma.CorreoResultadoCreateWithoutPublicacionInput>=contact?.estado==="ACEPTADO"?{estado:"ENVIADO",proveedorId:contact.proveedorId,enviadoAt:contact.aceptadoAt}:contact?.estado==="REVISION"?{estado:"CANCELADO",ultimoError:"ENVIO_CONTACTO_EN_REVISION"}:authorization.correoResultados?{}:{estado:"CANCELADO",ultimoError:"PRIVACIDAD"}
+  // These unsent intentions cannot run after the family publication is created.
+  await tx.resultadoContacto.updateMany({where:{evaluacionId:id,revision,estado:{in:["PENDIENTE","REINTENTABLE"]}},data:{estado:"CANCELADO",ultimoError:"PUBLICACION_FAMILIAR"}})
   const publicationId=randomUUID()
-  await tx.resultadoPublicado.create({data:{id:publicationId,evaluacionId:id,apoderadoId:family.id,publicadoPorId:staffId,revision,datos:snapshot,versiones:{create:{numero:1,revisionEvaluacion:revision,datos:snapshot,motivo:"Publicación inicial",actorId:staffId}},correo:{create:{destinatario:family.correo,portalUrl:portalUrl(publicationId),...(authorization.correoResultados?{}:{estado:"CANCELADO",ultimoError:"PRIVACIDAD"})}}}})
+  await tx.resultadoPublicado.create({data:{id:publicationId,evaluacionId:id,apoderadoId:family.id,publicadoPorId:staffId,revision,datos:snapshot,versiones:{create:{numero:1,revisionEvaluacion:revision,datos:snapshot,motivo:"Publicación inicial",actorId:staffId}},correo:{create:{destinatario:family.correo,portalUrl:portalUrl(publicationId),...priorMail}}}})
   await draftMailPlan(tx,publicationId)
   await trace(tx,{id:staffId,role:"KINESIOLOGO"},"PUBLICAR","PUBLICACION",publicationId)
   return {id:publicationId,nueva:true}
@@ -117,11 +127,11 @@ export async function changePublishedResult(actor:{id:string;version:number},id:
    if(!family || family.id!==publication.apoderadoId)throw new AttentionConflict("La vinculación familiar debe estar verificada y corresponder a la publicación antes de republicar.")
    await requireDataConsent(tx,row.autorizacionId??row.fila?.inscripcion.autorizacionId,row.pacienteId,family.id)
    if(!measures)throw new InvalidEvaluation("Revisa las medidas corregidas.")
-   if(base.medidas.desviacionDer!==undefined && measures.desviacionDer===undefined)throw new InvalidEvaluation("Conserva las dos desviaciones registradas.")
-   if(base.medidas.perimetro!==undefined && measures.perimetro===undefined)measures={...measures,perimetro:base.medidas.perimetro}
-   const currentMeasures=measures
-   if(publication.estado==="VIGENTE"&&Object.entries(base.medidas).every(([key,value])=>currentMeasures[key as keyof typeof base.medidas]===value))throw new InvalidEvaluation("Modifica al menos una medición antes de publicar una corrección.")
+   measures=revisedMeasurements(base.medidas,measures)
+   if(publication.estado==="VIGENTE"&&sameMeasurements(base.medidas,measures))throw new InvalidEvaluation("Modifica al menos una medición antes de publicar una corrección.")
    const snapshot:ResultSnapshot={...base,medidas:{ap:measures.ap,bp:measures.bp,di:measures.di,dd:measures.dd,...measurementExtras(measures)},indiceCraneal:measures.indiceCraneal,indiceAsimetria:measures.indiceAsimetria,diagnostico:measures.diagnostico,recomendacion:measures.recomendacion}
+   const problem=publicationProblem(snapshot)
+   if(problem)throw new AttentionConflict(problem)
    const updated=await tx.evaluacion.update({where:{id},data:{...measureData(measures),revision:{increment:1}}})
    await tx.revisionEvaluacion.create({data:{evaluacionId:id,revision:updated.revision,autorId:actor.id,anterior:base,nueva:snapshot}})
    newVersion=publication.versionActual+1

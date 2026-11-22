@@ -33,7 +33,7 @@ export function EventManager() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState(""), [success, setSuccess] = useState("")
   const creationId = useRef<string | null>(null)
-  const inFlight = useRef(false)
+  const inFlight = useRef(false), requestVersion = useRef(0)
   const selected = data.eventos.find(event => event.id === data.seleccionadoId)
 
   useEffect(() => {
@@ -45,9 +45,33 @@ export function EventManager() {
     return () => controller.abort()
   }, [])
 
+  useEffect(() => {
+    if (!loaded) return
+    const controller = new AbortController()
+    let pending = false
+    const refresh = async () => {
+      if (document.hidden || pending || inFlight.current) return
+      pending = true
+      const version = requestVersion.current
+      try {
+        const value: EventsState = await responseData(await fetch("/api/eventos", { cache: "no-store", signal: controller.signal }))
+        if (!controller.signal.aborted && version === requestVersion.current && !inFlight.current) {
+          setData(previous => ({ ...value, seleccionadoId: previous.seleccionadoId }))
+        }
+      } catch (cause) {
+        if (!controller.signal.aborted && version === requestVersion.current) setError(cause instanceof Error ? cause.message : "No pudimos actualizar los eventos.")
+      } finally { pending = false }
+    }
+    const tick = () => { void refresh() }
+    const interval = setInterval(tick, 15000)
+    document.addEventListener("visibilitychange", tick)
+    window.addEventListener("focus", tick)
+    return () => { controller.abort(); clearInterval(interval); document.removeEventListener("visibilitychange", tick); window.removeEventListener("focus", tick) }
+  }, [loaded])
+
   async function reload() {
     if (inFlight.current) return
-    inFlight.current = true; setLoading(true); setError(""); setSuccess("")
+    inFlight.current = true; requestVersion.current++; setLoading(true); setError(""); setSuccess("")
     try { setData(await responseData(await fetch("/api/eventos", { cache: "no-store" }))); setLoaded(true) }
     catch (cause) { setError(cause instanceof Error ? cause.message : "No pudimos cargar los eventos.") }
     finally { setLoading(false); inFlight.current = false }
@@ -56,7 +80,7 @@ export function EventManager() {
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (inFlight.current) return
-    inFlight.current = true; setBusy("create"); setError(""); setSuccess("")
+    inFlight.current = true; requestVersion.current++; setBusy("create"); setError(""); setSuccess("")
     try {
       creationId.current ??= crypto.randomUUID()
       const value = await responseData(await fetch("/api/eventos", {
@@ -72,7 +96,7 @@ export function EventManager() {
 
   async function select(event: EventSummary) {
     if (inFlight.current) return
-    inFlight.current = true; setBusy(event.id); setError(""); setSuccess("")
+    inFlight.current = true; requestVersion.current++; setBusy(event.id); setError(""); setSuccess("")
     try {
       const value = await responseData(await fetch("/api/eventos/seleccion", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ eventoId: event.id }) }))
       setData(previous => ({ ...previous, seleccionadoId: value.seleccionadoId }))
@@ -83,7 +107,7 @@ export function EventManager() {
 
   async function toggleRegistrations(event: EventSummary) {
     if (inFlight.current) return
-    inFlight.current = true; setBusy(event.id); setError(""); setSuccess("")
+    inFlight.current = true; requestVersion.current++; setBusy(event.id); setError(""); setSuccess("")
     try {
       const value = await responseData(await fetch(`/api/eventos/${event.id}/inscripciones`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ abiertas: !event.inscripcionesAbiertas }) }))
       setData(previous => ({ ...previous, eventos: previous.eventos.map(row => row.id === event.id ? value.evento : row) }))
@@ -108,20 +132,21 @@ export function EventManager() {
       {selected && <p className="mt-3 text-sm font-medium">Inscripciones {selected.inscripcionesAbiertas ? "abiertas" : "cerradas"}</p>}
       <p className="mt-4 text-sm text-gray-600 dark:text-gray-300">La selección se guarda para tu cuenta y no cambia el evento de otros administradores.</p>
     </section>
-    {selected && <CalendlyProtection key={`calendly:${selected.id}:${selected.revision}`} fecha={selected.fecha} reception={false} evento={selected} />}
+    {selected && <CalendlyProtection key={`calendly:${selected.id}:${selected.revision}`} fecha={selected.fecha} reception={false} evento={selected} jornadas={data.eventos} selectionBusy={disabled} onSelectEvent={id => { const event = data.eventos.find(row => row.id === id); if (event && event.id !== selected.id) void select(event) }} />}
     {selected && <p><Link className="underline" href="/agenda">Ver nombres y horarios en la agenda de Calendly</Link></p>}
-    {selected && <details className="team-support"><summary>Inscribir presencialmente</summary><AdminOnsiteRegistration key={`presencial:${selected.id}`} event={selected} disabled={disabled} onStart={() => { if (inFlight.current) return false; inFlight.current = true; setBusy("onsite"); return true }} onFinish={() => { inFlight.current = false; setBusy(null) }} onRegistered={async () => { try { setData(await responseData(await fetch("/api/eventos", { cache: "no-store" }))) } catch (cause) { setError(cause instanceof Error ? cause.message : "No pudimos actualizar los eventos.") } }} /></details>}
+    {selected && <details className="team-support"><summary>Inscribir presencialmente</summary><AdminOnsiteRegistration key={`presencial:${selected.id}`} event={selected} disabled={disabled} onStart={() => { if (inFlight.current) return false; inFlight.current = true; requestVersion.current++; setBusy("onsite"); return true }} onFinish={() => { inFlight.current = false; setBusy(null) }} onRegistered={async () => { try { setData(await responseData(await fetch("/api/eventos", { cache: "no-store" }))) } catch (cause) { setError(cause instanceof Error ? cause.message : "No pudimos actualizar los eventos.") } }} /></details>}
     {selected && <EventOverview key={`${selected.id}:${selected.revision}`} eventoId={selected.id} />}
     {selected && <details className="team-support"><summary>Correos de resultados y seguimiento</summary><MailQueueSummary key={`correo:${selected.id}`} eventoId={selected.id} /></details>}
-    {selected && <details className="team-support"><summary>Gestionar lista de espera de cupos</summary><WaitlistPanel key={selected.id} eventoId={selected.id} disabled={disabled} onStart={() => { if (inFlight.current) return false; inFlight.current = true; setBusy("waitlist"); return true }} onFinish={() => { inFlight.current = false; setBusy(null) }} /></details>}
-    {editing && <EventEditor key={editing.id} event={editing} disabled={disabled} onStart={() => { if (inFlight.current) return false; inFlight.current = true; setBusy("edit"); return true }} onFinish={() => { inFlight.current = false; setBusy(null) }} onCancel={() => setEditing(null)} onReloaded={event => setData(previous => ({ ...previous, eventos: previous.eventos.map(row => row.id === event.id ? event : row).sort((a, b) => b.fecha.localeCompare(a.fecha)) }))} onSaved={(event, changed) => { setData(previous => ({ ...previous, eventos: previous.eventos.map(row => row.id === event.id ? event : row).sort((a, b) => b.fecha.localeCompare(a.fecha)) })); setEditing(null); setError(""); setSuccess(changed ? `Cambios guardados en “${event.nombre}”. Las inscripciones existentes se conservaron.` : "El evento ya tenía estos datos. No se duplicaron cambios.") }} />}
+    {selected && <details className="team-support"><summary>Gestionar lista de espera de cupos</summary><WaitlistPanel key={selected.id} eventoId={selected.id} disabled={disabled} onStart={() => { if (inFlight.current) return false; inFlight.current = true; requestVersion.current++; setBusy("waitlist"); return true }} onFinish={() => { inFlight.current = false; setBusy(null) }} /></details>}
+    {editing && <EventEditor key={editing.id} event={editing} disabled={disabled} onStart={() => { if (inFlight.current) return false; inFlight.current = true; requestVersion.current++; setBusy("edit"); return true }} onFinish={() => { inFlight.current = false; setBusy(null) }} onCancel={() => setEditing(null)} onReloaded={event => setData(previous => ({ ...previous, eventos: previous.eventos.map(row => row.id === event.id ? event : row).sort((a, b) => b.fecha.localeCompare(a.fecha)) }))} onSaved={(event, changed) => { setData(previous => ({ ...previous, eventos: previous.eventos.map(row => row.id === event.id ? event : row).sort((a, b) => b.fecha.localeCompare(a.fecha)) })); setEditing(null); setError(""); setSuccess(changed ? `Cambios guardados en “${event.nombre}”. Las inscripciones existentes se conservaron.` : "El evento ya tenía estos datos. No se duplicaron cambios.") }} />}
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
       <section aria-labelledby="events-list-title" className="rounded-2xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-900">
         <h2 id="events-list-title" className="text-xl font-semibold">Eventos creados {loaded && <span className="text-sm font-normal text-gray-500 dark:text-gray-400">({data.eventos.length})</span>}</h2>
-        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Los inscritos de esta lista corresponden a su última actualización. El resumen del evento seleccionado se actualiza automáticamente.</p>
+        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">La lista y el resumen se actualizan cada 15 segundos mientras la página esté visible. Las reservas de Calendly y las inscripciones vinculadas se cuentan una sola vez.</p>
         {loading ? <p className="py-8 text-gray-600 dark:text-gray-300">Consultando eventos…</p> : !loaded ? <p className="py-8 text-gray-600 dark:text-gray-300">La lista no está disponible. Puedes volver a cargarla.</p> : data.eventos.length === 0 ? <div className="py-10"><h3 className="font-medium">Aquí comenzará tu próximo evento</h3><p className="mt-2 text-gray-600 dark:text-gray-300">Completa el formulario para crear el primero.</p></div> : <ul className="mt-4 divide-y divide-gray-200 dark:divide-gray-700">{data.eventos.map(event => <li key={event.id} className="space-y-3 py-5">
           <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="min-w-0 break-words text-lg font-medium">{event.nombre}</h3>{data.seleccionadoId === event.id && <span className="rounded-full bg-teal-100 px-3 py-1 text-xs font-medium text-teal-800 dark:bg-teal-900 dark:text-teal-100">Seleccionado</span>}</div>
-          <p className="break-words text-sm text-gray-600 dark:text-gray-300">{showDate(event.fecha)} · {event.lugar}</p><p className="text-sm">{event.inscritos} inscritos / {event.cupos.toLocaleString("es-CL")} cupos · Inscripciones {event.inscripcionesAbiertas ? "abiertas" : "cerradas"}</p>
+          <p className="break-words text-sm text-gray-600 dark:text-gray-300">{showDate(event.fecha)} · {event.lugar}</p><p className="text-sm">{event.totalReservados ?? event.inscritos} inscritos y reservas / {event.cupos.toLocaleString("es-CL")} cupos · Inscripciones {event.inscripcionesAbiertas ? "abiertas" : "cerradas"}</p>
+          <p className="text-sm">{event.inscritos} inscripciones formalizadas · {event.reservasCalendlyPendientes ?? 0} reservas de Calendly sin vincular · {event.presenciales ?? 0} inscripciones presenciales vigentes.</p>
           {data.seleccionadoId !== event.id && <button type="button" disabled={disabled} onClick={() => select(event)} className="rounded-lg border border-teal-700 px-4 py-2 text-sm font-medium text-teal-800 disabled:opacity-50 dark:border-teal-400 dark:text-teal-200">{busy === event.id ? "Seleccionando…" : "Trabajar en este evento"}</button>}
           <button type="button" disabled={disabled || editing !== null} onClick={() => { if (inFlight.current) return; setEditing(event); setError(""); setSuccess("") }} className="rounded-lg border px-4 py-2 text-sm disabled:opacity-50">Editar evento</button>
           <button type="button" disabled={disabled} onClick={() => toggleRegistrations(event)} className="ml-2 rounded-lg border px-4 py-2 text-sm disabled:opacity-50">{busy === event.id ? "Actualizando…" : event.inscripcionesAbiertas ? "Cerrar inscripciones" : "Abrir inscripciones"}</button>

@@ -47,6 +47,10 @@ import { waitlistChecks } from "./waitlist-checks.mjs"
 import { cancellationChecks } from "./cancellations-checks.mjs"
 import { seedBeforeCancellationMigration } from "./cancellations-migration.mjs"
 
+// PGlite y los procesos HTTP deben compartir UTC: en zonas locales su reloj
+// SQL puede desplazar leases timestamptz frente a Date.now(). Las fechas del
+// negocio siguen comprobándose explícitamente en America/Santiago.
+process.env.TZ = "UTC"
 const production = process.argv.includes("--production")
 const calendlyHooksOnly = process.argv.includes("--calendly-hooks-only")
 const calendlyHoldsOnly = process.argv.includes("--calendly-holds-only")
@@ -203,6 +207,10 @@ try {
     await calendlyHoldsChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, post, mails, family, secondaryBase: realPostgres ? secondaryBase : undefined, base })
   } else if (calendlyLinkOnly) {
     await calendlyLinkChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, post, mails, secondaryBase: realPostgres ? secondaryBase : undefined, base })
+  } else if(process.argv.includes("--overview-only")) {
+    const f1 = await family("overview-scope@example.com")
+    await overviewChecks({ db, client, signIn, password, accounts: receptionAccounts, admin, anonymous: client(), f1, post, createEvent, mails })
+    if (production) await browserTeamAdminChecks({ db, base, password })
   } else if(process.argv.includes("--calendly-only")) {
     await browserTeamAdminChecks({db,base,password})
   } else if(process.argv.includes("--family-visual-only")) {

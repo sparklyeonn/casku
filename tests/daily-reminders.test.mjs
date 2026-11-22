@@ -35,6 +35,9 @@ function fixture() {
   return { data, read }
 }
 async function context(t) {
+  // El lote ficticio y la validación real de Brevo usan el mismo reloj,
+  // aunque estas pruebas se ejecuten después de las fechas de la Expo.
+  t.mock.method(Date, "now", () => Date.parse("2026-11-20T23:00:00Z"))
   const dir = await mkdtemp(join(tmpdir(), "daily-reminders-unit-"))
   t.after(() => rm(dir, { recursive: true, force: true }))
   await privateDir(dir)

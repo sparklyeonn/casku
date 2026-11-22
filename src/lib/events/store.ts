@@ -38,11 +38,20 @@ export async function editEvent(actor: { id: string; version: number }, input: R
 }
 
 export async function listEventsFor(userId: string) {
-  const [events, selected] = await prisma.$transaction([
-    prisma.evento.findMany({ include: { jornadaCalendly: { select: { eventoId: true } } }, orderBy: [{ fecha: "desc" }, { createdAt: "desc" }] }),
-    prisma.eventoSeleccionado.findUnique({ where: { usuarioId: userId } }),
-  ])
-  return { eventos: events.map(summarizeEvent), seleccionadoId: selected?.eventoId ?? null }
+  return prisma.$transaction(async tx => {
+    const [events, selected, registrations, holds] = await Promise.all([
+      tx.evento.findMany({ include: { jornadaCalendly: { select: { eventoId: true } } }, orderBy: [{ fecha: "desc" }, { createdAt: "desc" }] }),
+      tx.eventoSeleccionado.findUnique({ where: { usuarioId: userId } }),
+      tx.inscripcion.groupBy({ by: ["eventoId", "origen"], where: { cancelacion: { is: null } }, _count: { _all: true } }),
+      tx.reservaCupoCalendly.groupBy({ by: ["eventoId"], where: { estado: "ACTIVA", OR: [{ inscripcionId: null }, { inscripcion: { is: { cancelacion: { isNot: null } } } }] }, _count: { _all: true } }),
+    ])
+    return { eventos: events.map(event => {
+      const rows = registrations.filter(row => row.eventoId === event.id)
+      const inscritos = rows.reduce((total, row) => total + row._count._all, 0)
+      const reservasCalendlyPendientes = holds.find(row => row.eventoId === event.id)?._count._all ?? 0
+      return { ...summarizeEvent(event), inscritos, presenciales: rows.find(row => row.origen === "PRESENCIAL")?._count._all ?? 0, reservasCalendlyPendientes, totalReservados: inscritos + reservasCalendlyPendientes }
+    }), seleccionadoId: selected?.eventoId ?? null }
+  }, { isolationLevel: "RepeatableRead", timeout: 15000 })
 }
 
 export async function createAndSelectEvent(userId: string, input: EventInput) {

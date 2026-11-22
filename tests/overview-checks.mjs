@@ -44,9 +44,11 @@ export async function overviewChecks({ db, client, signIn, password, accounts, a
   const before = (await db.query('SELECT to_jsonb(i) AS row FROM "Inscripcion" i WHERE "eventoId"=$1 UNION ALL SELECT to_jsonb(f) FROM "EntradaFila" f WHERE "eventoId"=$1', [event.id])).rows
   const response = await admin(path(event.id)); assert.equal(response.status, 200); assert(response.headers.get("cache-control").includes("no-store"))
   const result = await response.json()
-  assert.deepEqual(Object.keys(result).sort(), ["calendly", "consultadoAt", "evento", "totales"])
+  assert.deepEqual(Object.keys(result).sort(), ["calendly", "consultadoAt", "evento", "participacion", "sinInscripcionDelDia", "totales"])
   assert.deepEqual(result.evento, { id: event.id, nombre: event.nombre, cupos: 20 })
   assert(Number.isFinite(Date.parse(result.consultadoAt)))
+  assert.deepEqual(result.participacion, { totalReservados: 8, presenciales: 6, presencialesCanceladas: 0 })
+  assert.equal(result.sinInscripcionDelDia.evaluaciones, 0)
   assert.deepEqual(result.totales, { inscritos: 8, canceladas: 0, enEspera: 3, enAtencion: 1, atendidos: 2, ausentes: 1, sinLlegada: 1, resultadosPendientes: 1, resultadosPublicados: 1, resultadosRetirados: 0 })
   assert(!JSON.stringify(result).match(/privado|nombreBebe|pacienteId|apoderadoId|diagnostico|recomendacion|medidas|correo|qrToken|profesionalId/i))
   assert.deepEqual((await (await admin(path(other.id))).json()).totales, { ...zero, inscritos: 1, atendidos: 1, resultadosPendientes: 1 })
@@ -60,6 +62,35 @@ export async function overviewChecks({ db, client, signIn, password, accounts, a
   await publish(rows[6])
   changed = (await (await admin(path(event.id))).json()).totales
   assert.equal(changed.resultadosPendientes, 0); assert.equal(changed.resultadosPublicados, 2); assert.equal(changed.atendidos, 2)
-  const page = await admin("/administracion"); assert.equal(page.status, 200); assert((await page.text()).includes("El resumen del evento seleccionado se actualiza automáticamente."))
+  const page = await admin("/administracion"); assert.equal(page.status, 200); assert((await page.text()).includes("La lista y el resumen se actualizan cada 15 segundos"))
+  // Un vínculo vigente no duplica su reserva; canceladas no ocupan cupo.
+  await db.query('INSERT INTO "JornadaCalendly" ("eventoId",fecha,"sincronizadaAt") SELECT id,fecha,CURRENT_TIMESTAMP FROM "Evento" WHERE id=$1', [event.id])
+  for (const [index, linked] of [null, null, rows[0].id, null].entries()) {
+    await db.query('INSERT INTO "ReservaCupoCalendly" ("invitadoId","reservaId","eventoId",inicio,fin,estado,"inscripcionId","verificadaAt") VALUES ($1,$2,$3,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP+interval \'10 minutes\',$4,$5,CURRENT_TIMESTAMP)', [randomUUID(), randomUUID(), event.id, index === 3 ? "CANCELADA" : "ACTIVA", linked])
+  }
+  const withHolds = await (await admin(path(event.id))).json()
+  assert.equal(withHolds.participacion.totalReservados, 10)
+  assert.equal(withHolds.calendly.protegidos, 2)
+  let listed = (await (await admin("/api/eventos")).json()).eventos.find(row => row.id === event.id)
+  assert.equal(listed.totalReservados, 10); assert.equal(listed.inscritos, 8); assert.equal(listed.presenciales, 6)
+  // Agregado por fecha de Santiago, sin asignar la evaluación al evento.
+  const standalone = randomUUID()
+  await evaluation(standalone, rows[5].patient, null)
+  await db.query('UPDATE "Evaluacion" SET "createdAt"=(($1::date::timestamp AT TIME ZONE \'America/Santiago\') AT TIME ZONE \'UTC\') WHERE id=$2', [event.fecha, standalone])
+  let daily = (await (await admin(path(event.id))).json()).sinInscripcionDelDia
+  assert.equal(daily.evaluaciones, 1); assert.equal(daily.bebes, 1)
+  assert.equal((await (await admin(path(other.id))).json()).sinInscripcionDelDia.evaluaciones, 1, "El mismo día no atribuye automáticamente una evaluación a un evento")
+  await db.query('UPDATE "Evaluacion" SET "createdAt"=((($1::date+interval \'1 day\') AT TIME ZONE \'America/Santiago\') AT TIME ZONE \'UTC\') WHERE id=$2', [event.fecha, standalone])
+  daily = (await (await admin(path(event.id))).json()).sinInscripcionDelDia
+  assert.equal(daily.evaluaciones, 0, "El comienzo del día siguiente queda fuera")
+  await db.query('INSERT INTO "CancelacionInscripcion" (id,"inscripcionId","actorId","perfilActor","nombreActor",motivo) VALUES ($1,$2,\'fixture\',\'ADMIN\',\'Fixture\',\'Prueba\')', [randomUUID(), rows[0].id])
+  const cancelled = await (await admin(path(event.id))).json()
+  assert.equal(cancelled.participacion.presenciales, 5); assert.equal(cancelled.participacion.presencialesCanceladas, 1)
+  assert.equal(cancelled.totales.inscritos, 7)
+  assert.equal(cancelled.participacion.totalReservados, 10, "La cita activa conserva su protección al cancelar solo la inscripción local")
+  listed = (await (await admin("/api/eventos")).json()).eventos.find(row => row.id === event.id)
+  assert.equal(listed.inscritos, 7, "La lista cuenta registros reales incluso si el contador almacenado está desactualizado")
+  assert.equal(listed.presenciales, 5); assert.equal(listed.totalReservados, 10)
+  assert.equal(mails.length, beforeMails)
   console.log("OK resumen: ceros reales, estados por inscripción, aislamiento entre eventos, borradores sin vinculación, publicación y reincorporación actualizadas, privacidad y lectura sin efectos.")
 }

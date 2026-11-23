@@ -1,3 +1,4 @@
+import { expoDelivery, expoDeliveryBlocksEdit, expoResultKey } from "./expo-delivery"
 import { previousContactMail } from "./contact-publication"
 import { publicationProblem, revisedMeasurements, sameMeasurements } from "./protocol"
 import { measurementExtras } from "@/lib/measurement-fields"
@@ -48,8 +49,10 @@ export async function ownResults(staffId:string,page:number,state:"TODOS"|"BORRA
  const where:Prisma.EvaluacionWhereInput={autorId:staffId,...(eventoId?{fila:{is:{eventoId}}}:{}),...(state==="BORRADOR"?{publicacion:{is:null}}:state==="PUBLICADO"?{publicacion:{is:{estado:"VIGENTE"}}}:state==="RETIRADO"?{publicacion:{is:{estado:"RETIRADO"}}}:{})}
  const [total,rows]=await prisma.$transaction([prisma.evaluacion.count({where}),prisma.evaluacion.findMany({where,orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(page-1)*20,take:20,include:reviewInclude})])
  const contacts=rows.length?await prisma.resultadoContacto.findMany({where:{evaluacionId:{in:rows.map(row=>row.id)}},distinct:["evaluacionId"],orderBy:[{evaluacionId:"asc"},{createdAt:"desc"}],select:{evaluacionId:true,revision:true,estado:true,claveEnvio:true}}):[]
- const envelopes=contacts.length?await prisma.envioTransaccional.findMany({where:{clave:{in:contacts.map(copy=>copy.claveEnvio)}},select:{clave:true,estado:true}}):[]
+ const mailKeys=[...contacts.map(copy=>copy.claveEnvio),...rows.map(row=>expoResultKey(row.id,row.revision))]
+ const envelopes=mailKeys.length?await prisma.envioTransaccional.findMany({where:{clave:{in:mailKeys}},select:{clave:true,estado:true}}):[]
  const contactByEvaluation=new Map(contacts.map(copy=>[copy.evaluacionId,{estado:envelopes.find(mail=>mail.clave===copy.claveEnvio)?.estado??copy.estado,revision:copy.revision}]))
+ for(const row of rows){const mail=envelopes.find(item=>item.clave===expoResultKey(row.id,row.revision));if(mail&&["PENDIENTE","ENVIANDO","REVISION","ACEPTADO"].includes(mail.estado))contactByEvaluation.set(row.id,{estado:mail.estado,revision:row.revision})}
  await trace(prisma,{id:staffId,role:"KINESIOLOGO"},"CONSULTAR_LISTA","EVALUACIONES",`pagina:${page}`)
  return {total,pagina:page,hayMas:page*20<total,resultados:rows.map(row=>{const view=reviewSummary(row),copy=contactByEvaluation.get(row.id);return {id:row.id,revision:row.revision,contacto:copy?{...copy,actual:copy.revision===row.revision}:null,nombreBebe:view.datos.nombreBebe,fecha:row.createdAt.toISOString(),evento:view.datos.evento,numero:view.datos.numero,estado:row.publicacion?(row.publicacion.estado==="RETIRADO"?"RETIRADO":"PUBLICADO"):"BORRADOR",version:row.publicacion?.versionActual??null,correo:view.publicacion?.correo.estado??null}})}
 }
@@ -71,6 +74,7 @@ export async function reviseResult(staffId:string,id:string,revision:number,meas
   measures=revisedMeasurements(anterior.medidas,measures)
   const data=measureData(measures)
   if(sameMeasurements(anterior.medidas,measures)&&Object.entries(data).every(([key,value])=>key==="medicionesComplementarias"||row[key as keyof typeof data]===value))return reviewSummary(row)
+  if(expoDeliveryBlocksEdit(await expoDelivery(tx,id,row.revision)))throw new AttentionConflict("Esta revisión tiene un correo programado para Expo Bebé-Niño. Solicita a Administración cancelar ese correo antes de modificarla; las medidas actuales se conservan.")
   const updated=await tx.evaluacion.update({where:{id},data:{...data,revision:{increment:1}},include:reviewInclude})
   await tx.revisionEvaluacion.create({data:{evaluacionId:id,revision:updated.revision,autorId:staffId,anterior,nueva:draftSnapshot(updated)}})
   return reviewSummary(updated)

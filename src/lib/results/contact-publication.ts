@@ -1,3 +1,4 @@
+import { previousExpoMail } from "./expo-delivery.ts"
 import type { Prisma } from "@prisma/client"
 import { contactSnapshotHash } from "./contact-policy.ts"
 import type { ResultSnapshot } from "./snapshot.ts"
@@ -5,6 +6,8 @@ export type PreviousContactMail={estado:"ACEPTADO";proveedorId:string;aceptadoAt
 // Called under the evaluation lock. Publishing in an account must not send an
 // identical clinical copy again after a contact delivery (including ledger recovery).
 export async function previousContactMail(tx:Prisma.TransactionClient,evaluationId:string,revision:number,email:string,snapshot:ResultSnapshot,now=new Date()):Promise<PreviousContactMail> {
+ const expo=await previousExpoMail(tx,evaluationId,revision,email,snapshot)
+ if(expo)return expo
  const rows=await tx.resultadoContacto.findMany({where:{evaluacionId:evaluationId,revision,destinatario:email.trim().toLowerCase(),hashDatos:contactSnapshotHash(snapshot)},orderBy:{createdAt:"desc"}})
  let inFlight=false,uncertain=false
  for(const row of rows){

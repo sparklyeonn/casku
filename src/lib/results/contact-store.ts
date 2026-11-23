@@ -1,3 +1,4 @@
+import { expoDelivery, expoDeliveryBlocksAnotherMail } from "./expo-delivery.ts"
 import type { PrismaClient, Prisma, ResultadoContacto } from "@prisma/client"
 import type { BrevoConfig, MailMessage } from "../mail/brevo.ts"
 import { PRIVACY_VERSION } from "../privacy/policy.ts"
@@ -45,6 +46,7 @@ export function createResultContactService(db:PrismaClient,deps:Dependencies) {
     else if(!email)problem="El registro no tiene un correo de contacto válido. Debe corregirse en su registro antes de enviar."
     else if(guardian.length<3||guardian.startsWith("Apoderado presente sin nombre"))problem="Falta el nombre del apoderado en el registro de contacto o en la autorización guardada."
     else problem=publicationProblem(snapshot)
+    if (expoDeliveryBlocksAnotherMail(await expoDelivery(tx, id, row.revision))) problem="Esta revisión ya está incluida en el lote de Expo Bebé-Niño. No se generará otro correo individual. Consulta su programación con Administración Casku."
     const hashDatos=contactSnapshotHash(snapshot)
     const contexto=contactSnapshotHash({id:row.id,revision:row.revision,email,guardian,hashDatos,contactRevision:inscription?.revisionContacto??null,patientRevision:row.paciente.revisionDatos,authorizationId:permission?.id,authorizationRevision:permission?.revision})
     return {row,snapshot,email,guardian,permission,problem,contexto,hashDatos}

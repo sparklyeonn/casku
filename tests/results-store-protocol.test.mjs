@@ -9,6 +9,7 @@ import { REFERENCE_VERSION,LEGACY_REFERENCE_VERSION } from "../src/lib/craneomet
 import * as fields from "../src/lib/measurement-fields.ts"
 import * as input from "../src/lib/evaluation-input.ts"
 import * as snapshot from "../src/lib/results/snapshot.ts"
+import * as expoDelivery from "../src/lib/results/expo-delivery.ts"
 import * as contactPublication from "../src/lib/results/contact-publication.ts"
 import * as protocol from "../src/lib/results/protocol.ts"
 import * as resultInput from "../src/lib/results/input.ts"
@@ -17,7 +18,7 @@ const code=ts.transpileModule(readFileSync(new URL("../src/lib/results/store.ts"
 const base={ap:140,bp:120,di:135,dd:138}
 const v2={...base,protocolo:REFERENCE_VERSION,distanciaPOEtragusDer:105,distanciaPOEtragusIzq:108}
 const legacy={...base,protocolo:LEGACY_REFERENCE_VERSION,desviacionDer:5,desviacionIzq:8,perimetro:440}
-function harness(measures=legacy,{published=false,family=true,consent=true}={}) {
+function harness(measures=legacy,{published=false,family=true,consent=true,expoScheduled=false}={}) {
  const calls={revisions:[],versions:[],publications:[],mailPlans:[],publicationUpdates:[]}
  const result=protocol.legacyFour(measures)||measures.protocolo===REFERENCE_VERSION?input.parseMeasurements(measures):{indiceCraneal:85.71,indiceAsimetria:3,diagnostico:"Diagnóstico v1 intacto",recomendacion:"Recomendación v1 intacta"}
  const row={id:"evaluation",revision:1,autorId:"staff",autorizacionId:"consent",pacienteId:"baby",kinesiologa:"Profesional ficticia",createdAt:new Date("2026-11-20T12:00:00Z"),paciente:{nombre:"Bebé ficticio",fechaNacimiento:new Date("2026-01-01T00:00:00Z"),apoderadoId:"family"},fila:{estado:"ATENDIDO",inscripcion:{pacienteId:"baby",numero:1,evento:{nombre:"Evento ficticio"},apoderado:{id:"family",activo:family,correo:"ficticio@example.invalid"}}},anteroposterior:measures.ap,biparietal:measures.bp,diagonalIzq:measures.di,diagonalDer:measures.dd,medicionesComplementarias:measures.protocolo?fields.measurementExtras(measures):null,indiceCraneal:result.indiceCraneal,indiceAsimetria:result.indiceAsimetria,diagnostico:result.diagnostico,recomendacion:result.recomendacion,publicacion:null}
@@ -27,6 +28,7 @@ function harness(measures=legacy,{published=false,family=true,consent=true}={}) 
   $queryRaw:async()=>[{id:row.id}],
   evaluacion:{findUniqueOrThrow:async()=>row,findFirst:async()=>row,update:async({data})=>{const {revision,...values}=data;if(typeof values.medicionesComplementarias==="symbol")values.medicionesComplementarias=null;Object.assign(row,values);row.revision+=revision?.increment??0;return row}},
   revisionEvaluacion:{create:async({data})=>calls.revisions.push(structuredClone(data))},
+  envioTransaccional:{findUnique:async({where})=>expoScheduled&&where.clave===expoDelivery.expoResultKey(row.id,row.revision)?{clave:where.clave,finalidad:"RESULTADO",estado:"ACEPTADO",disponibleAt:new Date(Date.now()+60000),entrega:"SIN_CONFIRMAR"}:null},
   resultadoContacto:{findMany:async()=>[],updateMany:async()=>({count:0})},
   resultadoPublicado:{create:async({data})=>calls.publications.push(structuredClone(data)),update:async({data})=>{calls.publicationUpdates.push(structuredClone(data));Object.assign(row.publicacion,{...data,revisionControl:row.publicacion.revisionControl+1})}},
   versionResultado:{createMany:async({data})=>calls.versions.push(...structuredClone(data)),create:async({data})=>calls.versions.push(structuredClone(data))},
@@ -39,7 +41,7 @@ function harness(measures=legacy,{published=false,family=true,consent=true}={}) 
   "@/lib/mail-queue/store":{draftMailPlan:async(...args)=>calls.mailPlans.push(args.slice(1))},
   "@/lib/privacy/store":{trace:async()=>{},requireDataConsent:async()=>{if(!consent)throw new Error("Autorización retirada");return {correoResultados:false}}},
   "@/lib/families/security":{privateHash:value=>createHash("sha256").update(value).digest("hex")},"node:crypto":require("node:crypto"),"@prisma/client":{Prisma:{DbNull}},"@/lib/prisma":{prisma},
-  "@/lib/kinesiology/http":{AttentionConflict:class extends Error{},AttentionUnavailable:class extends Error{}},"@/lib/evaluation-input":input,"./snapshot":snapshot,"./protocol":protocol,"./contact-publication":contactPublication
+  "@/lib/kinesiology/http":{AttentionConflict:class extends Error{},AttentionUnavailable:class extends Error{}},"@/lib/evaluation-input":input,"./snapshot":snapshot,"./protocol":protocol,"./expo-delivery":expoDelivery,"./contact-publication":contactPublication
  }
  const loaded={exports:{}}
  runInNewContext(`(function(require,module,exports,process){${code}\n})`,{})(name=>{if(!(name in stubs))throw new Error(`Unexpected import: ${name}`);return stubs[name]},loaded,loaded.exports,{env:{}})
@@ -194,4 +196,10 @@ test("store: cuatro medidas publicadas se corrigen como cuatro sin DPOE/CVAI ni 
  assert.equal(calls.versions[1].datos.medidas.distanciaPOEtragusDer,undefined)
  assert.equal(calls.versions[1].datos.medidas.desviacionDer,undefined)
  assert.equal(row.medicionesComplementarias,null)
+})
+
+test("store: una revisión con correo futuro requiere cancelar antes de editar",async()=>{
+ const {store,row,calls}=harness(v2,{expoScheduled:true})
+ await assert.rejects(store.reviseResult("staff",row.id,1,input.parseMeasurements({...v2,di:134})),/cancelar ese correo/)
+ assert.equal(row.revision,1);assert.equal(calls.revisions.length,0)
 })

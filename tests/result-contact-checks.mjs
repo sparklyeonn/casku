@@ -28,9 +28,10 @@ export async function resultContactChecks({ db, base, browsers = false, resetGlo
     const key = createHmac("sha256", authSecret).update(`limit:result-contact:get:${author.id}`).digest("hex")
     await db.query(`UPDATE "LimiteSolicitud" SET "expiraAt"=CURRENT_TIMESTAMP-interval '1 second' WHERE clave=$1`, [key])
   }
+  const directEvent = await createEvent(admin, "Contacto directo con evento", 20, false)
   async function fixture(label) {
     const token = randomUUID(), email = `contact-${token}@example.test`, guardian = `Apoderado ficticio ${label}`
-    const response = await kine("/api/evaluaciones", post({ ...paperConsent, declaracion: { ...paperConsent.declaracion, declarante: guardian }, nombre: `Bebé contacto ${label} ${token}`, rut: `${randomInt(30000000, 99999999)}-1`, correo: email, fnac: "2026-01-01", ...resultMeasurements() }))
+    const response = await kine("/api/evaluaciones", post({ eventoId:directEvent.id, ...paperConsent, declaracion: { ...paperConsent.declaracion, declarante: guardian }, nombre: `Bebé contacto ${label} ${token}`, rut: `${randomInt(30000000, 99999999)}-1`, correo: email, fnac: "2026-01-01", ...resultMeasurements() }))
     assert.equal(response.status, 201, `Captura propia sin cuenta: ${await response.clone().text()}`)
     const { evaluacionId: id } = await response.json()
     const stored = (await db.query('SELECT e."autorId",e."pacienteId",e."autorizacionId",e."correoPadre",e."filaId",p."apoderadoId",a.datos,a."correoResultados",a.seguimiento,a."versionTexto" FROM "Evaluacion" e JOIN "Paciente" p ON p.id=e."pacienteId" JOIN "AutorizacionPrivacidad" a ON a.id=e."autorizacionId" WHERE e.id=$1', [id])).rows[0]

@@ -57,13 +57,14 @@ export async function kinesiologyChecks({ db, client, signIn, password, accounts
   assert.equal((await db.query('SELECT estado FROM "EntradaFila" WHERE id=$1', [reclaimed.id])).rows[0].estado, "EN_ATENCION")
   await db.exec('DROP TRIGGER evaluation_fail_trigger ON "Evaluacion"; DROP FUNCTION evaluation_fail();')
   const beforePatients = (await db.query('SELECT count(*)::int n FROM "Paciente"')).rows[0].n, beforeMails = mails.length
-  const payload = { atencionId: reclaimed.id, reservaId: reclaimed.reservaId, ...measures, nombre: "Intruso", pacienteId: "legacy-baby", correo: "intruso@example.com", kine: "Otra profesional", diagnostico: "inventado" }
+  const payload = { atencionId: reclaimed.id, reservaId: reclaimed.reservaId, ...measures, nombre: "Intruso", pacienteId: "legacy-baby", correo: "intruso@example.com", kine: "Otra profesional", diagnostico: "inventado", eventoId:b.id, origen:"CALENDLY" }
   const savedResponses = await Promise.all([kine("/api/evaluaciones", post(payload)), kine("/api/evaluaciones", post(payload))])
   assert.deepEqual(savedResponses.map(r => r.status).sort(), [200, 201])
   const saved = await Promise.all(savedResponses.map(r => r.json()))
   assert.equal(saved[0].evaluacionId, saved[1].evaluacionId)
   const evaluation = (await db.query('SELECT * FROM "Evaluacion" WHERE id=$1', [saved[0].evaluacionId])).rows[0]
   const registration = (await db.query('SELECT "pacienteId" FROM "Inscripcion" WHERE id=$1', [arrival])).rows[0]
+  assert.equal(evaluation.eventoId,a.id); assert.equal(evaluation.origen,"WEB", "La inscripción guardada prevalece sobre el origen falsificado")
   assert.equal(evaluation.pacienteId, registration.pacienteId); assert.equal(evaluation.correoPadre, t1.correo); assert.equal(evaluation.kinesiologa, accounts[2].name)
   assert.equal(evaluation.indiceCraneal, 120 / 140 * 100); assert.notEqual(evaluation.diagnostico, "inventado")
   assert.equal((await db.query('SELECT count(*)::int n FROM "Paciente"')).rows[0].n, beforePatients)
@@ -87,7 +88,7 @@ export async function kinesiologyChecks({ db, client, signIn, password, accounts
   const otherEntry = activeEntry.eventoId === a.id ? arrivalB.id : t2.id
   await assert.rejects(db.query('UPDATE "EntradaFila" SET "profesionalId"=$1,estado=\'EN_ATENCION\' WHERE id=$2', [accounts[2].id, otherEntry]), "El índice impide dos activas en eventos distintos")
   await db.query('UPDATE "Paciente" SET rut=$1 WHERE id=$2', ["12345678-5", first.bebe.id])
-  const bypass = await kine("/api/evaluaciones", post({ ...paperConsent, ...measures, nombre: first.bebe.nombre, rut: "12345678-5", fnac: "2026-01-01", correo: "intruso@example.com" }))
+  const bypass = await kine("/api/evaluaciones", post({ eventoId:a.id, ...paperConsent, ...measures, nombre: first.bebe.nombre, rut: "12345678-5", fnac: "2026-01-01", correo: "intruso@example.com" }))
   assert.equal(bypass.status, 409, "El formulario sin inscripción no elude la reserva del bebé vinculado")
   const page = await kine("/kinesiologia"); assert.equal(page.status, 200); assert((await page.text()).includes("Mi atención"))
   console.log("OK kinesiología: reserva exclusiva, datos precargados, bebés sin RUT, devolución segura, guardado atómico e idempotente y sin correo clínico.")

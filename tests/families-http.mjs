@@ -137,7 +137,13 @@ async function createEvent(admin, nombre, cupos, open = true) {
   return input
 }
 const registration = (event, changes = {}) => ({ ...familyConsent, id: randomUUID(), eventoId: event.id, nombreApoderado: "Apoderado ficticio", nombreBebe: "Bebé ficticio", fechaNacimiento: "2026-01-01", ...changes })
-const clinicalSnapshot = () => db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' - 'revisionDatos' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' - 'autorizacionId' - 'medicionesComplementarias' FROM "Evaluacion" e WHERE id='legacy-evaluation'`)
+const clinicalSnapshot = async () => {
+  const snapshot = await db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' - 'revisionDatos' AS row FROM "Paciente" p WHERE id='legacy-baby' UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' - 'autorizacionId' - 'medicionesComplementarias' - 'eventoId' - 'origen' FROM "Evaluacion" e WHERE id='legacy-evaluation'`)
+  const context = (await db.query(`SELECT to_jsonb(e)->'eventoId' evento, to_jsonb(e)->'origen' origen FROM "Evaluacion" e WHERE id='legacy-evaluation'`)).rows[0]
+  assert.equal(context.evento,null,"El histórico no se asocia automáticamente a un evento")
+  assert.equal(context.origen,null,"El histórico no recibe un origen inventado")
+  return snapshot
+}
 try {
   if (realPostgres) {
     const fixture = await realPostgresFixture()

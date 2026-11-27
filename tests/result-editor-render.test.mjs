@@ -7,6 +7,7 @@ import React from "react"
 import {renderToStaticMarkup} from "react-dom/server"
 import ts from "typescript"
 import {publicationProblem} from "../src/lib/results/protocol.ts"
+import * as evaluationContext from "../src/lib/evaluation-context.ts"
 import * as editorState from "../src/lib/results/editor-state.ts"
 import * as fields from "../src/lib/measurement-fields.ts"
 import {REFERENCE_VERSION,LEGACY_REFERENCE_VERSION} from "../src/lib/craneometry-reference.ts"
@@ -16,6 +17,7 @@ const compiled = ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKin
 function render(measures, stored = {}) {
   let displayed
   const modules = {
+    "@/lib/evaluation-context": evaluationContext,
     "next/link": ({href,children,...props}) => React.createElement("a",{href,...props},children),
     "@/lib/results/editor-state": editorState,
     "@/lib/results/protocol": {publicationProblem},

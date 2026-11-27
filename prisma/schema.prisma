@@ -64,6 +64,7 @@ model Evento {
   revision Int @default(1)
   cambios CambioEvento[]
   jornadaCalendly JornadaCalendly?
+  evaluaciones Evaluacion[]
 
   @@index([fecha, createdAt])
 }
@@ -109,7 +110,17 @@ model Paciente {
   @@unique([apoderadoId, nombreNormalizado, fechaNacimiento])
 }
 
+enum OrigenEvaluacion {
+  CALENDLY
+  WEB
+  PRESENCIAL
+  DIRECTA_SIN_INSCRIPCION
+}
+
 model Evaluacion {
+  eventoId String? @db.Uuid
+  evento Evento? @relation(fields: [eventoId], references: [id], onDelete: Restrict)
+  origen OrigenEvaluacion?
   autorizacionId String? @db.Uuid
   autorizacion AutorizacionPrivacidad? @relation(fields: [autorizacionId], references: [id], onDelete: Restrict)
   id              String   @id @default(cuid())
@@ -136,6 +147,7 @@ model Evaluacion {
   contactosResultado ResultadoContacto[]
 
   @@index([autorId, createdAt])
+  @@index([eventoId, origen])
 }
 
 model Apoderado {

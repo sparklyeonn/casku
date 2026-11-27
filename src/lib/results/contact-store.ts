@@ -9,7 +9,7 @@ import { contactMessage } from "./contact-message.ts"
 import { CONTACT_CONSENT_VERSION,CONTACT_CONSENT_TEXT,ContactConflict,ContactUnavailable,contactEmail,contactInput,contactSnapshotHash,contactDeliveryDecision } from "./contact-policy.ts"
 type Actor={id:string;version:number}
 type Dependencies={enabled:()=>boolean;config:()=>BrevoConfig;deliver:(message:MailMessage,key:string,config:BrevoConfig)=>Promise<string>}
-const include={paciente:true,fila:{include:{inscripcion:{include:{cancelacion:true}}}},publicacion:true} satisfies Prisma.EvaluacionInclude
+const include={evento:true,paciente:true,fila:{include:{inscripcion:{include:{cancelacion:true}}}},publicacion:true} satisfies Prisma.EvaluacionInclude
 type SourceRow=Prisma.EvaluacionGetPayload<{include:typeof include}>
 const json=(value:unknown)=>JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue
 export function createResultContactService(db:PrismaClient,deps:Dependencies) {
@@ -37,12 +37,12 @@ export function createResultContactService(db:PrismaClient,deps:Dependencies) {
     const guardian=(inscription?.contactoNombre??declaration?.declarante??"").trim()
     let email:string|null=null
     try{email=contactEmail(inscription?inscription.contactoCorreo:row.correoPadre)}catch{/* A missing saved contact never accepts a replacement from the request. */}
-    const snapshot=parseSnapshot({nombreBebe:row.paciente.nombre,fechaNacimiento:row.paciente.fechaNacimiento.toISOString().slice(0,10),profesional:row.kinesiologa,evento:inscription?await tx.evento.findUnique({where:{id:inscription.eventoId},select:{nombre:true}}).then(event=>event?.nombre??null):null,numero:inscription?.numero??null,fechaEvaluacion:row.createdAt.toISOString(),medidas:{ap:row.anteroposterior,bp:row.biparietal,di:row.diagonalIzq,dd:row.diagonalDer,...readComplementaryValues(row.medicionesComplementarias)},indiceCraneal:row.indiceCraneal,indiceAsimetria:row.indiceAsimetria,diagnostico:row.diagnostico,recomendacion:row.recomendacion})
+    const snapshot=parseSnapshot({nombreBebe:row.paciente.nombre,fechaNacimiento:row.paciente.fechaNacimiento.toISOString().slice(0,10),profesional:row.kinesiologa,evento:row.evento?.nombre??(inscription?await tx.evento.findUnique({where:{id:inscription.eventoId},select:{nombre:true}}).then(event=>event?.nombre??null):null),numero:inscription?.numero??null,fechaEvaluacion:row.createdAt.toISOString(),medidas:{ap:row.anteroposterior,bp:row.biparietal,di:row.diagonalIzq,dd:row.diagonalDer,...readComplementaryValues(row.medicionesComplementarias)},indiceCraneal:row.indiceCraneal,indiceAsimetria:row.indiceAsimetria,diagnostico:row.diagnostico,recomendacion:row.recomendacion})
     let problem:string|null=null
     if(row.publicacion)problem="Ya existe una publicación familiar, vigente o retirada. Este flujo separado no permite otro envío."
     else if(row.paciente.apoderadoId||inscription?.apoderadoId)problem="El bebé ya está vinculado a una cuenta. Revisa la publicación familiar."
     else if(inscription&&(row.fila?.estado!=="ATENDIDO"||inscription.cancelacion||inscription.pacienteId!==row.pacienteId))problem="La atención o inscripción no está vigente para enviar esta copia."
-    else if(!permission?.datos||permission.versionTexto!==PRIVACY_VERSION||permission.pacienteId!==row.pacienteId||permission.apoderadoId!==null||permission.eventoId!==(inscription?.eventoId??null))problem="La autorización de datos está pendiente, cambió o fue retirada. No se enviará el resultado."
+    else if(!permission?.datos||permission.versionTexto!==PRIVACY_VERSION||permission.pacienteId!==row.pacienteId||permission.apoderadoId!==null||permission.eventoId!==(row.eventoId??inscription?.eventoId??null))problem="La autorización de datos está pendiente, cambió o fue retirada. No se enviará el resultado."
     else if(!email)problem="El registro no tiene un correo de contacto válido. Debe corregirse en su registro antes de enviar."
     else if(guardian.length<3||guardian.startsWith("Apoderado presente sin nombre"))problem="Falta el nombre del apoderado en el registro de contacto o en la autorización guardada."
     else problem=publicationProblem(snapshot)

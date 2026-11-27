@@ -1,3 +1,4 @@
+import { parseEvaluationEvent, EvaluationContextError } from "@/lib/evaluation-context"
 import { complementaryData } from "@/lib/measurement-storage"
 import { randomUUID } from "node:crypto"
 import { parsePrivacy, paperDeclaration, PrivacyInputError } from "@/lib/privacy/policy"
@@ -30,12 +31,15 @@ export async function POST(req: Request) {
     }
     const data = parseEvaluation(input)
     const body = input as Record<string, unknown>
+    const eventoId = parseEvaluationEvent(body.eventoId)
     const privacy = parsePrivacy(body.privacidad)
     const presencial = body.autorizacionPresencial !== undefined
     if (presencial && body.autorizacionPresencial !== true) throw new PrivacyInputError("El apoderado debe marcar la autorización antes de guardar.")
     const declaration = presencial ? null : paperDeclaration(body.declaracion)
     if (privacy.correoResultados || privacy.seguimiento) throw new PrivacyInputError("El correo clínico requiere autorización desde una cuenta familiar verificada.")
     const evaluacion = await prisma.$transaction(async tx => {
+      const events = await tx.$queryRaw<Array<{id:string}>>`SELECT id FROM "Evento" WHERE id=${eventoId}::uuid FOR SHARE`
+      if (!events.length) throw new EvaluationContextError("El evento ya no está disponible. Selecciona otro evento antes de guardar.")
       const matches = await tx.paciente.findMany({ where: { rut: { in: data.rutVariants } }, take: 2 })
       if (matches.length > 1) throw new PatientConflict()
       let paciente = matches[0]
@@ -45,8 +49,8 @@ export async function POST(req: Request) {
       const id = randomUUID()
       const previous = presencial ? await tx.cambioPrivacidad.findFirst({where:{autorizacion:{pacienteId:paciente.id}},orderBy:{createdAt:"desc"},select:{declarante:true}}) : null
       const consent = declaration ?? { declarante: previous?.declarante || "Apoderado presente sin nombre registrado", canal: "CASILLA_PRESENCIAL" as const }
-      const authorization = await recordConsent(tx, { pacienteId: paciente.id, eventoId: null, apoderadoId: null, ambito: `evaluacion:${id}` }, privacy, { id: user.id, role: user.role }, consent)
-      const result = await tx.evaluacion.create({ data: { id, autorizacionId: authorization.id,
+      const authorization = await recordConsent(tx, { pacienteId: paciente.id, eventoId, apoderadoId: null, ambito: `evaluacion:${id}` }, privacy, { id: user.id, role: user.role }, consent)
+      const result = await tx.evaluacion.create({ data: { id, eventoId, origen: "DIRECTA_SIN_INSCRIPCION", autorizacionId: authorization.id,
         autorId: user.id, pacienteId: paciente.id, correoPadre: data.correo, anteroposterior: data.ap, biparietal: data.bp,
         diagonalIzq: data.di, diagonalDer: data.dd, medicionesComplementarias: complementaryData(data), indiceCraneal: data.indiceCraneal, indiceAsimetria: data.indiceAsimetria,
         diagnostico: data.diagnostico, recomendacion: data.recomendacion, kinesiologa: user.name,
@@ -57,10 +61,12 @@ export async function POST(req: Request) {
     // La revisión y publicación se realizan por separado del guardado.
     return NextResponse.json({ ok: true, evaluacionId: evaluacion.id, correo: "no_enviado", mensaje: "Borrador guardado. Revisa el resultado antes de publicarlo." }, { status: 201 })
   } catch (error) {
+    if (error instanceof EvaluationContextError) return NextResponse.json({ error: error.message }, { status: 400 })
     if (error instanceof PrivacyInputError) return NextResponse.json({ error: error.message }, { status: 400 })
     if (error instanceof PrivacyConflict) return NextResponse.json({ error: error.message }, { status: 409 })
     if (error instanceof InvalidEvaluation) return NextResponse.json({ error: error.message }, { status: 400 })
     if (error instanceof PatientConflict || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) return NextResponse.json({ error: error instanceof PatientConflict && error.message ? error.message : "El RUT ya está registrado con otros datos o se está registrando. Revisa la identidad antes de continuar." }, { status: 409 })
+    if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2021", "P2022"].includes(error.code)) return NextResponse.json({ error: "La base de evaluaciones necesita actualizarse antes de guardar el evento y origen." }, { status: 503 })
     console.error("No se pudo guardar la evaluación", error instanceof Error ? error.name : "Error")
     return NextResponse.json({ error: "No pudimos guardar la evaluación. Intenta nuevamente." }, { status: 500 })
   }

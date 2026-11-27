@@ -1,3 +1,4 @@
+import { registeredEvaluationOrigin } from "@/lib/evaluation-context"
 import { measurementExtras } from "@/lib/measurement-fields"
 import { complementaryData, complementaryValues } from "@/lib/measurement-storage"
 import { requireDataConsent, trace } from "@/lib/privacy/store"
@@ -11,12 +12,12 @@ import { queuePolicy } from "@/lib/queue/policy"
 const attentionSelect = {
   id: true, eventoId: true, estado: true, profesionalId: true, reservaId: true, llamadaAt: true,
   evento: { select: { nombre: true, fecha: true, lugar: true } },
-  inscripcion: { select: { revisionCalendlyPendiente: true, citaInicio: true, numero: true, origen: true, contactoNombre: true, contactoCorreo: true, paciente: { select: { id: true, nombre: true, rut: true, fechaNacimiento: true } }, apoderado: { select: { nombre: true, correo: true } } } },
+  inscripcion: { select: { calendlyReservaId: true, calendlyInvitadoId: true, revisionCalendlyPendiente: true, citaInicio: true, numero: true, origen: true, contactoNombre: true, contactoCorreo: true, paciente: { select: { id: true, nombre: true, rut: true, fechaNacimiento: true } }, apoderado: { select: { nombre: true, correo: true } } } },
 } satisfies Prisma.EntradaFilaSelect
 type AttentionRow = Prisma.EntradaFilaGetPayload<{ select: typeof attentionSelect }>
 function summary(row: AttentionRow) {
   return { revisionCalendlyPendiente: row.inscripcion.revisionCalendlyPendiente, citaInicio: row.inscripcion.citaInicio?.toISOString() ?? null, id: row.id, eventoId: row.eventoId, estado: row.estado, reservaId: row.reservaId!, llamadaAt: row.llamadaAt?.toISOString() ?? null,
-    evento: { ...row.evento, fecha: row.evento.fecha.toISOString().slice(0, 10) }, numero: row.inscripcion.numero, origen: row.inscripcion.origen,
+    evento: { ...row.evento, fecha: row.evento.fecha.toISOString().slice(0, 10) }, numero: row.inscripcion.numero, origen: row.inscripcion.origen, origenEvaluacion: registeredEvaluationOrigin(row.inscripcion),
     bebe: { nombre: row.inscripcion.paciente.nombre, rut: row.inscripcion.paciente.rut || "", fnac: row.inscripcion.paciente.fechaNacimiento.toISOString().slice(0, 10) }, apoderado: row.inscripcion.apoderado?.nombre || row.inscripcion.contactoNombre || "Apoderado", correo: row.inscripcion.apoderado?.correo || row.inscripcion.contactoCorreo || "" }
 }
 export async function currentAttention(staffId: string) {
@@ -107,7 +108,7 @@ export async function saveAssignedEvaluation(staff: { id: string; name: string }
     }
     if (row.estado !== "EN_ATENCION") throw new AttentionConflict("Esta atención ya no está activa. Vuelve a tu fila.")
     const authorization = await requireDataConsent(tx, row.inscripcion.autorizacionId, row.inscripcion.pacienteId, row.inscripcion.apoderadoId)
-    const saved = await tx.evaluacion.create({ data: { autorizacionId: authorization.id, autorId: staff.id, filaId: row.id, pacienteId: row.inscripcion.pacienteId, correoPadre: row.inscripcion.apoderado?.correo || row.inscripcion.contactoCorreo || null,
+    const saved = await tx.evaluacion.create({ data: { eventoId: row.eventoId, origen: registeredEvaluationOrigin(row.inscripcion), autorizacionId: authorization.id, autorId: staff.id, filaId: row.id, pacienteId: row.inscripcion.pacienteId, correoPadre: row.inscripcion.apoderado?.correo || row.inscripcion.contactoCorreo || null,
       anteroposterior: measures.ap, biparietal: measures.bp, diagonalIzq: measures.di, diagonalDer: measures.dd, medicionesComplementarias: complementaryData(measures),
       indiceCraneal: measures.indiceCraneal, indiceAsimetria: measures.indiceAsimetria, diagnostico: measures.diagnostico, recomendacion: measures.recomendacion, kinesiologa: staff.name } })
     await trace(tx, { id: staff.id, role: "KINESIOLOGO" }, "GUARDAR", "EVALUACION", saved.id)

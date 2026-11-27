@@ -21,6 +21,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return tx.evento.update({ where: { id }, data: { inscripcionesAbiertas: data.abiertas, revision: { increment: 1 } } })
     })
     if (updated && data.abiertas) { try { await processAvailable(id, "APERTURA_INSCRIPCIONES") } catch { /* La apertura ya está guardada. */ } }
-    return updated ? familyResponse({ evento: summarizeEvent(await prisma.evento.findUniqueOrThrow({ where: { id } })) }) : familyResponse({ error: "Evento no disponible." }, 404)
+    return updated ? familyResponse({ evento: summarizeEvent(await prisma.evento.findUniqueOrThrow({ where: { id }, include:{_count:{select:{evaluaciones:true}},jornadaCalendly:{select:{eventoId:true}}} })) }) : familyResponse({ error: "Evento no disponible." }, 404)
   } catch (error) { return familyFailure(error) }
 }

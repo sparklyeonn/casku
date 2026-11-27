@@ -8,8 +8,8 @@ export class EventConflict extends Error {}
 export class EventEditConflict extends Error {}
 
 // La fecha es un día calendario: siempre se serializa y muestra sin conversión horaria.
-export function summarizeEvent(event: { id: string; nombre: string; fecha: Date; lugar: string; cupos: number; inscritos: number; inscripcionesAbiertas: boolean; revision: number; ultimoNumero: number; ultimoOrdenEspera?: number; jornadaCalendly?: { eventoId: string } | null }) {
-  return { fechaProtegida: !!event.jornadaCalendly || event.ultimoNumero > 0 || event.inscritos > 0 || (event.ultimoOrdenEspera ?? 0) > 0, id: event.id, nombre: event.nombre, fecha: event.fecha.toISOString().slice(0, 10), lugar: event.lugar, cupos: event.cupos, inscritos: event.inscritos, inscripcionesAbiertas: event.inscripcionesAbiertas, revision: event.revision }
+export function summarizeEvent(event: { id: string; nombre: string; fecha: Date; lugar: string; cupos: number; inscritos: number; inscripcionesAbiertas: boolean; revision: number; ultimoNumero: number; ultimoOrdenEspera?: number; jornadaCalendly?: { eventoId: string } | null; _count?: { evaluaciones: number } }) {
+  return { fechaProtegida: !!event.jornadaCalendly || event.ultimoNumero > 0 || event.inscritos > 0 || (event.ultimoOrdenEspera ?? 0) > 0 || (event._count?.evaluaciones ?? 0) > 0, id: event.id, nombre: event.nombre, fecha: event.fecha.toISOString().slice(0, 10), lugar: event.lugar, cupos: event.cupos, inscritos: event.inscritos, inscripcionesAbiertas: event.inscripcionesAbiertas, revision: event.revision }
 }
 
 export async function editEvent(actor: { id: string; version: number }, input: ReturnType<typeof parseEventEdit>) {
@@ -19,28 +19,30 @@ export async function editEvent(actor: { id: string; version: number }, input: R
     if (!event) return null
     const admin = await tx.cuentaEquipo.findUnique({ where: { id: actor.id } })
     if (!admin?.active || admin.role !== "ADMIN" || admin.version !== actor.version) throw new EventEditConflict("Tu acceso cambió. Vuelve a iniciar sesión.")
+    const evaluationCount = await tx.evaluacion.count({where:{eventoId:event.id}})
     const same = event.nombre === input.nombre && event.lugar === input.lugar && event.fecha.getTime() === input.fecha.getTime() && event.cupos === input.cupos
     // Una respuesta perdida se recupera sin volver a editar ni duplicar la auditoría.
-    if (same) return { evento: summarizeEvent(event), actualizado: false }
+    if (same) return { evento: summarizeEvent({...event,_count:{evaluaciones:evaluationCount}}), actualizado: false }
     if (event.revision !== input.revision) throw new EventEditConflict("El evento cambió en otra pantalla. Recarga sus datos antes de guardar.")
     const occupied = Math.max(event.inscritos, await tx.inscripcion.count({ where: { eventoId: event.id, cancelacion: { is: null } } })) + (await calendlyCapacity(tx, event)).protegidos
     if (input.cupos < occupied) throw new EventEditConflict(`No puedes reducir los cupos por debajo de las ${occupied} inscripciones reservadas.`)
     if (event.fecha.getTime() !== input.fecha.getTime()) {
+      if (evaluationCount > 0) throw new EventEditConflict("No puedes cambiar la fecha de un evento que ya tiene evaluaciones asociadas.")
       if (await tx.jornadaCalendly.findUnique({ where: { eventoId: event.id } })) throw new EventEditConflict("No puedes cambiar la fecha de una jornada vinculada a Calendly, aunque todavía no hayan llegado familias.")
       if (await tx.inscripcion.count({ where: { eventoId: event.id } }) > 0 || await tx.listaEspera.count({ where: { eventoId: event.id } }) > 0) throw new EventEditConflict("No puedes cambiar la fecha de un evento que ya tiene inscripciones o solicitudes de lista de espera.")
       if (event.inscripcionesAbiertas) throw new EventEditConflict("Cierra las inscripciones antes de cambiar la fecha.")
       if (input.fecha.toISOString().slice(0, 10) < chileToday()) throw new EventEditConflict("La nueva fecha no puede ser anterior a hoy en Chile.")
     }
     const updated = await tx.evento.update({ where: { id: event.id }, data: { nombre: input.nombre, lugar: input.lugar, fecha: input.fecha, cupos: input.cupos, revision: { increment: 1 } } })
-    await tx.cambioEvento.create({ data: { eventoId: event.id, actorId: actor.id, revision: updated.revision, anterior: summarizeEvent(event), nueva: summarizeEvent(updated) } })
-    return { evento: summarizeEvent(updated), actualizado: true }
+    await tx.cambioEvento.create({ data: { eventoId: event.id, actorId: actor.id, revision: updated.revision, anterior: summarizeEvent({...event,_count:{evaluaciones:evaluationCount}}), nueva: summarizeEvent({...updated,_count:{evaluaciones:evaluationCount}}) } })
+    return { evento: summarizeEvent({...updated,_count:{evaluaciones:evaluationCount}}), actualizado: true }
   }, { timeout: 15000 })
 }
 
 export async function listEventsFor(userId: string) {
   return prisma.$transaction(async tx => {
     const [events, selected, registrations, holds] = await Promise.all([
-      tx.evento.findMany({ include: { jornadaCalendly: { select: { eventoId: true } } }, orderBy: [{ fecha: "desc" }, { createdAt: "desc" }] }),
+      tx.evento.findMany({ include: { _count: { select: { evaluaciones: true } }, jornadaCalendly: { select: { eventoId: true } } }, orderBy: [{ fecha: "desc" }, { createdAt: "desc" }] }),
       tx.eventoSeleccionado.findUnique({ where: { usuarioId: userId } }),
       tx.inscripcion.groupBy({ by: ["eventoId", "origen"], where: { cancelacion: { is: null } }, _count: { _all: true } }),
       tx.reservaCupoCalendly.groupBy({ by: ["eventoId"], where: { estado: "ACTIVA", OR: [{ inscripcionId: null }, { inscripcion: { is: { cancelacion: { isNot: null } } } }] }, _count: { _all: true } }),

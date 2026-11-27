@@ -13,12 +13,12 @@ import { AttentionConflict, AttentionUnavailable } from "@/lib/kinesiology/http"
 import { parseMeasurements, InvalidEvaluation } from "@/lib/evaluation-input"
 import { parseSnapshot, type ResultSnapshot } from "./snapshot"
 import type { publishedChangeInput } from "./input"
-const reviewInclude={paciente:true,fila:{include:{inscripcion:{include:{apoderado:true,evento:true}}}},publicacion:{include:{correo:true,versiones:{orderBy:{numero:"desc" as const},take:1},ordenesCorreo:{where:{etapa:"INICIAL"},select:{version:true,estado:true,disponibleAt:true}}}}} satisfies Prisma.EvaluacionInclude
+const reviewInclude={evento:true,paciente:true,fila:{include:{inscripcion:{include:{apoderado:true,evento:true}}}},publicacion:{include:{correo:true,versiones:{orderBy:{numero:"desc" as const},take:1},ordenesCorreo:{where:{etapa:"INICIAL"},select:{version:true,estado:true,disponibleAt:true}}}}} satisfies Prisma.EvaluacionInclude
 type Review=Prisma.EvaluacionGetPayload<{include:typeof reviewInclude}>
 type Publication=NonNullable<Review["publicacion"]>
 type Measures=ReturnType<typeof parseMeasurements>
 function draftSnapshot(row:Review):ResultSnapshot {
- return parseSnapshot({nombreBebe:row.paciente.nombre,fechaNacimiento:row.paciente.fechaNacimiento.toISOString().slice(0,10),profesional:row.kinesiologa,evento:row.fila?.inscripcion.evento.nombre??null,numero:row.fila?.inscripcion.numero??null,fechaEvaluacion:row.createdAt.toISOString(),medidas:{ap:row.anteroposterior,bp:row.biparietal,di:row.diagonalIzq,dd:row.diagonalDer,...complementaryValues(row.medicionesComplementarias)},indiceCraneal:row.indiceCraneal,indiceAsimetria:row.indiceAsimetria,diagnostico:row.diagnostico,recomendacion:row.recomendacion})
+ return parseSnapshot({nombreBebe:row.paciente.nombre,fechaNacimiento:row.paciente.fechaNacimiento.toISOString().slice(0,10),profesional:row.kinesiologa,evento:row.evento?.nombre??row.fila?.inscripcion.evento.nombre??null,numero:row.fila?.inscripcion.numero??null,fechaEvaluacion:row.createdAt.toISOString(),medidas:{ap:row.anteroposterior,bp:row.biparietal,di:row.diagonalIzq,dd:row.diagonalDer,...complementaryValues(row.medicionesComplementarias)},indiceCraneal:row.indiceCraneal,indiceAsimetria:row.indiceAsimetria,diagnostico:row.diagnostico,recomendacion:row.recomendacion})
 }
 function latest(publication:Publication) {
  const version=publication.versiones.find(row=>row.numero===publication.versionActual)
@@ -37,7 +37,7 @@ function publicationMail(publication:Publication) {
 function reviewSummary(row:Review) {
  const family=recipient(row),publication=row.publicacion,current=publication?latest(publication):null
  const datos=current?.datos??draftSnapshot(row),problem=publication?null:publicationProblem(datos)
- return {id:row.id,revision:row.revision,datos,publicable:!!family&&!problem,motivoBloqueo:!family?"Pendiente de vinculación con una cuenta familiar verificada y activa.":problem,correoDestino:family?.correo??publication?.correo?.destinatario??null,publicacion:publication?{id:publication.id,publicadoAt:current!.fecha.toISOString(),version:publication.versionActual,revisionControl:publication.revisionControl,estado:publication.estado,correo:publicationMail(publication)}:null}
+ return {id:row.id,revision:row.revision,eventoId:row.eventoId??row.fila?.eventoId??null,origen:row.origen??null,datos,publicable:!!family&&!problem,motivoBloqueo:!family?"Pendiente de vinculación con una cuenta familiar verificada y activa.":problem,correoDestino:family?.correo??publication?.correo?.destinatario??null,publicacion:publication?{id:publication.id,publicadoAt:current!.fecha.toISOString(),version:publication.versionActual,revisionControl:publication.revisionControl,estado:publication.estado,correo:publicationMail(publication)}:null}
 }
 export type ResultReview=ReturnType<typeof reviewSummary>
 export async function ownedReview(staffId:string,id:string) {
@@ -46,7 +46,7 @@ export async function ownedReview(staffId:string,id:string) {
  return row?reviewSummary(row):null
 }
 export async function ownResults(staffId:string,page:number,state:"TODOS"|"BORRADOR"|"PUBLICADO"|"RETIRADO",eventoId?:string) {
- const where:Prisma.EvaluacionWhereInput={autorId:staffId,...(eventoId?{fila:{is:{eventoId}}}:{}),...(state==="BORRADOR"?{publicacion:{is:null}}:state==="PUBLICADO"?{publicacion:{is:{estado:"VIGENTE"}}}:state==="RETIRADO"?{publicacion:{is:{estado:"RETIRADO"}}}:{})}
+ const where:Prisma.EvaluacionWhereInput={autorId:staffId,...(eventoId?{OR:[{eventoId},{eventoId:null,fila:{is:{eventoId}}}]}:{}),...(state==="BORRADOR"?{publicacion:{is:null}}:state==="PUBLICADO"?{publicacion:{is:{estado:"VIGENTE"}}}:state==="RETIRADO"?{publicacion:{is:{estado:"RETIRADO"}}}:{})}
  const [total,rows]=await prisma.$transaction([prisma.evaluacion.count({where}),prisma.evaluacion.findMany({where,orderBy:[{createdAt:"desc"},{id:"desc"}],skip:(page-1)*20,take:20,include:reviewInclude})])
  const contacts=rows.length?await prisma.resultadoContacto.findMany({where:{evaluacionId:{in:rows.map(row=>row.id)}},distinct:["evaluacionId"],orderBy:[{evaluacionId:"asc"},{createdAt:"desc"}],select:{evaluacionId:true,revision:true,estado:true,claveEnvio:true}}):[]
  const mailKeys=[...contacts.map(copy=>copy.claveEnvio),...rows.map(row=>expoResultKey(row.id,row.revision))]
@@ -54,7 +54,7 @@ export async function ownResults(staffId:string,page:number,state:"TODOS"|"BORRA
  const contactByEvaluation=new Map(contacts.map(copy=>[copy.evaluacionId,{estado:envelopes.find(mail=>mail.clave===copy.claveEnvio)?.estado??copy.estado,revision:copy.revision}]))
  for(const row of rows){const mail=envelopes.find(item=>item.clave===expoResultKey(row.id,row.revision));if(mail&&["PENDIENTE","ENVIANDO","REVISION","ACEPTADO"].includes(mail.estado))contactByEvaluation.set(row.id,{estado:mail.estado,revision:row.revision})}
  await trace(prisma,{id:staffId,role:"KINESIOLOGO"},"CONSULTAR_LISTA","EVALUACIONES",`pagina:${page}`)
- return {total,pagina:page,hayMas:page*20<total,resultados:rows.map(row=>{const view=reviewSummary(row),copy=contactByEvaluation.get(row.id);return {id:row.id,revision:row.revision,contacto:copy?{...copy,actual:copy.revision===row.revision}:null,nombreBebe:view.datos.nombreBebe,fecha:row.createdAt.toISOString(),evento:view.datos.evento,numero:view.datos.numero,estado:row.publicacion?(row.publicacion.estado==="RETIRADO"?"RETIRADO":"PUBLICADO"):"BORRADOR",version:row.publicacion?.versionActual??null,correo:view.publicacion?.correo.estado??null}})}
+ return {total,pagina:page,hayMas:page*20<total,resultados:rows.map(row=>{const view=reviewSummary(row),copy=contactByEvaluation.get(row.id);return {id:row.id,revision:row.revision,contacto:copy?{...copy,actual:copy.revision===row.revision}:null,nombreBebe:view.datos.nombreBebe,fecha:row.createdAt.toISOString(),evento:view.datos.evento,origen:row.origen??null,numero:view.datos.numero,estado:row.publicacion?(row.publicacion.estado==="RETIRADO"?"RETIRADO":"PUBLICADO"):"BORRADOR",version:row.publicacion?.versionActual??null,correo:view.publicacion?.correo.estado??null}})}
 }
 async function lockOwned(tx:Prisma.TransactionClient,staffId:string,id:string) {
  const rows=await tx.$queryRaw<Array<{id:string}>>`SELECT id FROM "Evaluacion" WHERE id=${id} AND "autorId"=${staffId} FOR UPDATE`

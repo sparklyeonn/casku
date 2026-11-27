@@ -157,6 +157,8 @@ export async function browserQueueChecks({db,base,accounts,password,admin,family
       await teamNavigate(kine,"Evaluación sin inscripción")
       await expect(kine.getByRole("heading",{name:"Craneometría sin inscripción",exact:true})).toBeVisible()
       await noOverflow(kine,profile.name+" evaluación sin inscripción")
+      await expect(kine.getByLabel("Evento de esta evaluación",{exact:true})).toBeVisible()
+      await kine.getByLabel("Evento de esta evaluación",{exact:true}).selectOption(event.id)
       assert.equal(await kine.getByRole("checkbox").count(),1)
       assert.equal(await kine.getByLabel("Nombre del apoderado que autorizó",{exact:true}).count(),0)
       assert.equal(await kine.getByLabel("Referencia interna del documento",{exact:true}).count(),0)

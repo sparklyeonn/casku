@@ -12,7 +12,7 @@ import { hashPassword } from "../src/lib/passwords.mjs"
 const db = new PGlite()
 const socket = new PGLiteSocketServer({ db, host: "127.0.0.1", port: 0 })
 const base = "http://localhost:3118", password = randomBytes(20).toString("base64url")
-let child, exited = false, log = ""
+let child, exited = false, log = "", testFailed = false
 function client() {
   const cookies = new Map()
   return async (path, options = {}) => {
@@ -29,15 +29,21 @@ async function login(account) {
   assert.equal((await (await request("/api/auth/session")).json()).user.role, account.role)
   return request
 }
+const clinicalSnapshot = async () => {
+  const snapshot = await db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' - 'revisionDatos' AS row FROM "Paciente" p UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' - 'autorizacionId' - 'medicionesComplementarias' - 'eventoId' - 'origen' FROM "Evaluacion" e`)
+  const contexts = (await db.query(`SELECT to_jsonb(e)->'eventoId' evento, to_jsonb(e)->'origen' origen FROM "Evaluacion" e`)).rows
+  assert(contexts.every(row=>row.evento===null&&row.origen===null),"Los históricos conservan evento y origen vacíos")
+  return snapshot
+}
 try {
   await db.waitReady
   const migrations = (await readdir("prisma/migrations", { withFileTypes: true })).filter(e => e.isDirectory()).map(e => e.name).sort()
   for (const migration of migrations.filter(name => name < "20261109000100_eventos")) await db.exec(await readFile(`prisma/migrations/${migration}/migration.sql`, "utf8"))
   await db.exec(`INSERT INTO "Paciente" ("id","rut","nombre","fechaNacimiento") VALUES ('legacy-patient','12345678-9','Paciente ficticio previo','2026-01-01');
     INSERT INTO "Evaluacion" ("id","pacienteId","correoPadre","anteroposterior","biparietal","diagonalIzq","diagonalDer","indiceCraneal","indiceAsimetria","diagnostico","recomendacion","kinesiologa") VALUES ('legacy-evaluation','legacy-patient','test@example.com',140,120,135,138,85.7,3,'Ejemplo','Ejemplo','Profesional de prueba');`)
-  const before = await db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' - 'revisionDatos' AS row FROM "Paciente" p UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' - 'autorizacionId' - 'medicionesComplementarias' FROM "Evaluacion" e`)
+  const before = await clinicalSnapshot()
   for (const migration of migrations.filter(name => name >= "20261109000100_eventos")) await db.exec(await readFile(`prisma/migrations/${migration}/migration.sql`, "utf8"))
-  assert.deepEqual((await db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' - 'revisionDatos' AS row FROM "Paciente" p UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' - 'autorizacionId' - 'medicionesComplementarias' FROM "Evaluacion" e`)).rows, before.rows)
+  assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   assert.equal((await db.query('SELECT "medicionesComplementarias" FROM "Evaluacion" WHERE id=$1', ["legacy-evaluation"])).rows[0].medicionesComplementarias, null)
   console.log("OK migración: conserva intactos paciente y evaluación anteriores; nuevas medidas nulas, sin datos inventados.")
   await socket.start()
@@ -100,13 +106,15 @@ try {
   assert.equal((await db.query('SELECT count(*)::int AS total FROM "Evento" WHERE id=$1', [atomicId])).rows[0].total, 0)
   await db.exec('DROP TRIGGER test_reject_selection ON "EventoSeleccionado"; DROP FUNCTION test_reject_selection();')
   await assert.rejects(db.query('UPDATE "Evento" SET cupos=0 WHERE id=$1', [event.id]))
-  assert.deepEqual((await db.query(`SELECT to_jsonb(p) - 'apoderadoId' - 'nombreNormalizado' - 'revisionDatos' AS row FROM "Paciente" p UNION ALL SELECT to_jsonb(e) - 'filaId' - 'autorId' - 'revision' - 'autorizacionId' - 'medicionesComplementarias' FROM "Evaluacion" e`)).rows, before.rows)
+  assert.deepEqual((await clinicalSnapshot()).rows, before.rows)
   const page = await admin("/administracion")
   assert.equal(page.status, 200); assert((await page.text()).includes("Crear evento"))
   console.log("OK atomicidad y restricciones: no quedan eventos a medio crear ni se alteran datos clínicos.")
   console.log("Pruebas completas en PostgreSQL temporal. No se usó Neon ni se enviaron correos.")
-} catch (error) { console.error(error); console.error(log); process.exitCode = 1 }
+} catch (error) { console.error(error); console.error(log); testFailed = true }
 finally {
   if (child && !exited) { child.kill("SIGTERM"); await Promise.race([once(child, "exit"), pause(5000)]) }
   await socket.stop(); await db.close()
 }
+
+if (testFailed) process.exitCode = 1

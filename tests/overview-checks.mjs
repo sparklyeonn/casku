@@ -1,3 +1,4 @@
+import { evaluationContextChecks } from "./evaluation-context-checks.mjs"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 
@@ -44,7 +45,7 @@ export async function overviewChecks({ db, client, signIn, password, accounts, a
   const before = (await db.query('SELECT to_jsonb(i) AS row FROM "Inscripcion" i WHERE "eventoId"=$1 UNION ALL SELECT to_jsonb(f) FROM "EntradaFila" f WHERE "eventoId"=$1', [event.id])).rows
   const response = await admin(path(event.id)); assert.equal(response.status, 200); assert(response.headers.get("cache-control").includes("no-store"))
   const result = await response.json()
-  assert.deepEqual(Object.keys(result).sort(), ["calendly", "consultadoAt", "evento", "participacion", "sinInscripcionDelDia", "totales"])
+  assert.deepEqual(Object.keys(result).sort(), ["calendly", "consultadoAt", "evaluaciones", "evento", "participacion", "sinInscripcionDelDia", "totales"])
   assert.deepEqual(result.evento, { id: event.id, nombre: event.nombre, cupos: 20 })
   assert(Number.isFinite(Date.parse(result.consultadoAt)))
   assert.deepEqual(result.participacion, { totalReservados: 8, presenciales: 6, presencialesCanceladas: 0 })
@@ -92,5 +93,6 @@ export async function overviewChecks({ db, client, signIn, password, accounts, a
   assert.equal(listed.inscritos, 7, "La lista cuenta registros reales incluso si el contador almacenado está desactualizado")
   assert.equal(listed.presenciales, 5); assert.equal(listed.totalReservados, 10)
   assert.equal(mails.length, beforeMails)
+  await evaluationContextChecks({db,kine,reception,admin,anonymous,family:f1.request,post,createEvent,mails})
   console.log("OK resumen: ceros reales, estados por inscripción, aislamiento entre eventos, borradores sin vinculación, publicación y reincorporación actualizadas, privacidad y lectura sin efectos.")
 }
